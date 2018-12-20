@@ -13,6 +13,10 @@ class Classifier(KartonBaseService):
         self.log.info('LOL XD', extra={'tss': random.randint(0, 10)})
         task = Task({"type": "exe"}, [], {})
         self.send_task(task)
+        task = Task({"type": "exe"}, [], {})
+        self.send_task(task)
+        task = Task({"type": "exe"}, [], {})
+        self.send_task(task)
 
 
 if __name__ == "__main__":

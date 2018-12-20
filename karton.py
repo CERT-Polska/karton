@@ -15,6 +15,10 @@ class RabbitMQHandler(logging.Handler):
         logging.Handler.__init__(self)
         self.connection = pika.BlockingConnection(parameters)
         self.channel = self.connection.channel()
+        self.task_id = 'unknown'
+
+    def set_task_id(self, task_id):
+        self.task_id = task_id
 
     def emit(self, record: logging.LogRecord):
         ignore_fields = ["args", "asctime", "msecs", "msg", "pathname", "process", "processName", "relativeCreated",
@@ -25,6 +29,8 @@ class RabbitMQHandler(logging.Handler):
             log_line["excValue"] = str(record.exc_info[1])
             log_line["excType"] = record.exc_info[0].__name__
             log_line["excTraceback"] = traceback.format_exception(*record.exc_info)
+
+        log_line["taskId"] = self.task_id
 
         try:
             self.channel.basic_publish("karton.logs", "", json.dumps(log_line), pika.BasicProperties())
@@ -47,24 +53,20 @@ class KartonBaseService:
         self.log.setLevel(logging.DEBUG)
         stream_handler = logging.StreamHandler()
         stream_handler.setFormatter(logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s"))
+        self.rmq_handler = RabbitMQHandler(parameters)
         self.log.addHandler(stream_handler)
-        self.log.addHandler(RabbitMQHandler(parameters))
+        self.log.addHandler(self.rmq_handler)
 
     def process(self):
         raise RuntimeError("Not implemented.")
 
     def send_create_task(self, task):
-        if self.current_task:
-            parent_task_id = self.current_task.uid
-        else:
-            parent_task_id = None
-
         op_json = json.dumps({
             "type": "create_task",
             "event": {
                 "identity": self.identity,
-                "parent_task_id": parent_task_id,
-                "task_id": task.uid
+                "uid_stack": task.uid_stack,
+                "uid": task.uid
             }
         })
 
@@ -78,6 +80,7 @@ class KartonBaseService:
     def internal_process(self, channel, method, properties, body):
         msg = json.loads(body)
         self.current_task = Task.unserialize(properties.headers, msg)
+        self.rmq_handler.set_task_id(self.current_task.uid)
 
         try:
             self.process()
@@ -94,19 +97,39 @@ class KartonBaseService:
 
 class Task:
     def __init__(self, headers, resources, payload):
-        self.uid = str(uuid.uuid4())
+        """
+        Create new root Task.
+        """
+        self.uid_stack = [str(uuid.uuid4())]
 
         self.headers = headers
         self.resources = resources
         self.payload = payload
 
+    @property
+    def uid(self):
+        return self.uid_stack[-1]
+
+    def derive_task(self, headers=None, resources=None, payload=None):
+        """
+        Derive new Task which is a child of this Task.
+        """
+        task = Task(headers or self.headers, resources or self.resources, payload or self.payload)
+        task.uid_stack = self.uid_stack + task.uid_stack
+        return task
+
     def serialize(self):
-        return json.dumps({"uid": self.uid, "resources": self.resources, "payload": self.payload})
+        return json.dumps({
+            "uid_stack": self.uid_stack,
+            "resources": self.resources,
+            "payload": self.payload
+        })
 
     @staticmethod
     def unserialize(headers, data):
         task = Task(headers, data["resources"], data["payload"])
-        task.uid = data["uid"]
+        task.uid_stack = data["uid_stack"]
+
         return task
 
     def __repr__(self):
