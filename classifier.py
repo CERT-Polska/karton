@@ -1,4 +1,7 @@
+import argparse
 import random
+
+import pika
 
 from karton import KartonBaseService, Task
 
@@ -12,4 +15,9 @@ class Classifier(KartonBaseService):
 
 
 if __name__ == "__main__":
-    Classifier().loop()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--amqp-url', nargs='?', default='amqp://guest:guest@localhost')
+
+    args = parser.parse_args()
+
+    Classifier(pika.URLParameters(args.amqp_url)).loop()

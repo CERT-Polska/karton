@@ -1,3 +1,7 @@
+import argparse
+
+import pika
+
 from karton import KartonBaseService
 
 
@@ -9,4 +13,9 @@ class Ripper(KartonBaseService):
 
 
 if __name__ == "__main__":
-    Ripper().loop()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--amqp_url', nargs='?', default='amqp://guest:guest@localhost')
+
+    args = parser.parse_args()
+
+    Ripper(pika.URLParameters(args.amqp_url)).loop()

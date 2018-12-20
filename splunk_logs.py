@@ -1,13 +1,29 @@
-import os
+"""
+Fetch subsystem logs from RabbitMQ queue and feed them to Splunk.
+"""
+import argparse
 
+import logging
 import pika
 import splunklib.client
 
 
-service = splunklib.client.connect(host='localhost', port=8089, username='monk', password=os.environ['SPLUNK_PASSWORD'])
+logging.basicConfig(level=logging.INFO)
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--amqp-url', nargs='?', default='amqp://guest:guest@localhost')
+parser.add_argument('--splunk-host', nargs='?', default='localhost')
+parser.add_argument('--splunk-port', nargs='?', default=8089, type=int)
+parser.add_argument('--splunk-username', nargs='?', required=True)
+parser.add_argument('--splunk-password', nargs='?', required=True)
+
+args = parser.parse_args()
+
+service = splunklib.client.connect(host=args.splunk_host, port=args.splunk_port,
+                                   username=args.splunk_username, password=args.splunk_password)
 splunk_index = service.indexes['some_events']
 
-connection = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
+connection = pika.BlockingConnection(pika.URLParameters(args.amqp_url))
 channel = connection.channel()
 
 result = channel.queue_declare(exclusive=True)
@@ -17,7 +33,7 @@ channel.queue_bind(exchange='karton.logs', queue=queue_name, routing_key='')
 
 
 def log_callback(ch, method, properties, body):
-    print('Sending', body)
+    logging.info('Sending', body)
     splunk_index.submit(event=body, source='logs', sourcetype='some_events')
 
 
