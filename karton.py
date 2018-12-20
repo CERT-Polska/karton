@@ -30,6 +30,7 @@ class RabbitMQHandler(logging.Handler):
             log_line["excType"] = record.exc_info[0].__name__
             log_line["excTraceback"] = traceback.format_exception(*record.exc_info)
 
+        log_line["type"] = "log"
         log_line["taskId"] = self.task_id
 
         try:

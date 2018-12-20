@@ -11,12 +11,10 @@ class Classifier(KartonBaseService):
 
     def process(self):
         self.log.info('LOL XD', extra={'tss': random.randint(0, 10)})
-        task = Task({"type": "exe"}, [], {})
-        self.send_task(task)
-        task = Task({"type": "exe"}, [], {})
-        self.send_task(task)
-        task = Task({"type": "exe"}, [], {})
-        self.send_task(task)
+
+        self.send_task(self.current_task.derive_task({"type": "exe"}, [], {}))
+        self.send_task(self.current_task.derive_task({"type": "exe"}, [], {}))
+        self.send_task(self.current_task.derive_task({"type": "exe"}, [], {}))
 
 
 if __name__ == "__main__":
