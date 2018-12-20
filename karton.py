@@ -1,3 +1,7 @@
+"""
+Base library for karton subsystems.
+"""
+
 import json
 import traceback
 from typing import List
