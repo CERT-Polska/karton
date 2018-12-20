@@ -8,7 +8,7 @@ from karton import KartonBaseService
 class Ripper(KartonBaseService):
     identity = "karton.ripper"
 
-    def process(self, task):
+    def process(self):
         raise RuntimeError('fucked up')
 
 

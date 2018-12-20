@@ -30,10 +30,13 @@ result = channel.queue_declare(exclusive=True)
 queue_name = result.method.queue
 
 channel.queue_bind(exchange='karton.logs', queue=queue_name, routing_key='')
+channel.queue_bind(exchange='karton.operations', queue=queue_name, routing_key='')
 
 
 def log_callback(ch, method, properties, body):
     logging.info('Sending: %s', body)
+    print(ch, method, properties)
+
     splunk_index.submit(event=body, source='logs', sourcetype='some_events')
 
 

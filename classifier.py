@@ -9,9 +9,10 @@ from karton import KartonBaseService, Task
 class Classifier(KartonBaseService):
     identity = "karton.classifier"
 
-    def process(self, task):
+    def process(self):
         self.log.info('LOL XD', extra={'tss': random.randint(0, 10)})
-        self.send_task(Task({"type": "exe"}, []))
+        task = Task({"type": "exe"}, [], {})
+        self.send_task(task)
 
 
 if __name__ == "__main__":
