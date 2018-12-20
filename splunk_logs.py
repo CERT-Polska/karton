@@ -8,7 +8,7 @@ import pika
 import splunklib.client
 
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="[%(asctime)s][%(levelname)s] %(message)s")
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--amqp-url', nargs='?', default='amqp://guest:guest@localhost')
@@ -33,7 +33,7 @@ channel.queue_bind(exchange='karton.logs', queue=queue_name, routing_key='')
 
 
 def log_callback(ch, method, properties, body):
-    logging.info('Sending', body)
+    logging.info('Sending: %s', body)
     splunk_index.submit(event=body, source='logs', sourcetype='some_events')
 
 

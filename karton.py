@@ -40,7 +40,9 @@ class KartonBaseService:
         self.channel = connection.channel()
         self.log = logging.getLogger(self.identity)
         self.log.setLevel(logging.DEBUG)
-        self.log.addHandler(logging.StreamHandler())
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s"))
+        self.log.addHandler(stream_handler)
         self.log.addHandler(RabbitMQHandler(parameters))
 
     def process(self, task):
