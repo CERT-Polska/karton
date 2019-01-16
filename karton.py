@@ -1,8 +1,10 @@
 """
 Base library for karton subsystems.
 """
-
+import contextlib
 import json
+import shutil
+import tempfile
 import traceback
 import uuid
 import sys
@@ -139,24 +141,22 @@ class Task:
 class NoContentException(Exception):
     pass
 
+class ContentDoesntExist(Exception):
+    pass
 
 class ResourceFlagEnum(Enum):
     DIRECTORY = "Directory"
 
 
 class Resource:
-    def __init__(self, name, content=None, bucket=minio_config["bucket"], _uid=None, flags=None):
+    def __init__(self, name, content=None, bucket=minio_config["bucket"], _uid=None):
         if _uid is None:
             _uid = str(uuid.uuid4())
-
-        if flags is None:
-            flags = []
 
         self.name = name
         self.uid = _uid
         self._content = content
         self.bucket = bucket
-        self.flags = flags
 
         self.log = logging.getLogger(self.name)
         self.log.setLevel(logging.DEBUG)
@@ -222,6 +222,36 @@ class Resource:
 
     def __repr__(self):
         return self.serialize()
+
+class DirResource(Resource):
+    def __init__(self, name, directory_path=None, bucket=minio_config["bucket"], _uid=None):
+        self.flags = [ResourceFlagEnum.DIRECTORY]
+        self._path = None
+        content = None
+
+        if directory_path is not None:
+            content = zip_dir(directory_path)
+        super(name, content, bucket, _uid)
+
+    @property
+    def content(self):
+        raise NotImplementedError("DirResource doesn't support content field, use path contextmanager instead to access directory")
+
+    @contextlib.contextmanager
+    def path(self):
+        if self._content is None:
+            raise ContentDoesntExist("No content was found in the DirResource")
+
+        tmpdir = tempfile.mkdtemp()
+        z = zipfile.ZipFile(self._content)
+        z.extractall(tmpdir)
+        try:
+            yield tmpdir
+        finally:
+            shutil.rmtree(tmpdir)
+
+
+
 
 
 def zip_dir(directory):
