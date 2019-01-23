@@ -19,9 +19,9 @@ class Classifier(KartonBaseService):
         task.add_resource(r1)
         self.send_task(task)
 
-        self.send_task(self.current_task.derive_task({"type": "exe"}))
-        self.send_task(self.current_task.derive_task({"type": "exe"}))
-        self.send_task(self.current_task.derive_task({"type": "exe"}))
+        self.send_task(self.current_task.derive_new_task({"type": "exe"}))
+        self.send_task(self.current_task.derive_new_task({"type": "exe"}))
+        self.send_task(self.current_task.derive_new_task({"type": "exe"}))
 
 
 if __name__ == "__main__":
