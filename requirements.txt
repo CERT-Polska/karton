@@ -1,3 +1,4 @@
 pika
+minio
 splunk-sdk
 python-magic
