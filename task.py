@@ -1,8 +1,7 @@
 import json
 import uuid
 
-from resource import Resource
-
+from resource import Resource, DirResource, ResourceFlagEnum
 
 class Task:
     def __init__(self, headers, resources=None, payload=None):
@@ -46,7 +45,12 @@ class Task:
 
     @staticmethod
     def unserialize(headers, data, config=None):
-        resources = [Resource._from_dict(x, config=config) for x in data["resources"]]
+        resources = []
+        for resource in data["resources"]:
+            r = resource
+            if ResourceFlagEnum.DIRECTORY in resource["flags"]:
+                r = DirResource._from_dict(resource, config=config)
+            resources.append(r)
 
         task = Task(headers, resources, data["payload"])
         task.uid_stack = data["uid_stack"]
