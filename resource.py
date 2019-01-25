@@ -11,14 +11,16 @@ from io import BytesIO, StringIO
 
 from minio import Minio
 
-from config import minio_config
-
 
 class NoContentException(Exception):
     pass
 
 
 class ContentDoesntExist(Exception):
+    pass
+
+
+class NotConfiguredResource(Exception):
     pass
 
 
@@ -32,9 +34,18 @@ class Resource:
 
     This exists to make it easier to share resources across clients
     """
-    def __init__(self, name, content=None, bucket=minio_config["bucket"], _uid=None):
+    def __init__(self, name, content=None, bucket=None, _uid=None, config=None):
         if _uid is None:
             _uid = str(uuid.uuid4())
+
+        if config is None:
+            raise NotConfiguredResource("Provide config for resource")
+        self.config = config
+
+        self.minio = Minio(self.config["address"], self.config["access_key"], self.config["secret_key"], secure=False)
+        if bucket and not self.minio.bucket_exists(bucket):
+            self.minio.make_bucket(bucket_name=bucket)
+
 
         self.name = name
         self.uid = _uid
@@ -53,10 +64,8 @@ class Resource:
         :return: content of the resource
         """
         if self._content is None:
-            minio = MinioSingleton.instance()
-
-            reader = minio.get_object(self.bucket, self.uid)
-            sio = StringIO(reader.data)
+            reader = self.minio.get_object(self.bucket, self.uid)
+            sio = BytesIO(reader.data)
             self._content = sio.getvalue()
             self.log.debug("Downloaded content")
         return self._content
@@ -84,21 +93,21 @@ class Resource:
         return cls(name, None, bucket, _uid=_uid)
 
     @classmethod
-    def _from_dict(cls, data_dict):
+    def _from_dict(cls, data_dict, config=None):
         bucket = data_dict["bucket"]
         name = data_dict["name"]
         _uid = data_dict["uid"]
-        return cls(name, None, bucket, _uid=_uid)
+        return cls(name, None, bucket, _uid=_uid, config=config)
 
     def _upload(self):
         """
         This is where we sync with remote, never to be used by user explicitly
+        Should be invoked while uploading task
         :return: None
         """
         if self._content is None:
             raise NoContentException("Resource does not have any content in it")
-        minio = MinioSingleton.instance()
-        minio.put_object(self.bucket, self.uid, self._content, len(self._content))
+        self.minio.put_object(self.bucket, self.uid, BytesIO(self._content), len(self._content))
         self.log.debug("Uploaded")
 
     def __repr__(self):
@@ -112,7 +121,7 @@ class DirResource(Resource):
 
     Content extraction should be done through path or zip_file.
     """
-    def __init__(self, name, directory_path=None, bucket=minio_config["bucket"], _uid=None):
+    def __init__(self, name, directory_path=None, bucket=None, _uid=None, config=None):
         """
         :param name: name of the resource
         :param directory_path: directory to be compressed and used as a minio object later on
@@ -125,7 +134,7 @@ class DirResource(Resource):
         if directory_path is not None:
             content = zip_dir(directory_path)
 
-        super().__init__(name, content, bucket, _uid)
+        super().__init__(name, content, bucket, _uid, config=config)
 
         self.flags = [ResourceFlagEnum.DIRECTORY]
 
@@ -177,15 +186,6 @@ def zip_dir(directory):
                 dest = os.path.join(rel, name)
                 zf.write(full, dest)
     return result
-
-
-class MinioSingleton:
-    mini = None
-    @classmethod
-    def instance(cls):
-        if cls.minio is None:
-            cls.minio = Minio(minio_config["address"], minio_config["access_key"], minio_config["secret_key"], secure=True)
-        return cls.minio
 
 
 

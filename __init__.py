@@ -1,1 +1,1 @@
-__all__ = ["KartonBaseService", "Task","Resource"]
+__all__ = ["Karton", "Task","Resource"]

@@ -8,6 +8,11 @@ import pika
 import logging
 
 from task import Task
+from config import Config
+from resource import Resource, DirResource
+
+TASKS_QUEUE = "karton.tasks"
+LOGS_QUEUE = "karton.logs"
 
 
 class RabbitMQHandler(logging.Handler):
@@ -34,7 +39,7 @@ class RabbitMQHandler(logging.Handler):
         log_line["taskId"] = self.task_id
 
         try:
-            self.channel.basic_publish("karton.logs", "", json.dumps(log_line), pika.BasicProperties())
+            self.channel.basic_publish(LOGS_QUEUE, "", json.dumps(log_line), pika.BasicProperties())
         except pika.exceptions.ChannelClosed:
             pass
 
@@ -44,8 +49,13 @@ class RabbitMQHandler(logging.Handler):
 
 class Karton:
     identity = None
+    filters = None
 
-    def __init__(self, parameters):
+    def __init__(self, config):
+        self.config = config
+
+        parameters = pika.URLParameters(self.config.rmq_config["address"])
+
         self.connection = pika.BlockingConnection(parameters)
         self.channel = self.connection.channel()
         self.current_task = None
@@ -61,28 +71,33 @@ class Karton:
     def process(self):
         raise RuntimeError("Not implemented.")
 
-    def send_create_task(self, task):
-        op_json = json.dumps({
-            "type": "create_task",
-            "event": {
-                "identity": self.identity,
-                "uid_stack": task.uid_stack,
-                "uid": task.uid,
-                "resources": [resource.to_dict() for resource in task.resources]
-            }
-        })
+    def create_task(self, *args, **kwargs):
+        return Task(*args, **kwargs)
 
-        self.channel.basic_publish("karton.operations", "", op_json, pika.BasicProperties())
+    def create_resource(self, *args, **kwargs):
+        return Resource(*args, **kwargs, bucket=self.config.minio_config["bucket"], config=self.config.minio_config)
+
+    def create_dir_resource(self, *args, **kwargs):
+        return DirResource(*args, **kwargs, bucket=self.config.minio_config["bucket"], config=self.config.minio_config)
 
     def send_task(self, task):
-        task = self.current_task.derive_task(task)
-        self.send_create_task(task)
+        """
+        We send task as a child of a current one to maintain whole chain of events
+        :param task:
+        :return:
+        """
+        if self.current_task is not None:
+            task = self.current_task.derive_task(task)
+
         task_json = task.serialize()
-        self.channel.basic_publish("karton.tasks", "", task_json, pika.BasicProperties(headers=task.headers))
+        for resource in task.resources:
+            resource._upload()
+
+        self.channel.basic_publish(TASKS_QUEUE, "", task_json, pika.BasicProperties(headers=task.headers))
 
     def internal_process(self, channel, method, properties, body):
         msg = json.loads(body)
-        self.current_task = Task.unserialize(properties.headers, msg)
+        self.current_task = Task.unserialize(properties.headers, msg, self.config.minio_config)
         self.rmq_handler.set_task_id(self.current_task.uid)
 
         try:
@@ -91,10 +106,15 @@ class Karton:
             self.log.exception("Failed to process task")
 
     def loop(self):
+        self.channel.queue_declare(queue=self.identity, durable=False, auto_delete=True)
+
+        # RMQ in headers doesn't allow multiple
+        for filter in self.filters:
+            self.channel.queue_bind(exchange=TASKS_QUEUE, queue=self.identity, routing_key='',
+                                    arguments=filter.update({"x-match": "all"}))
+
         self.channel.basic_consume(self.internal_process, queue=self.identity, no_ack=True)
         self.channel.start_consuming()
 
     def close(self):
         self.connection.close()
-
-

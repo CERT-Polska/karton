@@ -1,33 +1,34 @@
-import argparse
-import random
-
-import pika
-
-from karton import KartonBaseService, Task, Resource
+from karton import Karton, Config
 
 
-class Classifier(KartonBaseService):
+class Classifier(Karton):
     identity = "karton.classifier"
+    filters = [
+        {
+            "type": "sample",
+        },
+    ]
 
     def process(self):
-        self.log.info('LOL XD', extra={'tss': random.randint(0, 10)})
         print(self.current_task)
-        print([x for x in self.current_task.resources])
-        task = Task({"type": "exe"})
-        r1 = Resource("analiza", "Analiza")
 
-        task.add_resource(r1)
-        self.send_task(task)
+        sample = None
+        for resource in self.current_task.resources:
+            if resource.name == "sample":
+                sample = resource
+                break
+        else:
+            return
 
-        self.send_task(self.current_task.derive_new_task({"type": "exe"}))
-        self.send_task(self.current_task.derive_new_task({"type": "exe"}))
-        self.send_task(self.current_task.derive_new_task({"type": "exe"}))
+        sample_content = sample.content
+        print(sample_content)
+        if sample_content[:2] == "PE":
+            task = self.create_task({"type": "exe"})
+            task.add_resource(sample)
+            self.send_task(task)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--amqp-url', nargs='?', default='amqp://guest:guest@localhost')
-
-    args = parser.parse_args()
-
-    Classifier(pika.URLParameters(args.amqp_url)).loop()
+    conf = Config("config.ini")
+    c = Classifier(conf)
+    c.loop()

@@ -13,6 +13,7 @@ class Task:
             resources = []
         if payload is None:
             payload = []
+
         self.uid_stack = [str(uuid.uuid4())]
 
         self.headers = headers
@@ -44,8 +45,8 @@ class Task:
                            "payload": self.payload})
 
     @staticmethod
-    def unserialize(headers, data):
-        resources = [Resource._from_dict(x) for x in data["resources"]]
+    def unserialize(headers, data, config=None):
+        resources = [Resource._from_dict(x, config=config) for x in data["resources"]]
 
         task = Task(headers, resources, data["payload"])
         task.uid_stack = data["uid_stack"]
