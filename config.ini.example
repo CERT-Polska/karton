@@ -1,0 +1,9 @@
+[rmq]
+address = amqp://guest:guest@localhost/karton
+
+[minio]
+secret_key = OiYE7Ga+KjCcfgLiufk4BwwGnYgi+hmrr5JBLYzf
+access_key = 1XB0DQBACMKDC2WHYPFO
+address = 127.0.0.1:9000
+bucket = classifier
+
