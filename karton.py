@@ -110,8 +110,9 @@ class Karton:
 
         # RMQ in headers doesn't allow multiple
         for filter in self.filters:
+            filter.update({"x-match": "all"})
             self.channel.queue_bind(exchange=TASKS_QUEUE, queue=self.identity, routing_key='',
-                                    arguments=filter.update({"x-match": "all"}))
+                                    arguments=filter)
 
         self.channel.basic_consume(self.internal_process, queue=self.identity, no_ack=True)
         self.channel.start_consuming()
