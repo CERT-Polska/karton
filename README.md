@@ -14,6 +14,7 @@ To use karton you have to provide class that inherits from Karton.
 
 TODO(des): dopisac rzeczy
 
+```python
     class Classifier(Karton):
     # identity is used for unique idefntification of subsystem
     # it will also become a queue name when started
@@ -57,6 +58,7 @@ TODO(des): dopisac rzeczy
             task.add_resource(sample)
             # send task to queues for further processing
             self.send_task(task)
+```
 
 ### Technical details
 The above is accomplished by strapping together RabbitMQ with Minio.
