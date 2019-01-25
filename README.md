@@ -14,6 +14,50 @@ To use karton you have to provide class that inherits from Karton.
 
 TODO(des): dopisac rzeczy
 
+    class Classifier(Karton):
+    # identity is used for unique idefntification of subsystem
+    # it will also become a queue name when started
+    # for horizontal scaling, you can reuse this in multiple instances
+    identity = "karton.classifier"
+    
+    # filters define what you want to get from the queue
+    # key: value pairs are AND'ed and list elements are OR'ed
+    filters = [
+        {
+            "type": "sample",
+            "kind": "raw"
+        },
+    ]
+
+    def process(self):
+        # self.current_task - stores task which arrival invoked the process() function
+        # self.current_task.headers - dict of headers, useful when multiple filters are used
+
+        sample = None
+        # current_task contains resources which are needed to handle the task
+        for resource in self.current_task.resources:
+            if resource.name == "sample":
+                sample = resource
+                break
+        else:
+            return
+        
+        # you can access content of resources for processing
+        sample_content = sample.content
+        print(sample_content)
+        
+        # process
+        # handling of task should either end in creating new task
+        # or adding some newly obtained information to one of the 
+        # persistent storage systems, ie. mwdb
+        if sample_content[:2] == b"MZ":
+            # create new task if needed
+            task = self.create_task({"type": "sample", "kind": "executable"})
+            # append resource to task
+            task.add_resource(sample)
+            # send task to queues for further processing
+            self.send_task(task)
+
 ### Technical details
 The above is accomplished by strapping together RabbitMQ with Minio.
 
