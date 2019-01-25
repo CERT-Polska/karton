@@ -2,3 +2,5 @@ pika
 minio
 splunk-sdk
 python-magic
+chardet
+sflock

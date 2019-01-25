@@ -4,6 +4,7 @@ import zipfile
 import struct
 import re
 from io import BytesIO
+import chardet
 
 
 class Classifier(Karton):
@@ -24,12 +25,14 @@ class Classifier(Karton):
             self.log.error("Got task without bound 'sample' resource")
             return
 
+        file_name = self._meta_field("file_name", "(unknown)")
         sample_class = self._classify(sample)
         if sample_class is None:
-            self.log.info("Sample not recognized (unsupported type)")
+            self.log.info("Sample {} not recognized (unsupported type)".format(file_name))
             return
 
-        task = self.create_task(sample_class)
+        self.log.info("Classified {} as {}".format(file_name, repr(sample_class)))
+        task = self.create_task(sample_class, payload=self.current_task.payload)
         task.add_resource(sample)
         self.send_task(task)
 
@@ -162,7 +165,7 @@ class Classifier(Karton):
                 return sample_type
 
         # Check docx/xlsx/pptx by libmagic
-        for ext, typepart in office_extensions.values():
+        for ext, typepart in office_extensions.items():
             if magic.startswith(typepart):
                 sample_type.update({
                     "kind": "document",
@@ -225,7 +228,7 @@ class Classifier(Karton):
         partial = content[:4096]
 
         # Dumped PE file heuristics (PE not recognized by libmagic)
-        if ".text" in partial and "This program cannot be run" in partial:
+        if b".text" in partial and b"This program cannot be run" in partial:
             sample_type.update({
                 "kind": "dump",
                 "platform": "win32",
@@ -235,7 +238,7 @@ class Classifier(Karton):
 
         if len(partial) > 0x40:
             pe_offs = struct.unpack("<H", partial[0x3c:0x3e])[0]
-            if partial[pe_offs:pe_offs + 2] == "PE":
+            if partial[pe_offs:pe_offs + 2] == b"PE":
                 sample_type.update({
                     "kind": "dump",
                     "platform": "win32",
@@ -243,7 +246,7 @@ class Classifier(Karton):
                 })
                 return sample_type
 
-        if partial.startswith("MZ"):
+        if partial.startswith(b"MZ"):
             sample_type.update({
                 "kind": "dump",
                 "platform": "win32",
@@ -251,33 +254,42 @@ class Classifier(Karton):
             })
             return sample_type
 
-        vbs_keywords = ["dim ", "set ", "chr(", "sub ", "on error ", "createobject"]
-        js_keywords = ["function ", "function(", "this.", "this[", "new ", "createobject", "activexobject"]
+        # Heuristics for scripts
+        try:
+            try:
+                partial_str = partial.decode(chardet.detect(partial)['encoding']).lower()
+            except Exception:
+                pass
+            else:
+                vbs_keywords = ["dim ", "set ", "chr(", "sub ", "on error ", "createobject"]
+                js_keywords = ["function ", "function(", "this.", "this[", "new ", "createobject", "activexobject"]
 
-        if len([True for keyword in vbs_keywords if keyword in partial]) >= 2:
-            sample_type.update({
-                "kind": "script",
-                "platform": "win32",
-                "extension": "vbs"
-            })
-            return sample_type
+                if len([True for keyword in vbs_keywords if keyword in partial_str]) >= 2:
+                    sample_type.update({
+                        "kind": "script",
+                        "platform": "win32",
+                        "extension": "vbs"
+                    })
+                    return sample_type
 
-        if len([True for keyword in js_keywords if keyword in partial]) >= 2:
-            sample_type.update({
-                "kind": "script",
-                "platform": "win32",
-                "extension": "js"
-            })
-            return sample_type
+                if len([True for keyword in js_keywords if keyword in partial_str]) >= 2:
+                    sample_type.update({
+                        "kind": "script",
+                        "platform": "win32",
+                        "extension": "js"
+                    })
+                    return sample_type
 
-        # JSE heuristics
-        if re.match("#@~\\^[a-zA-Z0-9+/]{6}==", partial):
-            sample_type.update({
-                "kind": "script",
-                "platform": "win32",
-                "extension": "jse"   # jse is more possible than vbe
-            })
-            return sample_type
+                # JSE heuristics
+                if re.match("#@~\\^[a-zA-Z0-9+/]{6}==", partial_str):
+                    sample_type.update({
+                        "kind": "script",
+                        "platform": "win32",
+                        "extension": "jse"   # jse is more possible than vbe
+                    })
+                    return sample_type
+        except Exception as e:
+            self.log.exception(e)
 
         # If not recognized then unsupported
         return None
