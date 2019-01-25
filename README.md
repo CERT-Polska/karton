@@ -12,7 +12,6 @@ That's why we are developing Karton, wrapper for your package! :D
 ### Usage
 To use karton you have to provide class that inherits from Karton.
 
-TODO(des): dopisac rzeczy
 
 ```python
     class Classifier(Karton):
