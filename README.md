@@ -16,8 +16,8 @@ TODO(des): dopisac rzeczy
 
 ```python
     class Classifier(Karton):
-    # identity is used for unique idefntification of subsystem
-    # it will also become a queue name when started
+    # identity is used for unique identification of the given subsystem
+    # it will also become a queue name after launch
     # for horizontal scaling, you can reuse this in multiple instances
     identity = "karton.classifier"
     
