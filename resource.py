@@ -134,7 +134,7 @@ class DirResource(Resource):
         if directory_path is not None:
             content = zip_dir(directory_path).getvalue()
 
-        super().__init__(name, content, bucket, _uid, config=config)
+        super(DirResource, self).__init__(name, content, bucket, _uid, config=config)
 
         self.flags = [ResourceFlagEnum.DIRECTORY]
 
