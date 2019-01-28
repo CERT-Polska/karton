@@ -74,10 +74,10 @@ class Karton(object):
         return Task(*args, **kwargs)
 
     def create_resource(self, *args, **kwargs):
-        return Resource(*args, **kwargs, bucket=self.config.minio_config["bucket"], config=self.config.minio_config)
+        return Resource(*args, bucket=self.config.minio_config["bucket"], config=self.config.minio_config, **kwargs)
 
     def create_dir_resource(self, *args, **kwargs):
-        return DirResource(*args, **kwargs, bucket=self.config.minio_config["bucket"], config=self.config.minio_config)
+        return DirResource(*args, bucket=self.config.minio_config["bucket"], config=self.config.minio_config, **kwargs)
 
     def send_task(self, task):
         """
