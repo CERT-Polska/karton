@@ -7,8 +7,8 @@ import traceback
 import pika
 import logging
 
-from task import Task
-from resource import Resource, DirResource
+from .task import Task
+from .resource import Resource, DirResource
 
 TASKS_QUEUE = "karton.tasks"
 LOGS_QUEUE = "karton.logs"

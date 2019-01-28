@@ -1,7 +1,7 @@
 import json
 import uuid
 
-from resource import Resource, DirResource, ResourceFlagEnum
+from .resource import Resource, DirResource, ResourceFlagEnum
 
 
 class Task(object):
