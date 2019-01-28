@@ -8,7 +8,6 @@ import pika
 import logging
 
 from task import Task
-from config import Config
 from resource import Resource, DirResource
 
 TASKS_QUEUE = "karton.tasks"
@@ -47,7 +46,7 @@ class RabbitMQHandler(logging.Handler):
         self.connection.close()
 
 
-class Karton:
+class Karton(object):
     identity = None
     filters = None
 

@@ -4,7 +4,7 @@ import uuid
 from resource import Resource
 
 
-class Task:
+class Task(object):
     def __init__(self, headers, resources=None, payload=None):
         """
         Create new root Task.

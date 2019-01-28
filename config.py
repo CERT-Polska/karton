@@ -1,10 +1,10 @@
 import configparser
 
 
-class Config:
+class Config(object):
     def __init__(self, path):
-        config = configparser.ConfigParser()
-        config.read(path)
+        self.config = configparser.ConfigParser()
+        self.config.read(path)
 
-        self.minio_config = config["minio"]
-        self.rmq_config = config["rmq"]
+        self.minio_config = self.config["minio"]
+        self.rmq_config = self.config["rmq"]

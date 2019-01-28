@@ -28,7 +28,7 @@ class ResourceFlagEnum(Enum):
     DIRECTORY = "Directory"
 
 
-class Resource:
+class Resource(object):
     """
     Abstraction over remote minio objects.
 
