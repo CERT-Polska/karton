@@ -42,8 +42,9 @@ class Extractor(Karton):
 
         self.log.info("Got archive {}".format(fname))
 
-        if unpacked.children is None:
+        if not unpacked.children:
             self.log.warning("Don't know how to unpack this archive")
+            return
 
         for child in unpacked.children:
             fname = (child.filename and child.filename.decode("utf8")) or child.sha256

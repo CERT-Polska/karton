@@ -139,6 +139,7 @@ class Classifier(Karton):
                 "platform": "win32",
                 "extension": extension
             })
+            return sample_type
 
         # Office documents
         office_extensions = {
@@ -162,7 +163,7 @@ class Classifier(Karton):
             })
             if extension[:3] in office_extensions.keys():
                 sample_type["extension"] = extension
-                return sample_type
+            return sample_type
 
         # Check docx/xlsx/pptx by libmagic
         for ext, typepart in office_extensions.items():
@@ -199,6 +200,7 @@ class Classifier(Karton):
                 "platform": "win32",
                 "extension": "pdf"
             })
+            return sample_type
 
         # Archives
         archive_assoc = {
@@ -225,7 +227,7 @@ class Classifier(Karton):
             return sample_type
 
         # Content heuristics
-        partial = content[:4096]
+        partial = content[:2048]+content[-2048:]
 
         # Dumped PE file heuristics (PE not recognized by libmagic)
         if b".text" in partial and b"This program cannot be run" in partial:
@@ -259,10 +261,12 @@ class Classifier(Karton):
             try:
                 partial_str = partial.decode(chardet.detect(partial)['encoding']).lower()
             except Exception:
+                self.log.warning("Heuristics disabled - unknown encoding")
                 pass
             else:
                 vbs_keywords = ["dim ", "set ", "chr(", "sub ", "on error ", "createobject"]
-                js_keywords = ["function ", "function(", "this.", "this[", "new ", "createobject", "activexobject"]
+                js_keywords = ["function ", "function(", "this.", "this[", "new ", "createobject", "activexobject",
+                               "var ", "catch"]
 
                 if len([True for keyword in vbs_keywords if keyword in partial_str]) >= 2:
                     sample_type.update({
@@ -272,6 +276,7 @@ class Classifier(Karton):
                     })
                     return sample_type
 
+                self.log.info([keyword for keyword in js_keywords if keyword in partial_str])
                 if len([True for keyword in js_keywords if keyword in partial_str]) >= 2:
                     sample_type.update({
                         "kind": "script",
