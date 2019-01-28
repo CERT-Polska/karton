@@ -24,7 +24,7 @@ class NotConfiguredResource(Exception):
     pass
 
 
-class ResourceFlagEnum(Enum):
+class ResourceFlagEnum(str, Enum):
     DIRECTORY = "Directory"
 
 
@@ -42,10 +42,9 @@ class Resource(object):
             raise NotConfiguredResource("Provide config for resource")
         self.config = config
 
-        self.minio = Minio(self.config["address"], self.config["access_key"], self.config["secret_key"], secure=False)
+        self.minio = Minio(self.config["address"], self.config["access_key"], self.config["secret_key"], secure=True)
         if bucket and not self.minio.bucket_exists(bucket):
             self.minio.make_bucket(bucket_name=bucket)
-
 
         self.name = name
         self.uid = _uid
@@ -85,19 +84,16 @@ class Resource(object):
         return json.dumps(self.to_dict())
 
     @classmethod
-    def unserialize(cls, json_data):
-        data = json.load(json_data)
-        bucket = data["bucket"]
-        name = data["name"]
-        _uid = data["uid"]
-        return cls(name, None, bucket, _uid=_uid)
-
-    @classmethod
     def _from_dict(cls, data_dict, config=None):
         bucket = data_dict["bucket"]
         name = data_dict["name"]
         _uid = data_dict["uid"]
-        return cls(name, None, bucket, _uid=_uid, config=config)
+        flags = data_dict["flags"]
+
+        new_cls = cls(name, None, bucket, _uid=_uid, config=config)
+        new_cls.flags = flags
+        return new_cls
+
 
     def _upload(self):
         """
@@ -107,6 +103,7 @@ class Resource(object):
         """
         if self._content is None:
             raise NoContentException("Resource does not have any content in it")
+        print(type(self._content))
         self.minio.put_object(self.bucket, self.uid, BytesIO(self._content), len(self._content))
         self.log.debug("Uploaded")
 
@@ -132,7 +129,7 @@ class DirResource(Resource):
         content = None
 
         if directory_path is not None:
-            content = zip_dir(directory_path)
+            content = zip_dir(directory_path).getvalue()
 
         super().__init__(name, content, bucket, _uid, config=config)
 
@@ -155,8 +152,11 @@ class DirResource(Resource):
         Ensures that the unpacked content is removed after usage.
         :return: path to unpacked contents
         """
+
         if self._content is None:
-            raise ContentDoesntExist("No content was found in the DirResource")
+            reader = self.minio.get_object(self.bucket, self.uid)
+            self._content = BytesIO(reader.data)
+            self.log.debug("Downloaded content")
 
         tmpdir = tempfile.mkdtemp()
         z = zipfile.ZipFile(self._content)
