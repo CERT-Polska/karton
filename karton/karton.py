@@ -15,9 +15,9 @@ LOGS_QUEUE = "karton.logs"
 
 
 class RabbitMQHandler(logging.Handler):
-    def __init__(self, parameters):
+    def __init__(self, connection):
         logging.Handler.__init__(self)
-        self.connection = pika.BlockingConnection(parameters)
+        self.connection = connection
         self.channel = self.connection.channel()
         self.task_id = 'unknown'
 
@@ -63,7 +63,7 @@ class Karton(object):
         self.log.setLevel(logging.DEBUG)
         stream_handler = logging.StreamHandler()
         stream_handler.setFormatter(logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s"))
-        self.rmq_handler = RabbitMQHandler(parameters)
+        self.rmq_handler = RabbitMQHandler(self.connection)
         self.log.addHandler(stream_handler)
         self.log.addHandler(self.rmq_handler)
 

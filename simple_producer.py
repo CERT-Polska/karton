@@ -6,7 +6,6 @@ from karton import Karton, Config
 if __name__ == "__main__":
     conf = Config("config.ini")
     c = Karton(conf)
-    """
     t = c.create_task({"type": "analysis", "kind": "cuckoo1"})
     res = c.create_dir_resource("analysis", sys.argv[1])
     t.add_resource(res)
@@ -18,4 +17,5 @@ if __name__ == "__main__":
     t.add_resource(res)
     c.send_task(t)
     print("Sent")
+    """
 

@@ -28,10 +28,10 @@ class Classifier(Karton):
         file_name = self._meta_field("file_name", "(unknown)")
         sample_class = self._classify(sample)
         if sample_class is None:
-            self.log.info("Sample {} not recognized (unsupported type)".format(file_name))
+            self.log.info("Sample {} not recognized (unsupported type)".format(file_name.encode("utf8")))
             return
 
-        self.log.info("Classified {} as {}".format(file_name, repr(sample_class)))
+        self.log.info("Classified {} as {}".format(file_name.encode("utf8"), repr(sample_class)))
         task = self.create_task(sample_class, payload=self.current_task.payload)
         task.add_resource(sample)
         self.send_task(task)
@@ -226,6 +226,26 @@ class Classifier(Karton):
             })
             return sample_type
 
+        # E-mail
+        email_assoc = {
+            "msg": "Microsoft Outlook Message",
+            "eml": "multipart/mixed"
+        }
+        for ext in email_assoc.keys():
+            if email_assoc[ext] in magic:
+                sample_type.update({
+                    "kind": "archive",
+                    "extension": ext
+                })
+                return sample_type
+
+        if extension in email_assoc.keys():
+            sample_type.update({
+                "kind": "archive",
+                "extension": extension
+            })
+            return sample_type
+
         # Content heuristics
         partial = content[:2048]+content[-2048:]
 
@@ -262,7 +282,6 @@ class Classifier(Karton):
                 partial_str = partial.decode(chardet.detect(partial)['encoding']).lower()
             except Exception:
                 self.log.warning("Heuristics disabled - unknown encoding")
-                pass
             else:
                 vbs_keywords = ["dim ", "set ", "chr(", "sub ", "on error ", "createobject"]
                 js_keywords = ["function ", "function(", "this.", "this[", "new ", "createobject", "activexobject",
@@ -276,7 +295,6 @@ class Classifier(Karton):
                     })
                     return sample_type
 
-                self.log.info([keyword for keyword in js_keywords if keyword in partial_str])
                 if len([True for keyword in js_keywords if keyword in partial_str]) >= 2:
                     sample_type.update({
                         "kind": "script",
