@@ -24,7 +24,7 @@ class RabbitMQHandler(logging.Handler):
     def set_task_id(self, task_id):
         self.task_id = task_id
 
-    def emit(self, record: logging.LogRecord):
+    def emit(self, record):
         ignore_fields = ["args", "asctime", "msecs", "msg", "pathname", "process", "processName", "relativeCreated",
                          "exc_info", "exc_text", "stack_info", "thread", "threadName"]
         log_line = {k: v for k, v in record.__dict__.items() if k not in ignore_fields}
