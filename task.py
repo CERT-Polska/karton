@@ -3,6 +3,7 @@ import uuid
 
 from resource import Resource, DirResource, ResourceFlagEnum
 
+
 class Task(object):
     def __init__(self, headers, resources=None, payload=None):
         """
