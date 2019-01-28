@@ -51,6 +51,8 @@ class Task(object):
             r = resource
             if ResourceFlagEnum.DIRECTORY in resource["flags"]:
                 r = DirResource._from_dict(resource, config=config)
+            else:
+                r = Resource._from_dict(resource, config=config)
             resources.append(r)
 
         task = Task(headers, resources, data["payload"])

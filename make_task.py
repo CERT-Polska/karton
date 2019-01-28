@@ -2,7 +2,8 @@ import argparse
 
 import pika
 
-from karton import KartonBaseService, Task
+from karton import KartonBaseService
+from task import Task
 
 
 if __name__ == "__main__":

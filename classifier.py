@@ -1,4 +1,5 @@
-from karton import Karton, Config
+from karton import Karton
+from config import Config
 import magic
 import zipfile
 import struct

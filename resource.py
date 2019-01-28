@@ -42,7 +42,10 @@ class Resource(object):
             raise NotConfiguredResource("Provide config for resource")
         self.config = config
 
-        self.minio = Minio(self.config["address"], self.config["access_key"], self.config["secret_key"], secure=True)
+        self.minio = Minio(self.config["address"],
+                           self.config["access_key"],
+                           self.config["secret_key"],
+                           secure=bool(int(self.config.get("secure", True))))
         if bucket and not self.minio.bucket_exists(bucket):
             self.minio.make_bucket(bucket_name=bucket)
 
