@@ -4,3 +4,4 @@ splunk-sdk
 python-magic
 chardet
 sflock
+enum34
