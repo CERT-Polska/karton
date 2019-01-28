@@ -1,4 +1,8 @@
-import configparser
+try:
+    import configparser
+except ImportError:
+    import ConfigParser
+    configparser = ConfigParser
 
 
 class Config(object):
@@ -6,5 +10,5 @@ class Config(object):
         self.config = configparser.ConfigParser()
         self.config.read(path)
 
-        self.minio_config = self.config["minio"]
-        self.rmq_config = self.config["rmq"]
+        self.minio_config = dict(self.config.items("minio"))
+        self.rmq_config = dict(self.config.items("rmq"))
