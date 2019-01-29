@@ -9,21 +9,22 @@ import logging
 
 from .task import Task
 from .resource import Resource, DirResource
+from .rmq import RabbitMQClient
 
 TASKS_QUEUE = "karton.tasks"
 LOGS_QUEUE = "karton.logs"
 
 
-class RabbitMQHandler(logging.Handler):
+class RabbitMQHandler(logging.Handler, RabbitMQClient):
     def __init__(self, connection):
         logging.Handler.__init__(self)
-        self.connection = connection
-        self.channel = self.connection.channel()
+        RabbitMQClient.__init__(self, connection=connection)
         self.task_id = 'unknown'
 
     def set_task_id(self, task_id):
         self.task_id = task_id
 
+    @RabbitMQClient.retryable
     def emit(self, record):
         ignore_fields = ["args", "asctime", "msecs", "msg", "pathname", "process", "processName", "relativeCreated",
                          "exc_info", "exc_text", "stack_info", "thread", "threadName"]
@@ -37,29 +38,22 @@ class RabbitMQHandler(logging.Handler):
         log_line["type"] = "log"
         log_line["taskId"] = self.task_id
 
-        try:
-            self.channel.basic_publish(LOGS_QUEUE, "", json.dumps(log_line), pika.BasicProperties())
-        except pika.exceptions.ChannelClosed:
-            pass
-
-    def close(self):
-        self.connection.close()
+        self.channel.basic_publish(LOGS_QUEUE, "", json.dumps(log_line), pika.BasicProperties())
 
 
-class Karton(object):
-    identity = None
+class Karton(RabbitMQClient):
+    identity = ""
     filters = None
 
     def __init__(self, config):
         self.config = config
 
         parameters = pika.URLParameters(self.config.rmq_config["address"])
+        super(Karton, self).__init__(parameters=parameters)
 
-        self.connection = pika.BlockingConnection(parameters)
-        self.channel = self.connection.channel()
         self.current_task = None
 
-        self.log = logging.getLogger(self.identity)
+        self.log = logging.getLogger("karton."+self.identity)
         self.log.setLevel(logging.DEBUG)
         stream_handler = logging.StreamHandler()
         stream_handler.setFormatter(logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s"))
@@ -79,6 +73,7 @@ class Karton(object):
     def create_dir_resource(self, *args, **kwargs):
         return DirResource(*args, bucket=self.config.minio_config["bucket"], config=self.config.minio_config, **kwargs)
 
+    @RabbitMQClient.retryable
     def send_task(self, task):
         """
         We send task as a child of a current one to maintain whole chain of events
@@ -100,11 +95,15 @@ class Karton(object):
         self.rmq_handler.set_task_id(self.current_task.uid)
 
         try:
+            self.log.info("Received new task")
             self.process()
+            self.log.info("Task done")
         except Exception as e:
             self.log.exception("Failed to process task")
 
+    @RabbitMQClient.retryable
     def loop(self):
+        self.log.info("Service {} started".format(self.identity))
         self.channel.queue_declare(queue=self.identity, durable=False, auto_delete=True)
 
         # RMQ in headers doesn't allow multiple
@@ -115,6 +114,3 @@ class Karton(object):
 
         self.channel.basic_consume(self.internal_process, queue=self.identity, no_ack=True)
         self.channel.start_consuming()
-
-    def close(self):
-        self.connection.close()

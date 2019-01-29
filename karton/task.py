@@ -50,13 +50,10 @@ class Task(object):
         task.uid_stack = data["uid_stack"]
         return task
 
-    def get_resource_by_name(self, name, many=False):
+    def get_resource_by_name(self, name):
         for resource in self.resources:
             if resource.name == name:
-                if many:
-                    yield resource
-                else:
-                    return resource
+                return resource
         else:
             raise RuntimeError("Resource {} not found".format(name))
 

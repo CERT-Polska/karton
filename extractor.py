@@ -40,12 +40,12 @@ class Extractor(Karton):
             self.log.info("Unpacked child {}".format(fname))
 
             if not child.contents:
-                self.log.warning("Child has no contents")
+                self.log.warning("Child has no contents or protected by unknown password")
                 continue
 
             task = self.create_task(
                 headers={"type": "sample", "kind": "raw"},
-                resource=[
+                resources=[
                     self.create_resource("sample", child.contents)
                 ],
                 payload={
