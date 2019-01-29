@@ -86,7 +86,7 @@ class Karton(object):
         :return:
         """
         if self.current_task is not None:
-            task = self.current_task.derive_task(task)
+            task.bind_task(self.current_task)
 
         task_json = task.serialize()
         for resource in task.resources:

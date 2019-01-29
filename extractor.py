@@ -11,23 +11,11 @@ class Extractor(Karton):
         },
     ]
 
-    def _meta_field(self, field, default=None):
-        if isinstance(self.current_task.payload, dict):
-            return self.current_task.payload.get(field, default)
-        else:
-            return default
-
     def process(self):
-        for resource in self.current_task.resources:
-            if resource.name == "sample":
-                sample = resource
-                break
-        else:
-            self.log.error("Got task without bound 'sample' resource")
-            return
+        sample = self.current_task.get_resource_by_name("sample")
 
         try:
-            fname = self._meta_field("file_name")
+            fname = self.current_task.payload.get("file_name")
             if fname:
                 fname = fname.encode("utf8")
         except Exception:
@@ -55,12 +43,15 @@ class Extractor(Karton):
                 self.log.warning("Child has no contents")
                 continue
 
-            task = self.create_task({"type": "sample", "kind": "raw"}, payload={
-                "file_name": fname,
-                "parent": unpacked.sha256
-            })
-            resource = self.create_resource("sample", child.contents)
-            task.add_resource(resource)
+            task = self.create_task(
+                headers={"type": "sample", "kind": "raw"},
+                resource=[
+                    self.create_resource("sample", child.contents)
+                ],
+                payload={
+                    "file_name": fname,
+                    "parent": unpacked.sha256
+                })
             self.send_task(task)
 
 

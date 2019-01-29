@@ -17,36 +17,23 @@ class Classifier(Karton):
     ]
 
     def process(self):
-        for resource in self.current_task.resources:
-            if resource.name == "sample":
-                sample = resource
-                break
-        else:
-            self.log.error("Got task without bound 'sample' resource")
-            return
+        sample = self.current_task.get_resource_by_name("sample")
 
-        file_name = self._meta_field("file_name", "(unknown)")
+        file_name = self.current_task.payload.get("file_name", "(noname)")
         sample_class = self._classify(sample)
         if sample_class is None:
             self.log.info("Sample {} not recognized (unsupported type)".format(file_name.encode("utf8")))
             return
 
         self.log.info("Classified {} as {}".format(file_name.encode("utf8"), repr(sample_class)))
-        task = self.create_task(sample_class, payload=self.current_task.payload)
-        task.add_resource(sample)
+        task = self.create_task(sample_class, derive_task=self.current_task)
         self.send_task(task)
 
-    def _meta_field(self, field, default=None):
-        if isinstance(self.current_task.payload, dict):
-            return self.current_task.payload.get(field, default)
-        else:
-            return default
-
     def _get_magic(self, sample):
-        return self._meta_field("magic") or magic.from_buffer(sample.content)
+        return self.current_task.payload.get("magic") or magic.from_buffer(sample.content)
 
     def _get_extension(self):
-        name = self._meta_field("file_name", "")
+        name = self.current_task.payload.get("file_name", "")
         splitted = name.rsplit('.', 1)
         return splitted[-1].lower() if len(splitted) > 1 else ""
 

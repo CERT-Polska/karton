@@ -5,14 +5,14 @@ from .resource import Resource, DirResource, ResourceFlagEnum
 
 
 class Task(object):
-    def __init__(self, headers, resources=None, payload=None):
+    def __init__(self, headers, resources=None, payload=None, derive_task=None):
         """
         Create new root Task.
         """
         if resources is None:
-            resources = []
+            resources = (derive_task and derive_task.resources) or []
         if payload is None:
-            payload = {}
+            payload = (derive_task and derive_task.payload) or {}
 
         self.uid_stack = [str(uuid.uuid4())]
 
@@ -24,19 +24,11 @@ class Task(object):
     def uid(self):
         return self.uid_stack[-1]
 
-    def derive_task(self, task):
+    def bind_task(self, task):
         """
-        Derive existing Task which is a child of this Task.
+        Bind existing Task to parent task
         """
-        task.uid_stack = self.uid_stack + task.uid_stack
-        return task
-
-    def derive_new_task(self, headers=None, resources=None, payload=None):
-        """
-        Derive new Task which is a child of this Task.
-        """
-        task = Task(headers or self.headers, resources or self.resources, payload or self.payload)
-        task.uid_stack = self.uid_stack + task.uid_stack
+        self.uid_stack = task.uid_stack + self.uid_stack
         return task
 
     def serialize(self):
@@ -57,6 +49,16 @@ class Task(object):
         task = Task(headers, resources, data["payload"])
         task.uid_stack = data["uid_stack"]
         return task
+
+    def get_resource_by_name(self, name, many=False):
+        for resource in self.resources:
+            if resource.name == name:
+                if many:
+                    yield resource
+                else:
+                    return resource
+        else:
+            raise RuntimeError("Resource {} not found".format(name))
 
     def __repr__(self):
         return self.serialize()
