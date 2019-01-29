@@ -12,7 +12,7 @@ class Task(object):
         if resources is None:
             resources = []
         if payload is None:
-            payload = []
+            payload = {}
 
         self.uid_stack = [str(uuid.uuid4())]
 
@@ -48,7 +48,6 @@ class Task(object):
     def unserialize(headers, data, config=None):
         resources = []
         for resource in data["resources"]:
-            r = resource
             if ResourceFlagEnum.DIRECTORY in resource["flags"]:
                 r = DirResource._from_dict(resource, config=config)
             else:

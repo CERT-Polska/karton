@@ -7,7 +7,7 @@ import tempfile
 import uuid
 import zipfile
 from enum import Enum
-from io import BytesIO, StringIO
+from io import BytesIO
 
 from minio import Minio
 
@@ -97,7 +97,6 @@ class Resource(object):
         new_cls.flags = flags
         return new_cls
 
-
     def _upload(self):
         """
         This is where we sync with remote, never to be used by user explicitly
@@ -138,15 +137,6 @@ class DirResource(Resource):
 
         self.flags = [ResourceFlagEnum.DIRECTORY]
 
-    @property
-    def content(self):
-        """
-        There is no good way to provide simple content as string when content is zipped archive
-        See path or zip_file.
-        :return: None
-        """
-        raise NotImplementedError("DirResource doesn't support content field, use path contextmanager instead to access directory")
-
     @contextlib.contextmanager
     def path(self):
         """
@@ -155,14 +145,8 @@ class DirResource(Resource):
         Ensures that the unpacked content is removed after usage.
         :return: path to unpacked contents
         """
-
-        if self._content is None:
-            reader = self.minio.get_object(self.bucket, self.uid)
-            self._content = BytesIO(reader.data)
-            self.log.debug("Downloaded content")
-
+        z = zipfile.ZipFile(self.content)
         tmpdir = tempfile.mkdtemp()
-        z = zipfile.ZipFile(self._content)
         z.extractall(tmpdir)
         try:
             yield tmpdir
@@ -175,7 +159,7 @@ class DirResource(Resource):
         When contextmanager cannot be used, user should handle zipfile himself any way he likes.
         :return: zipfile object from content
         """
-        return zipfile.ZipFile(self._content)
+        return zipfile.ZipFile(self.content)
 
 
 def zip_dir(directory):
