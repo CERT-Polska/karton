@@ -15,17 +15,17 @@ if __name__ == '__main__':
                   secure=bool(int(config.get("secure", True))))
 
     while True:
+        deleted = 0
         buckets = minio.list_buckets()
         for bucket in buckets:
             objects = minio.list_objects(bucket_name=bucket.name)
             for obj in objects:
                 o = minio.stat_object(bucket_name=bucket.name, object_name=obj.object_name)
-                print(o.last_modified)
-                print(time.gmtime())
                 minutes_since_now = ((time.mktime(time.gmtime())-time.mktime(o.last_modified))/60)
-                print(minutes_since_now)
                 if minutes_since_now > older_than_minutes:
                     minio.remove_object(bucket_name=bucket.name, object_name=obj.object_name)
+                    deleted += 1
+        print("In this run deleted %d objects. Sleeping for %d minutes" % (deleted, older_than_minutes))
         time.sleep(older_than_minutes*60)
 
 
