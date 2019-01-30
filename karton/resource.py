@@ -109,6 +109,10 @@ class Resource(object):
         self.minio.put_object(self.bucket, self.uid, BytesIO(self._content), len(self._content))
         self.log.debug("Uploaded")
 
+    def _remove(self):
+        self.minio.remove_object(self.bucket, self.uid)
+        self.log.debug("Removed")
+
     def __repr__(self):
         return self.serialize()
 
