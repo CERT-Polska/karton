@@ -48,6 +48,7 @@ class Karton(RabbitMQClient):
         :param task:
         :return:
         """
+        self.log.debug("Dispatched task {}".format(task.uid))
         if self.current_task is not None:
             task.set_task_parent(self.current_task)
 
@@ -64,6 +65,8 @@ class Karton(RabbitMQClient):
 
         if delivered:
             self.housekeeper.declare_task(task)
+        else:
+            self.log.debug("Task {} is unroutable".format(task.uid))
         return delivered
 
     def internal_process(self, channel, method, properties, body):
