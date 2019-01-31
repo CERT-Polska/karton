@@ -7,7 +7,7 @@ import pika
 
 from .task import Task
 from .resource import Resource, DirResource
-from .rmq import RabbitMQClient
+from .rmq import RabbitMQClient, ExURLParameters
 from .housekeeper import KartonHousekeeper
 from .logger import KartonLogHandler
 
@@ -21,7 +21,7 @@ class Karton(RabbitMQClient):
     def __init__(self, config):
         self.config = config
 
-        parameters = pika.URLParameters(self.config.rmq_config["address"])
+        parameters = ExURLParameters(self.config.rmq_config["address"])
         super(Karton, self).__init__(parameters=parameters)
 
         self.current_task = None
