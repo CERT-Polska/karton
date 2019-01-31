@@ -21,11 +21,12 @@ class RabbitMQConnection(object):
                 logger.info("Connecting to broker...")
                 self._connection = pika.BlockingConnection(self._parameters)
                 return self._connection
-            except pika.exceptions.AMQPConnectionError:
-                logger.exception("[{}/{}] Reconnecting after {} seconds".format(
+            except pika.exceptions.AMQPConnectionError as e:
+                logger.exception("[{}/{}] Reconnecting after {} seconds - {}".format(
                     attemps+1,
                     self.RECONNECT_ATTEMPTS,
-                    self.RECONNECT_DELAY
+                    self.RECONNECT_DELAY,
+                    repr(e)
                 ))
                 time.sleep(self.RECONNECT_DELAY)
         raise RuntimeError("AMQP broker is unavailable")
