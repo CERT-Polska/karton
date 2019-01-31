@@ -92,5 +92,5 @@ class Karton(RabbitMQClient):
             self.channel.queue_bind(exchange=TASKS_QUEUE, queue=self.identity, routing_key='',
                                     arguments=filter)
 
-        self.channel.basic_consume(self.internal_process, queue=self.identity, no_ack=True)
+        self.channel.basic_consume(self.internal_process, self.identity, no_ack=True)
         self.channel.start_consuming()
