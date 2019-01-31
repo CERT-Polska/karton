@@ -14,7 +14,7 @@ class Task(object):
         if payload is None:
             payload = (derive_task and derive_task.payload) or {}
 
-        self.uid = uuid.uuid4()
+        self.uid = str(uuid.uuid4())
         self.root_uid = self.uid
         self.parent_uid = None
 
