@@ -1,8 +1,3 @@
 pika
 minio
-splunk-sdk
-python-magic
-chardet
-sflock
 enum34
-redis
