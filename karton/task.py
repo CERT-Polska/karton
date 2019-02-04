@@ -59,12 +59,15 @@ class Task(object):
         task.parent_uid = data["parent_uid"]
         return task
 
-    def get_resource_by_name(self, name):
+    def get_resource_by_name(self, name, mandatory=True):
         for resource in self.resources:
             if resource.name == name:
                 return resource
         else:
-            raise RuntimeError("Resource {} not found".format(name))
+            if mandatory:
+                raise RuntimeError("Resource {} not found".format(name))
+            else:
+                return None
 
     def __repr__(self):
         return self.serialize()
