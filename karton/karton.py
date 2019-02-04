@@ -53,8 +53,6 @@ class Karton(RabbitMQClient):
             task.set_task_parent(self.current_task)
 
         task_json = task.serialize()
-        for resource in task.resources:
-            resource._upload()
 
         # Enables delivery confirmation
         self.channel.confirm_delivery()
@@ -70,8 +68,7 @@ class Karton(RabbitMQClient):
         return delivered
 
     def internal_process(self, channel, method, properties, body):
-        msg = json.loads(body)
-        self.current_task = Task.unserialize(properties.headers, msg, self.config.minio_config)
+        self.current_task = Task.unserialize(properties.headers, body, self.config.minio_config)
         self.log_handler.set_task_id(self.current_task.uid)
 
         try:

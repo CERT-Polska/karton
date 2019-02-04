@@ -34,7 +34,7 @@ class Resource(object):
 
     This exists to make it easier to share resources across clients
     """
-    def __init__(self, name, content=None, bucket=None, _uid=None, config=None):
+    def __init__(self, name=None, content=None, bucket=None, _uid=None, config=None):
         if _uid is None:
             _uid = str(uuid.uuid4())
 
@@ -55,9 +55,6 @@ class Resource(object):
         self.bucket = bucket
         self.flags = []
 
-        self.log = logging.getLogger(self.name)
-        self.log.setLevel(logging.DEBUG)
-
     @property
     def content(self):
         """
@@ -69,7 +66,6 @@ class Resource(object):
             reader = self.minio.get_object(self.bucket, self.uid)
             sio = BytesIO(reader.data)
             self._content = sio.getvalue()
-            self.log.debug("Downloaded content")
         return self._content
 
     def is_directory(self):
@@ -87,7 +83,7 @@ class Resource(object):
         return json.dumps(self.to_dict())
 
     @classmethod
-    def _from_dict(cls, data_dict, config=None):
+    def from_dict(cls, data_dict, config=None):
         bucket = data_dict["bucket"]
         name = data_dict["name"]
         _uid = data_dict["uid"]
@@ -97,7 +93,7 @@ class Resource(object):
         new_cls.flags = flags
         return new_cls
 
-    def _upload(self):
+    def upload(self):
         """
         This is where we sync with remote, never to be used by user explicitly
         Should be invoked while uploading task
@@ -107,14 +103,9 @@ class Resource(object):
             raise NoContentException("Resource does not have any content in it")
         print(type(self._content))
         self.minio.put_object(self.bucket, self.uid, BytesIO(self._content), len(self._content))
-        self.log.debug("Uploaded")
 
-    def _remove(self):
+    def remove(self):
         self.minio.remove_object(self.bucket, self.uid)
-        self.log.debug("Removed")
-
-    def __repr__(self):
-        return self.serialize()
 
 
 class DirResource(Resource):

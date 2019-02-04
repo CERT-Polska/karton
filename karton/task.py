@@ -5,12 +5,10 @@ from .resource import Resource, DirResource, ResourceFlagEnum
 
 
 class Task(object):
-    def __init__(self, headers, resources=None, payload=None, derive_task=None):
+    def __init__(self, headers, payload=None, derive_task=None):
         """
         Create new root Task.
         """
-        if resources is None:
-            resources = (derive_task and derive_task.resources) or []
         if payload is None:
             payload = (derive_task and derive_task.payload) or {}
 
@@ -24,8 +22,8 @@ class Task(object):
         """
         self.asynchronic = False
 
+        self.resources = {}
         self.headers = headers
-        self.resources = resources
         self.payload = payload
 
     def set_task_parent(self, parent):
@@ -37,40 +35,39 @@ class Task(object):
         return self
 
     def serialize(self):
+        class KartonResourceEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, Resource):
+                    obj.upload()
+                    return {"__karton_resource__": obj.to_dict()}
+                return json.JSONEncoder.default(self, obj)
+
         return json.dumps({"uid": self.uid,
                            "root_uid": self.root_uid,
                            "parent_uid": self.parent_uid,
-                           "resources": [res.to_dict() for res in self.resources],
-                           "payload": self.payload})
+                           "payload": self.payload},
+                          cls=KartonResourceEncoder)
 
     @staticmethod
     def unserialize(headers, data, config=None):
-        resources = []
-        for resource in data["resources"]:
-            if ResourceFlagEnum.DIRECTORY in resource["flags"]:
-                r = DirResource._from_dict(resource, config=config)
-            else:
-                r = Resource._from_dict(resource, config=config)
-            resources.append(r)
+        resources = {}
 
-        task = Task(headers, resources, data["payload"])
+        def as_resource(dct):
+            if '__karton_resource__' in dct:
+                resource = dct['__karton_resource__']
+                resource = (DirResource if ResourceFlagEnum.DIRECTORY in resource["flags"] else Resource)\
+                    .from_dict(resource, config=config)
+                resources[resource.uid] = resource
+            return dct
+
+        data = json.loads(data, object_hook=as_resource)
+
+        task = Task(headers, payload=data["payload"])
         task.uid = data["uid"]
         task.root_uid = data["root_uid"]
         task.parent_uid = data["parent_uid"]
+        task.resources = resources
         return task
-
-    def get_resource_by_name(self, name, mandatory=True):
-        for resource in self.resources:
-            if resource.name == name:
-                return resource
-        else:
-            if mandatory:
-                raise RuntimeError("Resource {} not found".format(name))
-            else:
-                return None
 
     def __repr__(self):
         return self.serialize()
-
-    def add_resource(self, resource):
-        self.resources.append(resource)
