@@ -54,6 +54,10 @@ class Karton(RabbitMQClient):
 
         task_json = task.serialize()
 
+        print(task_json)
+        for resource in task.resources.values():
+            resource.upload()
+
         # Enables delivery confirmation
         self.channel.confirm_delivery()
 

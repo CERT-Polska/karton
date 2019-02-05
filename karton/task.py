@@ -22,7 +22,9 @@ class Task(object):
         """
         self.asynchronic = False
 
+        # This attribute should be used only internally, after successful serialize/unserialize call
         self.resources = {}
+
         self.headers = headers
         self.payload = payload
 
@@ -35,12 +37,14 @@ class Task(object):
         return self
 
     def serialize(self):
+        self.resources = {}
+
         class KartonResourceEncoder(json.JSONEncoder):
-            def default(self, obj):
+            def default(kself, obj):
                 if isinstance(obj, Resource):
-                    obj.upload()
+                    self.resources[obj.uid] = obj
                     return {"__karton_resource__": obj.to_dict()}
-                return json.JSONEncoder.default(self, obj)
+                return json.JSONEncoder.default(kself, obj)
 
         return json.dumps({"uid": self.uid,
                            "root_uid": self.root_uid,
