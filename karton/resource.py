@@ -101,7 +101,6 @@ class Resource(object):
         """
         if self._content is None:
             raise NoContentException("Resource does not have any content in it")
-        print(type(self._content))
         self.minio.put_object(self.bucket, self.uid, BytesIO(self._content), len(self._content))
 
     def remove(self):

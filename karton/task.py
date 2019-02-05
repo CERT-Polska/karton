@@ -58,6 +58,7 @@ class Task(object):
                 resource = (DirResource if ResourceFlagEnum.DIRECTORY in resource["flags"] else Resource)\
                     .from_dict(resource, config=config)
                 resources[resource.uid] = resource
+                return resource
             return dct
 
         data = json.loads(data, object_hook=as_resource)
