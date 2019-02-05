@@ -60,7 +60,7 @@ class Task(object):
             if '__karton_resource__' in dct:
                 resource = dct['__karton_resource__']
                 resource = (DirResource if ResourceFlagEnum.DIRECTORY in resource["flags"] else Resource)\
-                    .from_dict(resource, config=config)
+                    .from_dict(resource, config=config, uploaded=True)
                 resources[resource.uid] = resource
                 return resource
             return dct

@@ -1,6 +1,5 @@
 import contextlib
 import json
-import logging
 import os
 import shutil
 import tempfile
@@ -34,7 +33,7 @@ class Resource(object):
 
     This exists to make it easier to share resources across clients
     """
-    def __init__(self, name=None, content=None, bucket=None, _uid=None, config=None):
+    def __init__(self, name=None, content=None, bucket=None, _uid=None, config=None, uploaded=False):
         if _uid is None:
             _uid = str(uuid.uuid4())
 
@@ -54,6 +53,7 @@ class Resource(object):
         self._content = content
         self.bucket = bucket
         self.flags = []
+        self.uploaded = uploaded
 
     @property
     def content(self):
@@ -83,13 +83,13 @@ class Resource(object):
         return json.dumps(self.to_dict())
 
     @classmethod
-    def from_dict(cls, data_dict, config=None):
+    def from_dict(cls, data_dict, config=None, uploaded=False):
         bucket = data_dict["bucket"]
         name = data_dict["name"]
         _uid = data_dict["uid"]
         flags = data_dict["flags"]
 
-        new_cls = cls(name, None, bucket, _uid=_uid, config=config)
+        new_cls = cls(name, None, bucket, _uid=_uid, config=config, uploaded=uploaded)
         new_cls.flags = flags
         return new_cls
 
@@ -99,6 +99,8 @@ class Resource(object):
         Should be invoked while uploading task
         :return: None
         """
+        if self.uploaded:
+            return
         if self._content is None:
             raise NoContentException("Resource does not have any content in it")
         self.minio.put_object(self.bucket, self.uid, BytesIO(self._content), len(self._content))

@@ -1,3 +1,6 @@
+"""
+Base library for karton housekeeper listeners.
+"""
 import json
 
 import pika
