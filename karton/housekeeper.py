@@ -42,7 +42,7 @@ class KartonHousekeeper(RabbitMQClient):
             msg = json.loads(body)
             self.task_finished = msg["finished"]
             self.task = Task.unserialize(properties.headers,
-                                         json.loads(msg["task"]),
+                                         msg["task"],
                                          self.config.minio_config)
             self.process()
         except Exception as e:
