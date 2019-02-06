@@ -39,6 +39,9 @@ class KartonHousekeeper(RabbitMQClient):
 
     def internal_process(self, channel, method, properties, body):
         try:
+            if not isinstance(body, str):
+                body = body.decode("utf8")
+
             msg = json.loads(body)
             self.task_finished = msg["finished"]
             self.task = Task.unserialize(properties.headers,
