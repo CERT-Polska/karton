@@ -24,8 +24,7 @@ class KartonHousekeeper(RabbitMQClient):
 
     def __init__(self, config=None, **kwargs):
         self.config = config
-        self.task = None
-        self.task_finished = None
+        self.message = {}
         RabbitMQClient.__init__(self, **kwargs)
         self.log_handler = KartonLogHandler(connection=self.connection)
         self.log = self.log_handler.get_logger("karton." + self.identity)
@@ -50,11 +49,10 @@ class KartonHousekeeper(RabbitMQClient):
             if not isinstance(body, str):
                 body = body.decode("utf8")
 
-            msg = json.loads(body)
-            self.task_finished = msg["finished"]
-            self.task = Task.unserialize(properties.headers,
-                                         msg["task"],
-                                         self.config.minio_config)
+            self.message = json.loads(body)
+            self.message["task"] = Task.unserialize(properties.headers,
+                                                    self.message["task"],
+                                                    self.config.minio_config)
             self.process()
         except Exception as e:
             self.log.exception("Failed to process operation")
