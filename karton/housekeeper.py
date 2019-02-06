@@ -3,6 +3,7 @@ Base library for karton housekeeper listeners.
 """
 import json
 
+from enum import Enum
 import pika
 
 from .logger import KartonLogHandler
@@ -10,6 +11,12 @@ from .rmq import RabbitMQClient
 from .task import Task
 
 OPERATIONS_QUEUE = "karton.operations"
+
+
+class TaskState(str, Enum):
+    SPAWNED = "Spawned"
+    STARTED = "Started"
+    FINISHED = "Finished"
 
 
 class KartonHousekeeper(RabbitMQClient):
@@ -26,14 +33,15 @@ class KartonHousekeeper(RabbitMQClient):
     def process(self):
         raise RuntimeError("Not implemented.")
 
-    def declare_task(self, task, finished=False):
+    def declare_task_state(self, task, status, identity=None):
         """
         Declare task state
         :param task: Task
         :param finished: Is task finished? (task is started if False)
         """
         self.channel.basic_publish(OPERATIONS_QUEUE, "", json.dumps({
-            "finished": finished,
+            "status": status,
+            "identity": identity,
             "task": task.serialize()
         }), pika.BasicProperties(headers=task.headers))
 

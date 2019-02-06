@@ -1,14 +1,12 @@
 """
 Base library for karton subsystems.
 """
-import json
-
 import pika
 
 from .task import Task
 from .resource import Resource, DirResource
 from .rmq import RabbitMQClient, ExURLParameters
-from .housekeeper import KartonHousekeeper
+from .housekeeper import KartonHousekeeper, TaskState
 from .logger import KartonLogHandler
 
 TASKS_QUEUE = "karton.tasks"
@@ -65,7 +63,7 @@ class Karton(RabbitMQClient):
                                                mandatory=True)
 
         if delivered:
-            self.housekeeper.declare_task(task)
+            self.housekeeper.declare_task_state(task, TaskState.SPAWNED, identity=self.identity)
         else:
             self.log.debug("Task {} is unroutable".format(task.uid))
         return delivered
@@ -76,13 +74,14 @@ class Karton(RabbitMQClient):
 
         try:
             self.log.info("Received new task")
+            self.housekeeper.declare_task_state(self.current_task, TaskState.STARTED, identity=self.identity)
             self.process()
             self.log.info("Task done")
         except Exception as e:
             self.log.exception("Failed to process task")
         finally:
             if not self.current_task.asynchronic:
-                self.housekeeper.declare_task(self.current_task, finished=True)
+                self.housekeeper.declare_task_state(self.current_task, TaskState.FINISHED, identity=self.identity)
 
     @RabbitMQClient.retryable
     def loop(self):
