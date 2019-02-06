@@ -65,6 +65,9 @@ class Task(object):
                 return resource
             return dct
 
+        if not isinstance(data, str):
+            data = data.decode("utf8")
+
         data = json.loads(data, object_hook=as_resource)
 
         task = Task(headers, payload=data["payload"])
