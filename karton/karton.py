@@ -41,7 +41,7 @@ class Karton(RabbitMQClient):
     def create_dir_resource(self, *args, **kwargs):
         if "bucket" not in kwargs:
             kwargs["bucket"] = self.config.minio_config["bucket"]
-        return DirResource(*args, bucket=self.config.minio_config["bucket"], config=self.config.minio_config, **kwargs)
+        return DirResource(*args, config=self.config.minio_config, **kwargs)
 
     @RabbitMQClient.retryable
     def send_task(self, task):
