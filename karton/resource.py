@@ -33,7 +33,7 @@ class Resource(object):
 
     This exists to make it easier to share resources across clients
     """
-    def __init__(self, name=None, content=None, bucket=None, _uid=None, config=None, uploaded=False):
+    def __init__(self, name=None, content=None, bucket=None, _uid=None, config=None, uploaded=False, size=None):
         if _uid is None:
             _uid = str(uuid.uuid4())
 
@@ -54,6 +54,7 @@ class Resource(object):
         self.bucket = bucket
         self.flags = []
         self.uploaded = uploaded
+        self.size = len(content) if content is not None else size
 
     @property
     def content(self):
@@ -77,7 +78,7 @@ class Resource(object):
         return ResourceFlagEnum.DIRECTORY in self.flags or isinstance(self, DirResource)
 
     def to_dict(self):
-        return {"uid": self.uid, "name": self.name, "bucket": self.bucket, "flags": self.flags}
+        return {"uid": self.uid, "name": self.name, "size": self.size, "bucket": self.bucket, "flags": self.flags}
 
     def serialize(self):
         return json.dumps(self.to_dict())
@@ -86,10 +87,11 @@ class Resource(object):
     def from_dict(cls, data_dict, config=None, uploaded=False):
         bucket = data_dict["bucket"]
         name = data_dict["name"]
+        size = data_dict["size"]
         _uid = data_dict["uid"]
         flags = data_dict["flags"]
 
-        new_cls = cls(name, None, bucket, _uid=_uid, config=config, uploaded=uploaded)
+        new_cls = cls(name, None, bucket, _uid=_uid, config=config, uploaded=uploaded, size=size)
         new_cls.flags = flags
         return new_cls
 
