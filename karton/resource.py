@@ -118,7 +118,7 @@ class DirResource(Resource):
 
     Content extraction should be done through path or zip_file.
     """
-    def __init__(self, name, directory_path=None, bucket=None, _uid=None, config=None):
+    def __init__(self, name, directory_path=None, *args, **kwargs):
         """
         :param name: name of the resource
         :param directory_path: directory to be compressed and used as a minio object later on
@@ -131,7 +131,7 @@ class DirResource(Resource):
         if directory_path is not None:
             content = zip_dir(directory_path).getvalue()
 
-        super(DirResource, self).__init__(name, content, bucket, _uid, config=config)
+        super(DirResource, self).__init__(name, content, *args, **kwargs)
 
         self.flags = [ResourceFlagEnum.DIRECTORY]
 
