@@ -8,7 +8,6 @@ import pika
 
 from .logger import KartonLogHandler
 from .rmq import RabbitMQClient
-from .task import Task
 
 OPERATIONS_QUEUE = "karton.operations"
 
@@ -30,7 +29,7 @@ class KartonHousekeeper(RabbitMQClient):
         self.log = self.log_handler.get_logger("karton." + self.identity)
 
     def process(self):
-        raise RuntimeError("Not implemented.")
+        raise NotImplementedError()
 
     def declare_task_state(self, task, status, identity=None):
         """
@@ -45,25 +44,7 @@ class KartonHousekeeper(RabbitMQClient):
         }), pika.BasicProperties(headers=task.headers))
 
     def internal_process(self, channel, method, properties, body):
-        try:
-            if not isinstance(body, str):
-                body = body.decode("utf8")
+        raise NotImplementedError()
 
-            self.message = json.loads(body)
-            self.message["task"] = Task.unserialize(properties.headers,
-                                                    self.message["task"],
-                                                    self.config.minio_config)
-            self.process()
-        except Exception as e:
-            self.log.exception("Failed to process operation")
-
-    @RabbitMQClient.retryable
     def loop(self):
-        self.log.info("Housekeeper {} started".format(self.identity))
-        self.channel.queue_declare(queue=self.identity, durable=False, auto_delete=True)
-
-        # RMQ in headers doesn't allow multiple
-        self.channel.queue_bind(exchange=OPERATIONS_QUEUE, queue=self.identity, routing_key='')
-
-        self.channel.basic_consume(self.internal_process, queue=self.identity, no_ack=True)
-        self.channel.start_consuming()
+        raise NotImplementedError()
