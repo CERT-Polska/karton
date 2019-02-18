@@ -30,7 +30,9 @@ class KartonLogHandler(logging.Handler, RabbitMQClient):
             log_line["excTraceback"] = traceback.format_exception(*record.exc_info)
 
         log_line["type"] = "log"
-        log_line["task"] = self.task.serialize()
+
+        if self.task is not None:
+            log_line["task"] = self.task.serialize()
 
         self.channel.basic_publish(LOGS_QUEUE, "", json.dumps(log_line), pika.BasicProperties())
 
