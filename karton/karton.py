@@ -74,7 +74,7 @@ class Karton(RabbitMQClient):
 
     def internal_process(self, channel, method, properties, body):
         self.current_task = Task.unserialize(properties.headers, body, self.config.minio_config)
-        self.log_handler.set_task_id(self.current_task.uid)
+        self.log_handler.set_task(self.current_task)
 
         try:
             self.log.info("Received new task")

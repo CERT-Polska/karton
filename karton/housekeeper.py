@@ -40,7 +40,8 @@ class KartonHousekeeper(RabbitMQClient):
         self.channel.basic_publish(OPERATIONS_QUEUE, "", json.dumps({
             "status": status,
             "identity": identity,
-            "task": task.serialize()
+            "task": task.serialize(),
+            "type": "operation"
         }), pika.BasicProperties(headers=task.headers))
 
     def internal_process(self, channel, method, properties, body):

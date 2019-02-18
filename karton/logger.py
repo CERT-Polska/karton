@@ -13,10 +13,10 @@ class KartonLogHandler(logging.Handler, RabbitMQClient):
     def __init__(self, **kwargs):
         logging.Handler.__init__(self)
         RabbitMQClient.__init__(self, **kwargs)
-        self.task_id = 'unknown'
+        self.task = None
 
-    def set_task_id(self, task_id):
-        self.task_id = task_id
+    def set_task(self, task):
+        self.task = task
 
     @RabbitMQClient.retryable
     def emit(self, record):
@@ -30,7 +30,7 @@ class KartonLogHandler(logging.Handler, RabbitMQClient):
             log_line["excTraceback"] = traceback.format_exception(*record.exc_info)
 
         log_line["type"] = "log"
-        log_line["taskId"] = self.task_id
+        log_line["task"] = self.task.serialize()
 
         self.channel.basic_publish(LOGS_QUEUE, "", json.dumps(log_line), pika.BasicProperties())
 
