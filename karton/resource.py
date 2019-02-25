@@ -1,6 +1,5 @@
 import contextlib
 import json
-import os
 import shutil
 import tempfile
 import uuid
@@ -10,12 +9,14 @@ from io import BytesIO
 
 from minio import Minio
 
+from .utils import zip_dir
+
 
 class NoContentException(Exception):
     pass
 
 
-class ContentDoesntExist(Exception):
+class ContentDoesNotExist(Exception):
     pass
 
 
@@ -158,19 +159,6 @@ class DirResource(Resource):
         :return: zipfile object from content
         """
         return zipfile.ZipFile(self.content)
-
-
-def zip_dir(directory):
-    result = BytesIO()
-    dlen = len(directory)
-    with zipfile.ZipFile(result, "w") as zf:
-        for root, dirs, files in os.walk(directory):
-            for name in files:
-                full = os.path.join(root, name)
-                rel = root[dlen:]
-                dest = os.path.join(rel, name)
-                zf.write(full, dest)
-    return result
 
 
 

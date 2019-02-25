@@ -56,14 +56,18 @@ class Task(object):
     def unserialize(headers, data, config=None):
         resources = {}
 
-        def as_resource(dct):
-            if '__karton_resource__' in dct:
-                resource = dct['__karton_resource__']
-                resource = (DirResource if ResourceFlagEnum.DIRECTORY in resource["flags"] else Resource)\
-                    .from_dict(resource, config=config, uploaded=True)
+        def as_resource(resource_dict):
+            if '__karton_resource__' in resource_dict:
+                karton_resource_dict = resource_dict['__karton_resource__']
+
+                if ResourceFlagEnum.DIRECTORY in karton_resource_dict["flags"]:
+                    resource = DirResource.from_dict(karton_resource_dict, config=config, uploaded=True)
+                else:
+                    resource = DirResource.from_dict(karton_resource_dict, config=config, uploaded=True)
+
                 resources[resource.uid] = resource
                 return resource
-            return dct
+            return resource_dict
 
         if not isinstance(data, str):
             data = data.decode("utf8")
