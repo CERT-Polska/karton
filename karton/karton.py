@@ -12,24 +12,22 @@ from .logger import KartonLogHandler
 TASKS_QUEUE = "karton.tasks"
 
 
-class Karton(RabbitMQClient):
+class KartonBase(RabbitMQClient):
     identity = ""
-    filters = None
 
     def __init__(self, config):
         self.config = config
 
         parameters = ExURLParameters(self.config.rmq_config["address"])
-        super(Karton, self).__init__(parameters=parameters)
+        super(KartonBase, self).__init__(parameters=parameters)
 
         self.current_task = None
         self.log_handler = KartonLogHandler(connection=self.connection)
         self.housekeeper = KartonHousekeeper(connection=self.connection)
         self.log = self.log_handler.get_logger(self.identity)
 
-    def process(self):
-        raise RuntimeError("Not implemented.")
 
+class Producer(KartonBase):
     def create_task(self, *args, **kwargs):
         return Task(*args, **kwargs)
 
@@ -72,6 +70,18 @@ class Karton(RabbitMQClient):
             self.log.debug("Task {} is unroutable".format(task.uid))
         return delivered
 
+
+class Consumer(KartonBase):
+    filters = None
+
+    def __init__(self, config):
+        super(Consumer, self).__init__(config=config)
+
+        self.current_task = None
+
+    def process(self):
+        raise RuntimeError("Not implemented.")
+
     def internal_process(self, channel, method, properties, body):
         self.current_task = Task.unserialize(properties.headers, body, self.config.minio_config)
         self.log_handler.set_task(self.current_task)
@@ -100,3 +110,9 @@ class Karton(RabbitMQClient):
 
         self.channel.basic_consume(self.internal_process, self.identity, no_ack=True)
         self.channel.start_consuming()
+
+
+class Karton(Consumer, Producer):
+    """
+    This glues together Consumer and Producer - which is the most common use case
+    """
