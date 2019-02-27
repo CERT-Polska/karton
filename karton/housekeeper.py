@@ -6,8 +6,7 @@ import json
 from enum import Enum
 import pika
 
-from .logger import KartonLogHandler
-from .rmq import RabbitMQClient
+from karton.base import KartonSimple
 
 OPERATIONS_QUEUE = "karton.operations"
 
@@ -18,18 +17,8 @@ class TaskState(str, Enum):
     FINISHED = "Finished"
 
 
-class KartonHousekeeper(RabbitMQClient):
+class KartonHousekeeper(KartonSimple):
     identity = "housekeeper"
-
-    def __init__(self, config=None, **kwargs):
-        self.config = config
-        self.message = {}
-        RabbitMQClient.__init__(self, **kwargs)
-        self.log_handler = KartonLogHandler(connection=self.connection)
-        self.log = self.log_handler.get_logger("karton." + self.identity)
-
-    def process(self):
-        raise NotImplementedError()
 
     def declare_task_state(self, task, status, identity=None):
         """
@@ -44,8 +33,3 @@ class KartonHousekeeper(RabbitMQClient):
             "type": "operation"
         }), pika.BasicProperties(headers=task.headers))
 
-    def internal_process(self, channel, method, properties, body):
-        raise NotImplementedError()
-
-    def loop(self):
-        raise NotImplementedError()

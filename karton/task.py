@@ -1,32 +1,40 @@
 import json
 import uuid
 
-from .resource import Resource, DirResource, ResourceFlagEnum
+from .resource import  ResourceFlagEnum, RemoteDirectoryResource, RemoteResource, PayloadBag
 
 
 class Task(object):
-    def __init__(self, headers, payload=None, derive_task=None):
+    def __init__(self, headers, payload=None):
         """
         Create new root Task.
         """
-        if payload is None:
-            payload = (derive_task and derive_task.payload) or {}
+        payload = payload or {}
+        if not isinstance(payload, dict):
+            raise ValueError("Payload should be an instance of a dict")
 
         self.uid = str(uuid.uuid4())
         self.root_uid = self.uid
         self.parent_uid = None
 
-        """
-        If asynchronic is set: task declares that work will be done by some remote
-        handler, so task shouldn't be considered finished when process() returns
-        """
-        self.asynchronic = False
-
-        # This attribute should be used only internally, after successful serialize/unserialize call
-        self.resources = {}
-
         self.headers = headers
-        self.payload = payload
+        self.payload = PayloadBag()
+        self.payload.update(payload)
+
+    @classmethod
+    def derive_task(cls, headers, task):
+        new_task = cls(headers=headers, payload=task.payload)
+        return new_task
+
+    def add_resource(self, resource):
+        if resource.name in self.payload:
+            raise ValueError("Payload already exists")
+
+        self.payload[resource.name] = resource
+
+    def add_resources(self, resources_list):
+        for resource in resources_list:
+            self.add_resource(resource)
 
     def set_task_parent(self, parent):
         """
@@ -37,12 +45,12 @@ class Task(object):
         return self
 
     def serialize(self):
-        self.resources = {}
+        resources = {}
 
         class KartonResourceEncoder(json.JSONEncoder):
             def default(kself, obj):
-                if isinstance(obj, Resource):
-                    self.resources[obj.uid] = obj
+                if isinstance(obj, RemoteResource):
+                    resources[obj.uid] = obj
                     return {"__karton_resource__": obj.to_dict()}
                 return json.JSONEncoder.default(kself, obj)
 
@@ -53,7 +61,7 @@ class Task(object):
                           cls=KartonResourceEncoder)
 
     @staticmethod
-    def unserialize(headers, data, config=None):
+    def unserialize(headers, data):
         resources = {}
 
         def as_resource(resource_dict):
@@ -61,9 +69,9 @@ class Task(object):
                 karton_resource_dict = resource_dict['__karton_resource__']
 
                 if ResourceFlagEnum.DIRECTORY in karton_resource_dict["flags"]:
-                    resource = DirResource.from_dict(karton_resource_dict, config=config, uploaded=True)
+                    resource = RemoteDirectoryResource.from_dict(karton_resource_dict)
                 else:
-                    resource = DirResource.from_dict(karton_resource_dict, config=config, uploaded=True)
+                    resource = RemoteResource.from_dict(karton_resource_dict)
 
                 resources[resource.uid] = resource
                 return resource
@@ -78,8 +86,20 @@ class Task(object):
         task.uid = data["uid"]
         task.root_uid = data["root_uid"]
         task.parent_uid = data["parent_uid"]
-        task.resources = resources
+        task.payload.update(resources)
         return task
 
     def __repr__(self):
         return self.serialize()
+
+    def is_asynchronic(self):
+        return False
+
+
+class AsyncTask(Task):
+    """
+    Task declares that work will be done by some remote
+    handler, so task shouldn't be considered finished when process() returns
+    """
+    def is_asynchronic(self):
+        return True

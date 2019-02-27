@@ -2,9 +2,11 @@
 Base library for karton subsystems.
 """
 import pika
+from minio import Minio
 
+from karton.base import KartonSimple
+from karton.resource import RemoteResource, RemoteDirectoryResource
 from .task import Task
-from .resource import Resource, DirResource
 from .rmq import RabbitMQClient, ExURLParameters
 from .housekeeper import KartonHousekeeper, TaskState
 from .logger import KartonLogHandler
@@ -12,35 +14,15 @@ from .logger import KartonLogHandler
 TASKS_QUEUE = "karton.tasks"
 
 
-class KartonBase(RabbitMQClient):
+class KartonBase(KartonSimple):
     identity = ""
 
-    def __init__(self, config):
-        self.config = config
-
-        parameters = ExURLParameters(self.config.rmq_config["address"])
-        super(KartonBase, self).__init__(parameters=parameters)
-
-        self.current_task = None
-        self.log_handler = KartonLogHandler(connection=self.connection)
-        self.housekeeper = KartonHousekeeper(connection=self.connection)
-        self.log = self.log_handler.get_logger(self.identity)
+    def __init__(self, config, **kwargs):
+        super(KartonBase, self).__init__(config=config, **kwargs)
+        self.housekeeper = KartonHousekeeper(config=config, connection=self.connection)
 
 
 class Producer(KartonBase):
-    def create_task(self, *args, **kwargs):
-        return Task(*args, **kwargs)
-
-    def create_resource(self, *args, **kwargs):
-        if "bucket" not in kwargs:
-            kwargs["bucket"] = self.config.minio_config["bucket"]
-        return Resource(*args, config=self.config.minio_config, **kwargs)
-
-    def create_dir_resource(self, *args, **kwargs):
-        if "bucket" not in kwargs:
-            kwargs["bucket"] = self.config.minio_config["bucket"]
-        return DirResource(*args, config=self.config.minio_config, **kwargs)
-
     @RabbitMQClient.retryable
     def send_task(self, task):
         """
@@ -52,10 +34,11 @@ class Producer(KartonBase):
         if self.current_task is not None:
             task.set_task_parent(self.current_task)
 
-        task_json = task.serialize()
+        for name, resource in task.payload.resources():
+            if type(resource) is not RemoteResource and type(resource) is not RemoteDirectoryResource:
+                task.payload[name] = resource.upload(self.minio, self.config.minio_config["bucket"])
 
-        for resource in task.resources.values():
-            resource.upload()
+        task_json = task.serialize()
 
         # Enables delivery confirmation
         self.channel.confirm_delivery()
@@ -83,7 +66,7 @@ class Consumer(KartonBase):
         raise RuntimeError("Not implemented.")
 
     def internal_process(self, channel, method, properties, body):
-        self.current_task = Task.unserialize(properties.headers, body, self.config.minio_config)
+        self.current_task = Task.unserialize(properties.headers, body)
         self.log_handler.set_task(self.current_task)
 
         try:
@@ -94,7 +77,7 @@ class Consumer(KartonBase):
         except Exception as e:
             self.log.exception("Failed to process task")
         finally:
-            if not self.current_task.asynchronic:
+            if self.current_task.is_asynchronic():
                 self.housekeeper.declare_task_state(self.current_task, TaskState.FINISHED, identity=self.identity)
 
     @RabbitMQClient.retryable
@@ -110,6 +93,15 @@ class Consumer(KartonBase):
 
         self.channel.basic_consume(self.internal_process, self.identity, no_ack=True)
         self.channel.start_consuming()
+
+    def download_resource(self, resource):
+        return resource.download(self.minio)
+
+    def remove_resource(self, resource):
+        return resource.remove(self.minio)
+
+    def upload_resource(self, resource):
+        return resource.upload(self.minio)
 
 
 class Karton(Consumer, Producer):
