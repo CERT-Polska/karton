@@ -72,6 +72,3 @@ class RabbitMQClient(object):
                     self.connection.__connect()
                 logger.debug("Retrying {} after connection break...".format(f.__name__))
         return retryable_method
-
-
-
