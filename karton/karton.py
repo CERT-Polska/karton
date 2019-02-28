@@ -89,7 +89,7 @@ class Consumer(KartonBase):
         self.log.info("Service {} started".format(self.identity))
         self.channel.queue_declare(queue=self.identity, durable=False, auto_delete=True)
 
-        # RMQ in headers doesn't allow multiple
+        # RMQ in headers doesn't allow multiple filters, se we bind multiple times
         for filter in self.filters:
             filter.update({"x-match": "all"})
             self.channel.queue_bind(exchange=TASKS_QUEUE, queue=self.identity, routing_key='',

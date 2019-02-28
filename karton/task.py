@@ -26,16 +26,6 @@ class Task(object):
         new_task = cls(headers=headers, payload=task.payload)
         return new_task
 
-    def add_resource(self, resource):
-        if resource.name in self.payload:
-            raise ValueError("Payload already exists")
-
-        self.payload[resource.name] = resource
-
-    def add_resources(self, resources_list):
-        for resource in resources_list:
-            self.add_resource(resource)
-
     def set_task_parent(self, parent):
         """
         Bind existing Task to parent task
@@ -94,6 +84,47 @@ class Task(object):
 
     def is_asynchronic(self):
         return False
+
+    """
+    Following methods are simple wrappers on self.payload PayloadBag for abstracting out direct access.
+    Due to decentralized nature of the project this gives us some room for further changes.
+    """
+    def _add_to_payload(self, name, content):
+        if name in self.payload:
+            raise ValueError("Payload already exists")
+
+        self.payload[name] = content
+
+    def add_resource(self, resource):
+        self._add_to_payload(resource.name, resource)
+
+    def add_resources(self, resources_list):
+        for resource in resources_list:
+            self.add_resource(resource)
+
+    def add_payload(self, name, content):
+        self._add_to_payload(name, content)
+
+    def get_payload(self, name, default=None):
+        return self.payload.get(name, default)
+
+    def get_resource(self, name, default=None):
+        return self.payload.get(name, default)
+
+    def get_resources(self):
+        return self.payload.resources()
+
+    def get_directory_resources(self):
+        return self.payload.directory_resources()
+
+    def get_file_resources(self):
+        return self.payload.file_resources()
+
+    def remove_payload(self, name):
+        del self.payload[name]
+
+    def payload_contains(self, name):
+        return name in self.payload
 
 
 class AsyncTask(Task):
