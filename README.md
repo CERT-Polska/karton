@@ -8,6 +8,12 @@ Many times we have some sort of scripts made with duct tape and WD-40. Those scr
 
 We need a solution for fast deployment of PoC scripts, so they can share their results with other entities.
 That's why we are developing Karton, wrapper for your package! :D
+### Installation
+```
+pip3 install git+ssh://git@vcs.cert.pl/karton/karton.git
+```
+
+or using docker: ...
 
 ### Usage
 To use karton you have to provide class that inherits from Karton.
