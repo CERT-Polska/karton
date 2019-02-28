@@ -2,14 +2,13 @@
 Base library for karton subsystems.
 """
 import pika
-from minio import Minio
 
 from karton.base import KartonSimple
 from karton.resource import RemoteResource, RemoteDirectoryResource
 from .task import Task
-from .rmq import RabbitMQClient, ExURLParameters
+from .rmq import RabbitMQClient
 from .housekeeper import KartonHousekeeper, TaskState
-from .logger import KartonLogHandler
+from .utils import GracefulKiller
 
 TASKS_QUEUE = "karton.tasks"
 
@@ -61,6 +60,11 @@ class Consumer(KartonBase):
         super(Consumer, self).__init__(config=config)
 
         self.current_task = None
+        self.killer = GracefulKiller(self.graceful_shutdown)
+
+    def graceful_shutdown(self):
+        self.log.info("Gracefully shutting down!")
+        self.channel.stop_consuming()
 
     def process(self):
         raise RuntimeError("Not implemented.")
