@@ -6,7 +6,7 @@ import json
 from enum import Enum
 import pika
 
-from karton.base import KartonSimple
+from .base import KartonSimple
 
 OPERATIONS_QUEUE = "karton.operations"
 

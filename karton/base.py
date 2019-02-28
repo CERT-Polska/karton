@@ -1,7 +1,7 @@
 from minio import Minio
 
-from karton.logger import KartonLogHandler
-from karton.rmq import RabbitMQClient, ExURLParameters
+from .logger import KartonLogHandler
+from .rmq import RabbitMQClient, ExURLParameters
 
 
 class KartonSimple(RabbitMQClient):

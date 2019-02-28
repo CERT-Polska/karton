@@ -3,8 +3,8 @@ Base library for karton subsystems.
 """
 import pika
 
-from karton.base import KartonSimple
-from karton.resource import RemoteResource, RemoteDirectoryResource
+from .base import KartonSimple
+from .resource import RemoteResource, RemoteDirectoryResource
 from .task import Task
 from .rmq import RabbitMQClient
 from .housekeeper import KartonHousekeeper, TaskState
