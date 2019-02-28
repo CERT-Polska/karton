@@ -3,7 +3,6 @@ Base library for karton housekeeper listeners.
 """
 import json
 
-from enum import Enum
 import pika
 
 from .base import KartonSimple
@@ -11,7 +10,7 @@ from .base import KartonSimple
 OPERATIONS_QUEUE = "karton.operations"
 
 
-class TaskState(str, Enum):
+class TaskState(object):
     SPAWNED = "Spawned"
     STARTED = "Started"
     FINISHED = "Finished"

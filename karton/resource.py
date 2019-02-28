@@ -4,7 +4,6 @@ import shutil
 import tempfile
 import uuid
 import zipfile
-from enum import Enum
 from io import BytesIO
 
 from .utils import zip_dir
@@ -30,7 +29,7 @@ class LocalResourceCanNotBeDownloaded(Exception):
     pass
 
 
-class ResourceFlagEnum(str, Enum):
+class ResourceFlagEnum(object):
     DIRECTORY = "Directory"
 
 
