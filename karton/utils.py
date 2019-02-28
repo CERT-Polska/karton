@@ -25,4 +25,3 @@ def zip_dir(directory):
                 dest = os.path.join(rel, name)
                 zf.write(full, dest)
     return result
-

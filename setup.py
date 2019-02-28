@@ -12,6 +12,6 @@ setup(name="karton",
       packages=['karton'],
       install_requires=open("requirements.txt").read().splitlines(),
       classifiers=[
-        "Programming Language :: Python",
-        "Operating System :: OS Independent",
+          "Programming Language :: Python",
+          "Operating System :: OS Independent",
       ])

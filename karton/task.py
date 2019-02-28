@@ -1,7 +1,7 @@
 import json
 import uuid
 
-from .resource import  ResourceFlagEnum, RemoteDirectoryResource, RemoteResource, PayloadBag
+from .resource import ResourceFlagEnum, RemoteDirectoryResource, RemoteResource, PayloadBag
 
 
 class Task(object):

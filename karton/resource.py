@@ -211,4 +211,3 @@ class PayloadBag(dict):
         for k, v in self.items():
             if isinstance(v, RemoteResource):
                 yield (k, v)
-

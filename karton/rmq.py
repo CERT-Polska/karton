@@ -4,8 +4,6 @@ from functools import wraps
 import pika
 import logging
 
-
-
 logger = logging.getLogger("rmq")
 
 
@@ -31,7 +29,7 @@ class RabbitMQConnection(object):
                 return self._connection
             except pika.exceptions.AMQPConnectionError as e:
                 logger.exception("[{}/{}] Reconnecting after {} seconds - {}".format(
-                    attempts+1,
+                    attempts + 1,
                     self.RECONNECT_ATTEMPTS,
                     self.RECONNECT_DELAY,
                     repr(e)

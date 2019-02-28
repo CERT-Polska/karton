@@ -32,4 +32,3 @@ class KartonHousekeeper(KartonSimple):
             "task": task.serialize(),
             "type": "operation"
         }), pika.BasicProperties(headers=task.headers))
-
