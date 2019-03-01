@@ -1,8 +1,9 @@
 from minio import Minio
 
 from .logger import KartonLogHandler
-from .rmq import RabbitMQClient, ExURLParameters
-
+from .rmq import RabbitMQClient
+from pika import ConnectionParameters
+import ssl
 
 class KartonSimple(RabbitMQClient):
     identity = ""
@@ -10,7 +11,15 @@ class KartonSimple(RabbitMQClient):
     def __init__(self, config, **kwargs):
         self.config = config
 
-        parameters = ExURLParameters(self.config.rmq_config["address"])
+        parameters = ConnectionParameters(host=self.config.rmq_config["address"],
+                                          ssl=True,
+                                          ssl_options=dict(
+                                              ssl_version=ssl.PROTOCOL_TLSv1,
+                                              ca_certs=self.config.rmq_config["ca_certs"],
+                                              keyfile=self.config.rmq_config["keyfile"],
+                                              certfile=self.config.rmq_config["certfile"],
+                                              cert_reqs=ssl.CERT_REQUIRED
+                                          ))
         super(KartonSimple, self).__init__(parameters=parameters, **kwargs)
 
         self.current_task = None

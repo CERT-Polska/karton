@@ -6,13 +6,6 @@ import logging
 
 logger = logging.getLogger("rmq")
 
-
-class ExURLParameters(pika.URLParameters):
-    def _set_url_external_creds(self, value):
-        if value:
-            self.credentials = pika.credentials.ExternalCredentials()
-
-
 class RabbitMQConnection(object):
     RECONNECT_ATTEMPTS = 20
     RECONNECT_DELAY = 5
