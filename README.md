@@ -38,15 +38,12 @@ To use karton you have to provide class that inherits from Karton.
     def process(self):
         # self.current_task - stores task which arrival invoked the process() function
         # self.current_task.headers - dict of headers, useful when multiple filters are used
-
-        sample = None
-        # current_task contains resources which are needed to handle the task
-        for resource in self.current_task.resources:
-            if resource.name == "sample":
-                sample = resource
-                break
-        else:
-            return
+        
+        # get_resource() gets remote resource object
+        remote_sample = self.current_task.get_resource("sample")
+        
+        # download_resource actually downloads content from remote resource
+        sample = self.current_task.download_resource(remote_sample)
         
         # you can access content of resources for processing
         sample_content = sample.content
@@ -57,10 +54,8 @@ To use karton you have to provide class that inherits from Karton.
         # or adding some newly obtained information to one of the 
         # persistent storage systems, ie. mwdb
         if sample_content[:2] == b"MZ":
-            # create new task if needed
-            task = self.create_task({"type": "sample", "kind": "executable"})
-            # append resource to task
-            task.add_resource(sample)
+            # derive task from current task, this saves resources of current_task
+            task = Task.derive_task({"type": "sample", "kind": "executable"}, self.current_task)
             # send task to queues for further processing
             self.send_task(task)
 ```
