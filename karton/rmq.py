@@ -6,6 +6,7 @@ import logging
 
 logger = logging.getLogger("rmq")
 
+
 class RabbitMQConnection(object):
     RECONNECT_ATTEMPTS = 20
     RECONNECT_DELAY = 5
