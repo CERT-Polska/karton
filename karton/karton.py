@@ -81,7 +81,7 @@ class Consumer(KartonBase):
         except Exception as e:
             self.log.exception("Failed to process task")
         finally:
-            if self.current_task.is_asynchronic():
+            if not self.current_task.is_asynchronic():
                 self.housekeeper.declare_task_state(self.current_task, TaskState.FINISHED, identity=self.identity)
 
     @RabbitMQClient.retryable
