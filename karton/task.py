@@ -21,6 +21,8 @@ class Task(object):
         self.payload = PayloadBag()
         self.payload.update(payload)
 
+        self.asynchronic = False
+
     @classmethod
     def derive_task(cls, headers, task):
         new_task = cls(headers=headers, payload=task.payload)
@@ -83,7 +85,14 @@ class Task(object):
         return self.serialize()
 
     def is_asynchronic(self):
-        return False
+        return self.asynchronic
+
+    def make_asynchronic(self):
+        """
+        Task declares that work will be done by some remote
+        handler, so task shouldn't be considered finished when process() returns
+        """
+        self.asynchronic = True
 
     """
     Following methods are simple wrappers on self.payload PayloadBag for abstracting out direct access.
@@ -126,11 +135,3 @@ class Task(object):
     def payload_contains(self, name):
         return name in self.payload
 
-
-class AsyncTask(Task):
-    """
-    Task declares that work will be done by some remote
-    handler, so task shouldn't be considered finished when process() returns
-    """
-    def is_asynchronic(self):
-        return True
