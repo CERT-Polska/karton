@@ -104,12 +104,8 @@ class Task(object):
 
         self.payload[name] = content
 
-    def add_resource(self, resource):
-        self._add_to_payload(resource.name, resource)
-
-    def add_resources(self, resources_list):
-        for resource in resources_list:
-            self.add_resource(resource)
+    def add_resource(self, name, resource):
+        self._add_to_payload(name, resource)
 
     def add_payload(self, name, content):
         self._add_to_payload(name, content)
