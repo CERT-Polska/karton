@@ -101,6 +101,16 @@ class Consumer(KartonBase):
     def download_resource(self, resource):
         return resource.download(self.minio)
 
+    def download_to_temporary_folder(self, resource):
+        if not resource.is_directory():
+            raise TypeError("Attempted to download resource that is NOT a directory as a directory.")
+        yield resource.download_to_temporary_folder(self.minio)
+
+    def download_zip_file(self, resource):
+        if not resource.is_directory():
+            raise TypeError("Attempted to download resource that is NOT a directory as a directory.")
+        yield resource.download_zip_file(self.minio)
+
     def remove_resource(self, resource):
         return resource.remove(self.minio)
 
