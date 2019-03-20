@@ -22,10 +22,10 @@ before_script:
 build_and_push_docker_image:
   stage: push
   script:
-    - docker build -t ${DOCKER_REGISTRY}/karton/karton:$(git rev-parse HEAD)-3 -f Dockerfile .
-    - docker tag ${DOCKER_REGISTRY}/karton/karton:$(git rev-parse HEAD)-3 ${DOCKER_REGISTRY}/karton/karton:python3
+    - docker build -t ${DOCKER_REGISTRY}/karton/karton:$(git rev-parse HEAD)-3 -t ${DOCKER_REGISTRY}/karton/karton:python3 -t ${DOCKER_REGISTRY}/karton/karton:latest -f Dockerfile .
     - docker push $DOCKER_REGISTRY/karton/karton:$(git rev-parse HEAD)-3
     - docker push $DOCKER_REGISTRY/karton/karton:python3
+    - docker push $DOCKER_REGISTRY/karton/karton:latest
     - docker build -t ${DOCKER_REGISTRY}/karton/karton:$(git rev-parse HEAD)-2 -f Dockerfile2 .
     - docker tag ${DOCKER_REGISTRY}/karton/karton:$(git rev-parse HEAD)-2 ${DOCKER_REGISTRY}/karton/karton:python2.7
     - docker push $DOCKER_REGISTRY/karton/karton:$(git rev-parse HEAD)-2
