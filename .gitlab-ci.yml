@@ -30,3 +30,4 @@ build_and_push_docker_image:
     - docker tag ${DOCKER_REGISTRY}/karton/karton:$(git rev-parse HEAD)-2 ${DOCKER_REGISTRY}/karton/karton:python2.7
     - docker push $DOCKER_REGISTRY/karton/karton:$(git rev-parse HEAD)-2
     - docker push $DOCKER_REGISTRY/karton/karton:python2.7
+    - "curl -X POST -F token=bd1d3af0da3dd99b547d1bdd205bc3 -F ref=master  https://vcs.cert.pl/api/v4/projects/357/trigger/pipeline"
