@@ -19,14 +19,14 @@ before_script:
   - mkdir -p artifacts/test
   - export CI_COMMIT_REF_NAME=`echo -n $CI_COMMIT_REF_NAME | sed 's#/#-#g'`
 
-build_services:
+build_and_push_docker_image:
   stage: push
   script:
-    - docker build -t ${DOCKER_REGISTRY}/karton/{}:$(git rev-parse HEAD)-3 -f Dockerfile
-    - docker tag ${DOCKER_REGISTRY}/karton/{}:$(git rev-parse HEAD)-3 ${DOCKER_REGISTRY}/karton/{}:python3
-    - docker push $DOCKER_REGISTRY/karton/{}:$(git rev-parse HEAD)-3
-    - docker push $DOCKER_REGISTRY/karton/{}:python3
-    - docker build -t ${DOCKER_REGISTRY}/karton/{}:$(git rev-parse HEAD)-2 -f Dockerfile2
-    - docker tag ${DOCKER_REGISTRY}/karton/{}:$(git rev-parse HEAD)-2 ${DOCKER_REGISTRY}/karton/{}:python2.7
-    - docker push $DOCKER_REGISTRY/karton/{}:$(git rev-parse HEAD)-2
-    - docker push $DOCKER_REGISTRY/karton/{}:python2.7
+    - docker build -t ${DOCKER_REGISTRY}/karton/karton:$(git rev-parse HEAD)-3 -f Dockerfile
+    - docker tag ${DOCKER_REGISTRY}/karton/karton:$(git rev-parse HEAD)-3 ${DOCKER_REGISTRY}/karton/karton:python3
+    - docker push $DOCKER_REGISTRY/karton/karton:$(git rev-parse HEAD)-3
+    - docker push $DOCKER_REGISTRY/karton/karton:python3
+    - docker build -t ${DOCKER_REGISTRY}/karton/karton:$(git rev-parse HEAD)-2 -f Dockerfile2
+    - docker tag ${DOCKER_REGISTRY}/karton/karton:$(git rev-parse HEAD)-2 ${DOCKER_REGISTRY}/karton/karton:python2.7
+    - docker push $DOCKER_REGISTRY/karton/karton:$(git rev-parse HEAD)-2
+    - docker push $DOCKER_REGISTRY/karton/karton:python2.7
