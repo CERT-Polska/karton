@@ -129,11 +129,12 @@ class Resource(RemoteResource):
             minio.make_bucket(bucket_name=bucket)
 
         if type(self.content) is str:
-            content = StringIO(self.content)
+            content = self.content.encode("utf-8")
         elif type(self.content) is bytes:
-            content = BytesIO(self.content)
+            content = self.content
         else:
             raise TypeError("Content can be bytes or str only")
+        content = BytesIO(content)
 
         minio.put_object(bucket, self.uid, content, len(self.content))
 
