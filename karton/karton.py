@@ -13,6 +13,7 @@ from .utils import GracefulKiller
 TASKS_QUEUE = "karton.tasks"
 
 
+
 class KartonBase(KartonSimple):
     identity = ""
 
@@ -91,6 +92,7 @@ class Consumer(KartonBase):
 
         # RMQ in headers doesn't allow multiple filters, se we bind multiple times
         for filter in self.filters:
+            self.log.info("Binding on: %s" % filter)
             filter.update({"x-match": "all"})
             self.channel.queue_bind(exchange=TASKS_QUEUE, queue=self.identity, routing_key='',
                                     arguments=filter)

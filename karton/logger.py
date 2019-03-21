@@ -37,6 +37,7 @@ class KartonLogHandler(logging.Handler, RabbitMQClient):
         self.channel.basic_publish(LOGS_QUEUE, "", json.dumps(log_line), pika.BasicProperties())
 
     def get_logger(self, identity):
+        logging.basicConfig()
         if not identity:
             return logging.getLogger("karton")
         logger = logging.getLogger(identity)

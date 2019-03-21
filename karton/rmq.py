@@ -4,6 +4,7 @@ from functools import wraps
 import pika
 import logging
 
+logging.basicConfig()
 logger = logging.getLogger("rmq")
 
 
