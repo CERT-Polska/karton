@@ -53,8 +53,8 @@ class RemoteResource(object):
 
     def is_directory(self):
         """
-        Helps to identify DirResource vs Resource without type checking
-        :return: true if we are RemoteDirResource
+        Helps to identify DirectoryResource vs Resource without type checking
+        :return: true if this instance is RemoteDirectoryResource or DirectoryResource
         """
         # both conditions should be identical
         return ResourceFlagEnum.DIRECTORY in self.flags or isinstance(self, RemoteDirectoryResource)
@@ -77,13 +77,17 @@ class RemoteResource(object):
         return new_cls
 
     def remove(self, minio):
+        """
+        Remove remote resource from minio storage
+        :param minio: minio instance
+        """
         minio.remove_object(self.bucket, self.uid)
 
     def download(self, minio):
         """
         Download RemoteResource into object for local usage
-        :param minio:
-        :return:
+        :param minio: minio instance
+        :return: :py:class:`karton.Resource` - local resource
         """
         reader = minio.get_object(self.bucket, self.uid)
         sio = BytesIO(reader.data)
@@ -94,6 +98,11 @@ class RemoteResource(object):
         return Resource(self.name, sio.getvalue(), size, self.uid)
 
     def get_size(self, minio):
+        """
+        Gets size of remote object (without downloading content)
+        :param minio: minio instance
+        :return: size of remote object
+        """
         stat = minio.stat_object(self.bucket, self.name)
         return stat.size
 
@@ -154,6 +163,7 @@ class RemoteDirectoryResource(RemoteResource):
         Context manager for using content of the DirResource, this is the preferred way of getting the contents.
 
         Ensures that the unpacked content is removed after usage.
+        :param minio: minio instance
         :return: path to unpacked contents
         """
         resource = self.download(minio=minio)
@@ -178,6 +188,7 @@ class RemoteDirectoryResource(RemoteResource):
 class DirectoryResource(RemoteDirectoryResource, Resource):
     def __init__(self, name, bucket, directory_path, *args, **kwargs):
         """
+        Resource specialized in handling directories
         :param name: name of the resource
         :param directory_path: directory to be compressed and used as a minio object later on
         :param bucket: minio bucket

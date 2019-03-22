@@ -1,4 +1,4 @@
 from .karton import Karton, Producer, Consumer
 from .task import Task
-from .resource import Resource, DirectoryResource
+from .resource import Resource, DirectoryResource, RemoteResource
 from .config import Config

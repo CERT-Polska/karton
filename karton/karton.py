@@ -1,6 +1,8 @@
 """
 Base library for karton subsystems.
 """
+import contextlib
+
 import pika
 
 from .base import KartonSimple
@@ -11,7 +13,6 @@ from .housekeeper import KartonHousekeeper, TaskState
 from .utils import GracefulKiller
 
 TASKS_QUEUE = "karton.tasks"
-
 
 
 class KartonBase(KartonSimple):
@@ -26,9 +27,10 @@ class Producer(KartonBase):
     @RabbitMQClient.retryable
     def send_task(self, task):
         """
-        We send task as a child of a current one to maintain whole chain of events
-        :param task:
-        :return:
+        Sends a task to the RabbitMQ queue. Takes care of logging.
+        Given task will be child of task we are currently handling (if such exists) - this ensures our log continuity
+        :param task: :py:class:`karton.Task` to be sent
+        :return: bool if task was delivered
         """
         self.log.debug("Dispatched task {}".format(task.uid))
         if self.current_task is not None:
@@ -55,6 +57,9 @@ class Producer(KartonBase):
 
 
 class Consumer(KartonBase):
+    """
+    Base consumer class, expected to be inherited from
+    """
     filters = None
 
     def __init__(self, config):
@@ -68,6 +73,11 @@ class Consumer(KartonBase):
         self.channel.stop_consuming()
 
     def process(self):
+        """
+        Expected to be overwritten
+
+        self.current_task contains task that triggered invokation of :py:meth:`karton.Consumer.process`
+        """
         raise RuntimeError("Not implemented.")
 
     def internal_process(self, channel, method, properties, body):
@@ -87,6 +97,9 @@ class Consumer(KartonBase):
 
     @RabbitMQClient.retryable
     def loop(self):
+        """
+        Blocking loop that consumes tasks and runs :py:meth:`karton.Consumer.process` as a handler
+        """
         self.log.info("Service {} started".format(self.identity))
         self.channel.queue_declare(queue=self.identity, durable=False, auto_delete=True)
 
@@ -101,22 +114,52 @@ class Consumer(KartonBase):
         self.channel.start_consuming()
 
     def download_resource(self, resource):
+        """
+        Download remote resource into local resource.
+
+        :param resource: :py:class:`karton.RemoteResource` to download
+        :return: :py:class:`karton.Resource`
+        """
         return resource.download(self.minio)
 
+    @contextlib.contextmanager
     def download_to_temporary_folder(self, resource):
+        """
+        Context manager for downloading remote directory resource into local temporary folder.
+        It also makes sure that the temporary folder is disposed afterwards.
+
+        :param resource: :py:class:`karton.RemoteDirectoryResource`
+        :return: path to temporary folder with unpacked contents
+        """
         if not resource.is_directory():
             raise TypeError("Attempted to download resource that is NOT a directory as a directory.")
         yield resource.download_to_temporary_folder(self.minio)
 
     def download_zip_file(self, resource):
+        """
+        Download remote directory resource contents into Zipfile object.
+
+        :param resource: :py:class:`karton.RemoteDirectoryResource`
+        :return: :py:class:`zipfile.Zipfile`
+        """
         if not resource.is_directory():
             raise TypeError("Attempted to download resource that is NOT a directory as a directory.")
         yield resource.download_zip_file(self.minio)
 
     def remove_resource(self, resource):
+        """
+        Remove remote resource.
+        :param: :py:class:`karton.RemoteResource` to be removes
+        """
         return resource.remove(self.minio)
 
     def upload_resource(self, resource):
+        """
+        Upload local resource to the storage hub
+
+        :param resource: :py:class:`karton.Resource` to upload
+        :return: :py:class:`karton.RemoteResource` representing uploaded resource
+        """
         return resource.upload(self.minio)
 
 
