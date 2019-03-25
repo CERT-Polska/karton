@@ -54,6 +54,7 @@ class RemoteResource(object):
     def is_directory(self):
         """
         Helps to identify DirectoryResource vs Resource without type checking
+
         :return: true if this instance is RemoteDirectoryResource or DirectoryResource
         """
         # both conditions should be identical
@@ -79,6 +80,7 @@ class RemoteResource(object):
     def remove(self, minio):
         """
         Remove remote resource from minio storage
+
         :param minio: minio instance
         """
         minio.remove_object(self.bucket, self.uid)
@@ -86,6 +88,7 @@ class RemoteResource(object):
     def download(self, minio):
         """
         Download RemoteResource into object for local usage
+
         :param minio: minio instance
         :return: :py:class:`karton.Resource` - local resource
         """
@@ -100,6 +103,7 @@ class RemoteResource(object):
     def get_size(self, minio):
         """
         Gets size of remote object (without downloading content)
+
         :param minio: minio instance
         :return: size of remote object
         """
@@ -129,6 +133,7 @@ class Resource(RemoteResource):
         """
         This is where we sync with remote, never to be used by user explicitly
         Should be invoked while uploading task
+
         :return: RemoteResource to use locally
         """
         if self.content is None:
@@ -163,6 +168,7 @@ class RemoteDirectoryResource(RemoteResource):
         Context manager for using content of the DirResource, this is the preferred way of getting the contents.
 
         Ensures that the unpacked content is removed after usage.
+
         :param minio: minio instance
         :return: path to unpacked contents
         """
@@ -179,6 +185,7 @@ class RemoteDirectoryResource(RemoteResource):
     def download_zip_file(self, minio):
         """
         When contextmanager cannot be used, user should handle zipfile himself any way he likes.
+
         :return: zipfile object from content
         """
         r = self.download(minio=minio)
@@ -189,6 +196,7 @@ class DirectoryResource(RemoteDirectoryResource, Resource):
     def __init__(self, name, bucket, directory_path, *args, **kwargs):
         """
         Resource specialized in handling directories
+
         :param name: name of the resource
         :param directory_path: directory to be compressed and used as a minio object later on
         :param bucket: minio bucket
@@ -206,6 +214,7 @@ class PayloadBag(dict):
     def directory_resources(self):
         """
         generator for DirectoryResources
+
         :return: yields simple DirectoryResource
         """
         for k, v in self.items():
@@ -215,6 +224,7 @@ class PayloadBag(dict):
     def file_resources(self):
         """
         generator for normal resources that is without DirectoryResources
+
         :return: yields single resource
         """
         for k, v in self.items():
@@ -224,6 +234,7 @@ class PayloadBag(dict):
     def resources(self):
         """
         generator for normal resources that is without DirectoryResources
+
         :return: yields single resource
         """
         for k, v in self.items():

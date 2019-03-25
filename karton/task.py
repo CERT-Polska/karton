@@ -8,6 +8,7 @@ class Task(object):
     def __init__(self, headers, payload=None):
         """
         Task represents some resources + metadata.
+
         :param headers: Routing information for other systems, this is what allows for evaluation of given \
                         system usefulness for given task. Systems filter by these.
         :param payload: any instance of :py:class:`dict` - contains resources and additional informations
@@ -30,6 +31,7 @@ class Task(object):
     def derive_task(cls, headers, task):
         """
         Alternative constructor which copies payload from given task, useful for proxying resource with added metadata.
+
         :param headers: same as in normal constructor
         :param task: :py:class:`karton.Task` - task to derive from
         :return: :py:class:`karton.Task` with new headers
@@ -40,6 +42,7 @@ class Task(object):
     def set_task_parent(self, parent):
         """
         Bind existing Task to parent task
+
         :param parent: :py:class:`karton.Task` - task to bind to
         """
         self.parent_uid = parent.uid
@@ -122,6 +125,7 @@ class Task(object):
     def add_resource(self, name, resource):
         """
         Add resource to task
+
         :param name: name of the resource
         :param resource: :py:class:`karton.Resource` - resource to be added
         """
@@ -130,6 +134,7 @@ class Task(object):
     def add_payload(self, name, content):
         """
         Add payload to task
+
         :param name: name of the payload
         :param resource: payload to be added
         """
@@ -138,6 +143,7 @@ class Task(object):
     def get_payload(self, name, default=None):
         """
         Get payload from task
+
         :param name: name of the payload
         :param default: value to be returned if payload is not present
         :return: payload content
@@ -147,6 +153,7 @@ class Task(object):
     def get_resource(self, name, default=None):
         """
         Get resource from task
+
         :param name: name of the resource
         :param default: value to be returned if resource is not present
         :return: :py:class:`karton.Resource` - resource with given name
@@ -174,6 +181,7 @@ class Task(object):
     def remove_payload(self, name):
         """
         Removes payload for the task
+
         :param name: payload name to be removed
         """
         del self.payload[name]

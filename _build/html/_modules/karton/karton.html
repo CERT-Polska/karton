@@ -64,6 +64,7 @@
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Sends a task to the RabbitMQ queue. Takes care of logging.</span>
 <span class="sd">        Given task will be child of task we are currently handling (if such exists) - this ensures our log continuity</span>
+
 <span class="sd">        :param task: :py:class:`karton.Task` to be sent</span>
 <span class="sd">        :return: bool if task was delivered</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -184,7 +185,8 @@
 <div class="viewcode-block" id="Consumer.remove_resource"><a class="viewcode-back" href="../../index.html#karton.Consumer.remove_resource">[docs]</a>    <span class="k">def</span> <span class="nf">remove_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Remove remote resource.</span>
-<span class="sd">        :param: :py:class:`karton.RemoteResource` to be removes</span>
+
+<span class="sd">        :param resource: :py:class:`karton.RemoteResource` to be removed</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="n">resource</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">minio</span><span class="p">)</span></div>
 
