@@ -43,6 +43,7 @@
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">headers</span><span class="p">,</span> <span class="n">payload</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Task represents some resources + metadata.</span>
+
 <span class="sd">        :param headers: Routing information for other systems, this is what allows for evaluation of given \</span>
 <span class="sd">                        system usefulness for given task. Systems filter by these.</span>
 <span class="sd">        :param payload: any instance of :py:class:`dict` - contains resources and additional informations</span>
@@ -65,6 +66,7 @@
     <span class="k">def</span> <span class="nf">derive_task</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">headers</span><span class="p">,</span> <span class="n">task</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Alternative constructor which copies payload from given task, useful for proxying resource with added metadata.</span>
+
 <span class="sd">        :param headers: same as in normal constructor</span>
 <span class="sd">        :param task: :py:class:`karton.Task` - task to derive from</span>
 <span class="sd">        :return: :py:class:`karton.Task` with new headers</span>
@@ -75,6 +77,7 @@
 <div class="viewcode-block" id="Task.set_task_parent"><a class="viewcode-back" href="../../index.html#karton.Task.set_task_parent">[docs]</a>    <span class="k">def</span> <span class="nf">set_task_parent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parent</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Bind existing Task to parent task</span>
+
 <span class="sd">        :param parent: :py:class:`karton.Task` - task to bind to</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">parent_uid</span> <span class="o">=</span> <span class="n">parent</span><span class="o">.</span><span class="n">uid</span>
@@ -157,6 +160,7 @@
 <div class="viewcode-block" id="Task.add_resource"><a class="viewcode-back" href="../../index.html#karton.Task.add_resource">[docs]</a>    <span class="k">def</span> <span class="nf">add_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Add resource to task</span>
+
 <span class="sd">        :param name: name of the resource</span>
 <span class="sd">        :param resource: :py:class:`karton.Resource` - resource to be added</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -165,6 +169,7 @@
 <div class="viewcode-block" id="Task.add_payload"><a class="viewcode-back" href="../../index.html#karton.Task.add_payload">[docs]</a>    <span class="k">def</span> <span class="nf">add_payload</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">content</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Add payload to task</span>
+
 <span class="sd">        :param name: name of the payload</span>
 <span class="sd">        :param resource: payload to be added</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -173,6 +178,7 @@
 <div class="viewcode-block" id="Task.get_payload"><a class="viewcode-back" href="../../index.html#karton.Task.get_payload">[docs]</a>    <span class="k">def</span> <span class="nf">get_payload</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get payload from task</span>
+
 <span class="sd">        :param name: name of the payload</span>
 <span class="sd">        :param default: value to be returned if payload is not present</span>
 <span class="sd">        :return: payload content</span>
@@ -182,6 +188,7 @@
 <div class="viewcode-block" id="Task.get_resource"><a class="viewcode-back" href="../../index.html#karton.Task.get_resource">[docs]</a>    <span class="k">def</span> <span class="nf">get_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get resource from task</span>
+
 <span class="sd">        :param name: name of the resource</span>
 <span class="sd">        :param default: value to be returned if resource is not present</span>
 <span class="sd">        :return: :py:class:`karton.Resource` - resource with given name</span>
@@ -209,6 +216,7 @@
 <div class="viewcode-block" id="Task.remove_payload"><a class="viewcode-back" href="../../index.html#karton.Task.remove_payload">[docs]</a>    <span class="k">def</span> <span class="nf">remove_payload</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Removes payload for the task</span>
+
 <span class="sd">        :param name: payload name to be removed</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">payload</span><span class="p">[</span><span class="n">name</span><span class="p">]</span></div>

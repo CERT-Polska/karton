@@ -89,6 +89,7 @@
 <div class="viewcode-block" id="RemoteResource.is_directory"><a class="viewcode-back" href="../../index.html#karton.RemoteResource.is_directory">[docs]</a>    <span class="k">def</span> <span class="nf">is_directory</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Helps to identify DirectoryResource vs Resource without type checking</span>
+
 <span class="sd">        :return: true if this instance is RemoteDirectoryResource or DirectoryResource</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="c1"># both conditions should be identical</span>
@@ -114,6 +115,7 @@
 <div class="viewcode-block" id="RemoteResource.remove"><a class="viewcode-back" href="../../index.html#karton.RemoteResource.remove">[docs]</a>    <span class="k">def</span> <span class="nf">remove</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">minio</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Remove remote resource from minio storage</span>
+
 <span class="sd">        :param minio: minio instance</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">minio</span><span class="o">.</span><span class="n">remove_object</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">uid</span><span class="p">)</span></div>
@@ -121,6 +123,7 @@
 <div class="viewcode-block" id="RemoteResource.download"><a class="viewcode-back" href="../../index.html#karton.RemoteResource.download">[docs]</a>    <span class="k">def</span> <span class="nf">download</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">minio</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Download RemoteResource into object for local usage</span>
+
 <span class="sd">        :param minio: minio instance</span>
 <span class="sd">        :return: :py:class:`karton.Resource` - local resource</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -135,6 +138,7 @@
 <div class="viewcode-block" id="RemoteResource.get_size"><a class="viewcode-back" href="../../index.html#karton.RemoteResource.get_size">[docs]</a>    <span class="k">def</span> <span class="nf">get_size</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">minio</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Gets size of remote object (without downloading content)</span>
+
 <span class="sd">        :param minio: minio instance</span>
 <span class="sd">        :return: size of remote object</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -164,6 +168,7 @@
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        This is where we sync with remote, never to be used by user explicitly</span>
 <span class="sd">        Should be invoked while uploading task</span>
+
 <span class="sd">        :return: RemoteResource to use locally</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">content</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -198,6 +203,7 @@
 <span class="sd">        Context manager for using content of the DirResource, this is the preferred way of getting the contents.</span>
 
 <span class="sd">        Ensures that the unpacked content is removed after usage.</span>
+
 <span class="sd">        :param minio: minio instance</span>
 <span class="sd">        :return: path to unpacked contents</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -214,6 +220,7 @@
     <span class="k">def</span> <span class="nf">download_zip_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">minio</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        When contextmanager cannot be used, user should handle zipfile himself any way he likes.</span>
+
 <span class="sd">        :return: zipfile object from content</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">r</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">download</span><span class="p">(</span><span class="n">minio</span><span class="o">=</span><span class="n">minio</span><span class="p">)</span>
@@ -224,6 +231,7 @@
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">directory_path</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Resource specialized in handling directories</span>
+
 <span class="sd">        :param name: name of the resource</span>
 <span class="sd">        :param directory_path: directory to be compressed and used as a minio object later on</span>
 <span class="sd">        :param bucket: minio bucket</span>
@@ -241,6 +249,7 @@
     <span class="k">def</span> <span class="nf">directory_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        generator for DirectoryResources</span>
+
 <span class="sd">        :return: yields simple DirectoryResource</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
@@ -250,6 +259,7 @@
     <span class="k">def</span> <span class="nf">file_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        generator for normal resources that is without DirectoryResources</span>
+
 <span class="sd">        :return: yields single resource</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
@@ -259,6 +269,7 @@
     <span class="k">def</span> <span class="nf">resources</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        generator for normal resources that is without DirectoryResources</span>
+
 <span class="sd">        :return: yields single resource</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>

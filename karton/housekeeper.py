@@ -22,6 +22,7 @@ class KartonHousekeeper(KartonSimple):
     def declare_task_state(self, task, status, identity=None):
         """
         Declare task state
+
         :param task: Task
         :param finished: Is task finished? (task is started if False)
         """

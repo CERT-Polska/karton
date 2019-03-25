@@ -29,6 +29,7 @@ class Producer(KartonBase):
         """
         Sends a task to the RabbitMQ queue. Takes care of logging.
         Given task will be child of task we are currently handling (if such exists) - this ensures our log continuity
+
         :param task: :py:class:`karton.Task` to be sent
         :return: bool if task was delivered
         """
@@ -149,7 +150,8 @@ class Consumer(KartonBase):
     def remove_resource(self, resource):
         """
         Remove remote resource.
-        :param: :py:class:`karton.RemoteResource` to be removes
+
+        :param resource: :py:class:`karton.RemoteResource` to be removed
         """
         return resource.remove(self.minio)
 
