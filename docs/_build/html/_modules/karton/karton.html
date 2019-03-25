@@ -58,8 +58,8 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">housekeeper</span> <span class="o">=</span> <span class="n">KartonHousekeeper</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span> <span class="n">connection</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">connection</span><span class="p">)</span>
 
 
-<div class="viewcode-block" id="Producer"><a class="viewcode-back" href="../../index.html#karton.Producer">[docs]</a><span class="k">class</span> <span class="nc">Producer</span><span class="p">(</span><span class="n">KartonBase</span><span class="p">):</span>
-<div class="viewcode-block" id="Producer.send_task"><a class="viewcode-back" href="../../index.html#karton.Producer.send_task">[docs]</a>    <span class="nd">@RabbitMQClient</span><span class="o">.</span><span class="n">retryable</span>
+<div class="viewcode-block" id="Producer"><a class="viewcode-back" href="../../karton.html#karton.Producer">[docs]</a><span class="k">class</span> <span class="nc">Producer</span><span class="p">(</span><span class="n">KartonBase</span><span class="p">):</span>
+<div class="viewcode-block" id="Producer.send_task"><a class="viewcode-back" href="../../karton.html#karton.Producer.send_task">[docs]</a>    <span class="nd">@RabbitMQClient</span><span class="o">.</span><span class="n">retryable</span>
     <span class="k">def</span> <span class="nf">send_task</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Sends a task to the RabbitMQ queue. Takes care of logging.</span>
@@ -92,7 +92,7 @@
         <span class="k">return</span> <span class="n">delivered</span></div></div>
 
 
-<div class="viewcode-block" id="Consumer"><a class="viewcode-back" href="../../index.html#karton.Consumer">[docs]</a><span class="k">class</span> <span class="nc">Consumer</span><span class="p">(</span><span class="n">KartonBase</span><span class="p">):</span>
+<div class="viewcode-block" id="Consumer"><a class="viewcode-back" href="../../karton.html#karton.Consumer">[docs]</a><span class="k">class</span> <span class="nc">Consumer</span><span class="p">(</span><span class="n">KartonBase</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Base consumer class, expected to be inherited from</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -108,7 +108,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Gracefully shutting down!&quot;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">stop_consuming</span><span class="p">()</span>
 
-<div class="viewcode-block" id="Consumer.process"><a class="viewcode-back" href="../../index.html#karton.Consumer.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="Consumer.process"><a class="viewcode-back" href="../../karton.html#karton.Consumer.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Expected to be overwritten</span>
 
@@ -131,7 +131,7 @@
             <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_task</span><span class="o">.</span><span class="n">is_asynchronic</span><span class="p">():</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">housekeeper</span><span class="o">.</span><span class="n">declare_task_state</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_task</span><span class="p">,</span> <span class="n">TaskState</span><span class="o">.</span><span class="n">FINISHED</span><span class="p">,</span> <span class="n">identity</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">identity</span><span class="p">)</span>
 
-<div class="viewcode-block" id="Consumer.loop"><a class="viewcode-back" href="../../index.html#karton.Consumer.loop">[docs]</a>    <span class="nd">@RabbitMQClient</span><span class="o">.</span><span class="n">retryable</span>
+<div class="viewcode-block" id="Consumer.loop"><a class="viewcode-back" href="../../karton.html#karton.Consumer.loop">[docs]</a>    <span class="nd">@RabbitMQClient</span><span class="o">.</span><span class="n">retryable</span>
     <span class="k">def</span> <span class="nf">loop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Blocking loop that consumes tasks and runs :py:meth:`karton.Consumer.process` as a handler</span>
@@ -149,7 +149,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">basic_consume</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">internal_process</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">identity</span><span class="p">,</span> <span class="n">no_ack</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">channel</span><span class="o">.</span><span class="n">start_consuming</span><span class="p">()</span></div>
 
-<div class="viewcode-block" id="Consumer.download_resource"><a class="viewcode-back" href="../../index.html#karton.Consumer.download_resource">[docs]</a>    <span class="k">def</span> <span class="nf">download_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+<div class="viewcode-block" id="Consumer.download_resource"><a class="viewcode-back" href="../../karton.html#karton.Consumer.download_resource">[docs]</a>    <span class="k">def</span> <span class="nf">download_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Download remote resource into local resource.</span>
 
@@ -158,7 +158,7 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="n">resource</span><span class="o">.</span><span class="n">download</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">minio</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="Consumer.download_to_temporary_folder"><a class="viewcode-back" href="../../index.html#karton.Consumer.download_to_temporary_folder">[docs]</a>    <span class="nd">@contextlib</span><span class="o">.</span><span class="n">contextmanager</span>
+<div class="viewcode-block" id="Consumer.download_to_temporary_folder"><a class="viewcode-back" href="../../karton.html#karton.Consumer.download_to_temporary_folder">[docs]</a>    <span class="nd">@contextlib</span><span class="o">.</span><span class="n">contextmanager</span>
     <span class="k">def</span> <span class="nf">download_to_temporary_folder</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Context manager for downloading remote directory resource into local temporary folder.</span>
@@ -171,7 +171,7 @@
             <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Attempted to download resource that is NOT a directory as a directory.&quot;</span><span class="p">)</span>
         <span class="k">yield</span> <span class="n">resource</span><span class="o">.</span><span class="n">download_to_temporary_folder</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">minio</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="Consumer.download_zip_file"><a class="viewcode-back" href="../../index.html#karton.Consumer.download_zip_file">[docs]</a>    <span class="k">def</span> <span class="nf">download_zip_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+<div class="viewcode-block" id="Consumer.download_zip_file"><a class="viewcode-back" href="../../karton.html#karton.Consumer.download_zip_file">[docs]</a>    <span class="k">def</span> <span class="nf">download_zip_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Download remote directory resource contents into Zipfile object.</span>
 
@@ -182,7 +182,7 @@
             <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Attempted to download resource that is NOT a directory as a directory.&quot;</span><span class="p">)</span>
         <span class="k">yield</span> <span class="n">resource</span><span class="o">.</span><span class="n">download_zip_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">minio</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="Consumer.remove_resource"><a class="viewcode-back" href="../../index.html#karton.Consumer.remove_resource">[docs]</a>    <span class="k">def</span> <span class="nf">remove_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+<div class="viewcode-block" id="Consumer.remove_resource"><a class="viewcode-back" href="../../karton.html#karton.Consumer.remove_resource">[docs]</a>    <span class="k">def</span> <span class="nf">remove_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Remove remote resource.</span>
 
@@ -190,7 +190,7 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="n">resource</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">minio</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="Consumer.upload_resource"><a class="viewcode-back" href="../../index.html#karton.Consumer.upload_resource">[docs]</a>    <span class="k">def</span> <span class="nf">upload_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+<div class="viewcode-block" id="Consumer.upload_resource"><a class="viewcode-back" href="../../karton.html#karton.Consumer.upload_resource">[docs]</a>    <span class="k">def</span> <span class="nf">upload_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Upload local resource to the storage hub</span>
 
@@ -200,7 +200,7 @@
         <span class="k">return</span> <span class="n">resource</span><span class="o">.</span><span class="n">upload</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">minio</span><span class="p">)</span></div></div>
 
 
-<div class="viewcode-block" id="Karton"><a class="viewcode-back" href="../../index.html#karton.Karton">[docs]</a><span class="k">class</span> <span class="nc">Karton</span><span class="p">(</span><span class="n">Consumer</span><span class="p">,</span> <span class="n">Producer</span><span class="p">):</span>
+<div class="viewcode-block" id="Karton"><a class="viewcode-back" href="../../karton.html#karton.Karton">[docs]</a><span class="k">class</span> <span class="nc">Karton</span><span class="p">(</span><span class="n">Consumer</span><span class="p">,</span> <span class="n">Producer</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    This glues together Consumer and Producer - which is the most common use case</span>
 <span class="sd">    &quot;&quot;&quot;</span></div>
@@ -222,6 +222,14 @@
 
 
 <h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Examples:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../examples.html">Examples</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Full API:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../karton.html">Karton API</a></li>
+</ul>
 
 <div class="relations">
 <h3>Related Topics</h3>
@@ -244,14 +252,6 @@
     </div>
 </div>
 <script type="text/javascript">$('#searchbox').show(0);</script>
-
-
-
-
-
-
-
-
         </div>
       </div>
       <div class="clearer"></div>
