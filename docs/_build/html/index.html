@@ -1,0 +1,586 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Welcome to karton’s documentation! &#8212; karton 1.3 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="welcome-to-karton-s-documentation">
+<h1>Welcome to karton’s documentation!<a class="headerlink" href="#welcome-to-karton-s-documentation" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+</div>
+<span class="target" id="module-karton"></span><dl class="class">
+<dt id="karton.Producer">
+<em class="property">class </em><code class="descclassname">karton.</code><code class="descname">Producer</code><span class="sig-paren">(</span><em>config</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/karton.html#Producer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Producer" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="method">
+<dt id="karton.Producer.send_task">
+<code class="descname">send_task</code><span class="sig-paren">(</span><em>task</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/karton.html#Producer.send_task"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Producer.send_task" title="Permalink to this definition">¶</a></dt>
+<dd><p>Sends a task to the RabbitMQ queue. Takes care of logging.
+Given task will be child of task we are currently handling (if such exists) - this ensures our log continuity</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>task</strong> – <a class="reference internal" href="#karton.Task" title="karton.Task"><code class="xref py py-class docutils literal notranslate"><span class="pre">karton.Task</span></code></a> to be sent</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">bool if task was delivered</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="karton.Consumer">
+<em class="property">class </em><code class="descclassname">karton.</code><code class="descname">Consumer</code><span class="sig-paren">(</span><em>config</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/karton.html#Consumer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Consumer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Base consumer class, expected to be inherited from</p>
+<dl class="method">
+<dt id="karton.Consumer.download_resource">
+<code class="descname">download_resource</code><span class="sig-paren">(</span><em>resource</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/karton.html#Consumer.download_resource"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Consumer.download_resource" title="Permalink to this definition">¶</a></dt>
+<dd><p>Download remote resource into local resource.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>resource</strong> – <a class="reference internal" href="#karton.RemoteResource" title="karton.RemoteResource"><code class="xref py py-class docutils literal notranslate"><span class="pre">karton.RemoteResource</span></code></a> to download</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><a class="reference internal" href="#karton.Resource" title="karton.Resource"><code class="xref py py-class docutils literal notranslate"><span class="pre">karton.Resource</span></code></a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.Consumer.download_to_temporary_folder">
+<code class="descname">download_to_temporary_folder</code><span class="sig-paren">(</span><em>resource</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/karton.html#Consumer.download_to_temporary_folder"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Consumer.download_to_temporary_folder" title="Permalink to this definition">¶</a></dt>
+<dd><p>Context manager for downloading remote directory resource into local temporary folder.
+It also makes sure that the temporary folder is disposed afterwards.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>resource</strong> – <code class="xref py py-class docutils literal notranslate"><span class="pre">karton.RemoteDirectoryResource</span></code></td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">path to temporary folder with unpacked contents</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.Consumer.download_zip_file">
+<code class="descname">download_zip_file</code><span class="sig-paren">(</span><em>resource</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/karton.html#Consumer.download_zip_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Consumer.download_zip_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Download remote directory resource contents into Zipfile object.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>resource</strong> – <code class="xref py py-class docutils literal notranslate"><span class="pre">karton.RemoteDirectoryResource</span></code></td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><code class="xref py py-class docutils literal notranslate"><span class="pre">zipfile.Zipfile</span></code></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.Consumer.loop">
+<code class="descname">loop</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/karton.html#Consumer.loop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Consumer.loop" title="Permalink to this definition">¶</a></dt>
+<dd><p>Blocking loop that consumes tasks and runs <a class="reference internal" href="#karton.Consumer.process" title="karton.Consumer.process"><code class="xref py py-meth docutils literal notranslate"><span class="pre">karton.Consumer.process()</span></code></a> as a handler</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.Consumer.process">
+<code class="descname">process</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/karton.html#Consumer.process"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Consumer.process" title="Permalink to this definition">¶</a></dt>
+<dd><p>Expected to be overwritten</p>
+<p>self.current_task contains task that triggered invokation of <a class="reference internal" href="#karton.Consumer.process" title="karton.Consumer.process"><code class="xref py py-meth docutils literal notranslate"><span class="pre">karton.Consumer.process()</span></code></a></p>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.Consumer.remove_resource">
+<code class="descname">remove_resource</code><span class="sig-paren">(</span><em>resource</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/karton.html#Consumer.remove_resource"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Consumer.remove_resource" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remove remote resource.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>resource</strong> – <a class="reference internal" href="#karton.RemoteResource" title="karton.RemoteResource"><code class="xref py py-class docutils literal notranslate"><span class="pre">karton.RemoteResource</span></code></a> to be removed</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.Consumer.upload_resource">
+<code class="descname">upload_resource</code><span class="sig-paren">(</span><em>resource</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/karton.html#Consumer.upload_resource"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Consumer.upload_resource" title="Permalink to this definition">¶</a></dt>
+<dd><p>Upload local resource to the storage hub</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>resource</strong> – <a class="reference internal" href="#karton.Resource" title="karton.Resource"><code class="xref py py-class docutils literal notranslate"><span class="pre">karton.Resource</span></code></a> to upload</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><a class="reference internal" href="#karton.RemoteResource" title="karton.RemoteResource"><code class="xref py py-class docutils literal notranslate"><span class="pre">karton.RemoteResource</span></code></a> representing uploaded resource</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="karton.Karton">
+<em class="property">class </em><code class="descclassname">karton.</code><code class="descname">Karton</code><span class="sig-paren">(</span><em>config</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/karton.html#Karton"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Karton" title="Permalink to this definition">¶</a></dt>
+<dd><p>This glues together Consumer and Producer - which is the most common use case</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="karton.Resource">
+<em class="property">class </em><code class="descclassname">karton.</code><code class="descname">Resource</code><span class="sig-paren">(</span><em>name</em>, <em>content</em>, <em>size=None</em>, <em>_uid=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/resource.html#Resource"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Resource" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="method">
+<dt id="karton.Resource.download">
+<code class="descname">download</code><span class="sig-paren">(</span><em>minio</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/resource.html#Resource.download"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Resource.download" title="Permalink to this definition">¶</a></dt>
+<dd><p>Download RemoteResource into object for local usage</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>minio</strong> – minio instance</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><a class="reference internal" href="#karton.Resource" title="karton.Resource"><code class="xref py py-class docutils literal notranslate"><span class="pre">karton.Resource</span></code></a> - local resource</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.Resource.get_size">
+<code class="descname">get_size</code><span class="sig-paren">(</span><em>minio</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/resource.html#Resource.get_size"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Resource.get_size" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gets size of remote object (without downloading content)</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>minio</strong> – minio instance</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">size of remote object</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.Resource.remove">
+<code class="descname">remove</code><span class="sig-paren">(</span><em>minio</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/resource.html#Resource.remove"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Resource.remove" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remove remote resource from minio storage</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>minio</strong> – minio instance</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.Resource.upload">
+<code class="descname">upload</code><span class="sig-paren">(</span><em>minio</em>, <em>bucket</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/resource.html#Resource.upload"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Resource.upload" title="Permalink to this definition">¶</a></dt>
+<dd><p>This is where we sync with remote, never to be used by user explicitly
+Should be invoked while uploading task</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">RemoteResource to use locally</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="karton.DirectoryResource">
+<em class="property">class </em><code class="descclassname">karton.</code><code class="descname">DirectoryResource</code><span class="sig-paren">(</span><em>name</em>, <em>bucket</em>, <em>directory_path</em>, <em>*args</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/resource.html#DirectoryResource"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.DirectoryResource" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="class">
+<dt id="karton.RemoteResource">
+<em class="property">class </em><code class="descclassname">karton.</code><code class="descname">RemoteResource</code><span class="sig-paren">(</span><em>name</em>, <em>bucket=None</em>, <em>_uid=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/resource.html#RemoteResource"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.RemoteResource" title="Permalink to this definition">¶</a></dt>
+<dd><p>Abstraction over remote minio objects.</p>
+<p>This exists to make it easier to share resources across clients</p>
+<p>Resources are independent of underlying minio objects for easier local manipulation</p>
+<dl class="method">
+<dt id="karton.RemoteResource.download">
+<code class="descname">download</code><span class="sig-paren">(</span><em>minio</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/resource.html#RemoteResource.download"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.RemoteResource.download" title="Permalink to this definition">¶</a></dt>
+<dd><p>Download RemoteResource into object for local usage</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>minio</strong> – minio instance</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><a class="reference internal" href="#karton.Resource" title="karton.Resource"><code class="xref py py-class docutils literal notranslate"><span class="pre">karton.Resource</span></code></a> - local resource</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.RemoteResource.get_size">
+<code class="descname">get_size</code><span class="sig-paren">(</span><em>minio</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/resource.html#RemoteResource.get_size"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.RemoteResource.get_size" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gets size of remote object (without downloading content)</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>minio</strong> – minio instance</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">size of remote object</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.RemoteResource.is_directory">
+<code class="descname">is_directory</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/resource.html#RemoteResource.is_directory"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.RemoteResource.is_directory" title="Permalink to this definition">¶</a></dt>
+<dd><p>Helps to identify DirectoryResource vs Resource without type checking</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">true if this instance is RemoteDirectoryResource or DirectoryResource</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.RemoteResource.remove">
+<code class="descname">remove</code><span class="sig-paren">(</span><em>minio</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/resource.html#RemoteResource.remove"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.RemoteResource.remove" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remove remote resource from minio storage</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>minio</strong> – minio instance</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="karton.Task">
+<em class="property">class </em><code class="descclassname">karton.</code><code class="descname">Task</code><span class="sig-paren">(</span><em>headers</em>, <em>payload=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/task.html#Task"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Task" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="method">
+<dt id="karton.Task.add_payload">
+<code class="descname">add_payload</code><span class="sig-paren">(</span><em>name</em>, <em>content</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/task.html#Task.add_payload"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Task.add_payload" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add payload to task</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>name</strong> – name of the payload</li>
+<li><strong>resource</strong> – payload to be added</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.Task.add_resource">
+<code class="descname">add_resource</code><span class="sig-paren">(</span><em>name</em>, <em>resource</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/task.html#Task.add_resource"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Task.add_resource" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add resource to task</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>name</strong> – name of the resource</li>
+<li><strong>resource</strong> – <a class="reference internal" href="#karton.Resource" title="karton.Resource"><code class="xref py py-class docutils literal notranslate"><span class="pre">karton.Resource</span></code></a> - resource to be added</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="classmethod">
+<dt id="karton.Task.derive_task">
+<em class="property">classmethod </em><code class="descname">derive_task</code><span class="sig-paren">(</span><em>headers</em>, <em>task</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/task.html#Task.derive_task"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Task.derive_task" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alternative constructor which copies payload from given task, useful for proxying resource with added metadata.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>headers</strong> – same as in normal constructor</li>
+<li><strong>task</strong> – <a class="reference internal" href="#karton.Task" title="karton.Task"><code class="xref py py-class docutils literal notranslate"><span class="pre">karton.Task</span></code></a> - task to derive from</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last"><a class="reference internal" href="#karton.Task" title="karton.Task"><code class="xref py py-class docutils literal notranslate"><span class="pre">karton.Task</span></code></a> with new headers</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.Task.get_directory_resources">
+<code class="descname">get_directory_resources</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/task.html#Task.get_directory_resources"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Task.get_directory_resources" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">Generator of all directory resources present in the <code class="xref py py-class docutils literal notranslate"><span class="pre">karton.PayloadBag</span></code></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.Task.get_file_resources">
+<code class="descname">get_file_resources</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/task.html#Task.get_file_resources"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Task.get_file_resources" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">Generator of all file resources present in the <code class="xref py py-class docutils literal notranslate"><span class="pre">karton.PayloadBag</span></code></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.Task.get_payload">
+<code class="descname">get_payload</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/task.html#Task.get_payload"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Task.get_payload" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get payload from task</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>name</strong> – name of the payload</li>
+<li><strong>default</strong> – value to be returned if payload is not present</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">payload content</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.Task.get_resource">
+<code class="descname">get_resource</code><span class="sig-paren">(</span><em>name</em>, <em>default=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/task.html#Task.get_resource"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Task.get_resource" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get resource from task</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>name</strong> – name of the resource</li>
+<li><strong>default</strong> – value to be returned if resource is not present</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last"><a class="reference internal" href="#karton.Resource" title="karton.Resource"><code class="xref py py-class docutils literal notranslate"><span class="pre">karton.Resource</span></code></a> - resource with given name</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.Task.get_resources">
+<code class="descname">get_resources</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/task.html#Task.get_resources"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Task.get_resources" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">Generator of all resources present in the <code class="xref py py-class docutils literal notranslate"><span class="pre">karton.PayloadBag</span></code></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.Task.is_asynchronic">
+<code class="descname">is_asynchronic</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/task.html#Task.is_asynchronic"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Task.is_asynchronic" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">bool - If current task is asynchronic</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.Task.make_asynchronic">
+<code class="descname">make_asynchronic</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/task.html#Task.make_asynchronic"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Task.make_asynchronic" title="Permalink to this definition">¶</a></dt>
+<dd><p>Task declares that work will be done by some remote
+handler, so task shouldn’t be considered finished when process() returns</p>
+<p>Useful for processing long running tasks - eg. in cuckoo we finish task only after analysis</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.Task.payload_contains">
+<code class="descname">payload_contains</code><span class="sig-paren">(</span><em>name</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/task.html#Task.payload_contains"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Task.payload_contains" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>name</strong> – name of the payload to be checked</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">bool - if task’s payload contains payload with given name</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.Task.remove_payload">
+<code class="descname">remove_payload</code><span class="sig-paren">(</span><em>name</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/task.html#Task.remove_payload"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Task.remove_payload" title="Permalink to this definition">¶</a></dt>
+<dd><p>Removes payload for the task</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>name</strong> – payload name to be removed</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="karton.Task.set_task_parent">
+<code class="descname">set_task_parent</code><span class="sig-paren">(</span><em>parent</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/karton/task.html#Task.set_task_parent"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#karton.Task.set_task_parent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bind existing Task to parent task</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>parent</strong> – <a class="reference internal" href="#karton.Task" title="karton.Task"><code class="xref py py-class docutils literal notranslate"><span class="pre">karton.Task</span></code></a> - task to bind to</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></li>
+<li><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></li>
+<li><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></li>
+</ul>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="#">karton</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="#">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, CERT Polska.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.3</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
