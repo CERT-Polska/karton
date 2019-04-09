@@ -233,7 +233,7 @@ class PayloadBag(dict):
 
     def resources(self):
         """
-        generator for normal resources that is without DirectoryResources
+        generator for normal resources - that is without DirectoryResources
 
         :return: yields single resource
         """
