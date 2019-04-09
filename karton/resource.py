@@ -193,7 +193,7 @@ class RemoteDirectoryResource(RemoteResource):
 
 
 class DirectoryResource(RemoteDirectoryResource, Resource):
-    def __init__(self, name, bucket, directory_path, *args, **kwargs):
+    def __init__(self, name, directory_path, *args, **kwargs):
         """
         Resource specialized in handling directories
 
@@ -205,7 +205,7 @@ class DirectoryResource(RemoteDirectoryResource, Resource):
         """
         content = zip_dir(directory_path).getvalue()
 
-        super(DirectoryResource, self).__init__(name, bucket, content, *args, **kwargs)
+        super(DirectoryResource, self).__init__(name, content, *args, **kwargs)
 
         self.flags = [ResourceFlagEnum.DIRECTORY]
 

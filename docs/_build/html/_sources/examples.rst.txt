@@ -124,3 +124,10 @@ Finally, we need to run our module, we get this done with `loop` method, which b
 
 Karton
 -------------------
+Karton class gives both Producer and Consumer functionality combined.
+
+For usage see examples on VCS:
+
+- https://vcs.cert.pl/karton/services/ripper/blob/master/karton-ripper.py
+
+- https://vcs.cert.pl/karton/services/classifier/blob/master/classifier.py
