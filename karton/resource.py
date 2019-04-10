@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import uuid
 import zipfile
+import sys
 from io import BytesIO, StringIO
 
 from .utils import zip_dir
@@ -142,12 +143,16 @@ class Resource(RemoteResource):
         if bucket and not minio.bucket_exists(bucket):
             minio.make_bucket(bucket_name=bucket)
 
-        if type(self.content) is str:
-            content = self.content.encode("utf-8")
-        elif type(self.content) is bytes:
-            content = self.content
+        content = self.content
+
+        # Python2 represents binary as str, no need to convert
+        if type(content) is str and sys.version_info >= (3, 0):
+            content = content.encode("utf-8")
+        elif type(content) is bytes:
+            pass
         else:
             raise TypeError("Content can be bytes or str only")
+
         content = BytesIO(content)
 
         minio.put_object(bucket, self.uid, content, len(self.content))
