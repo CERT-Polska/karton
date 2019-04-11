@@ -130,12 +130,10 @@ class Resource(RemoteResource):
     def get_size(self, minio):
         return len(self.content)
 
-    def upload(self, minio, bucket):
+    def _upload(self, minio, bucket):
         """
         This is where we sync with remote, never to be used by user explicitly
         Should be invoked while uploading task
-
-        :return: RemoteResource to use locally
         """
         if self.content is None:
             raise NoContentException("Resource does not have any content in it")
@@ -157,7 +155,15 @@ class Resource(RemoteResource):
 
         minio.put_object(bucket, self.uid, content, len(self.content))
 
-        return RemoteResource(self.name, bucket, _uid=self.uid)
+    def upload(self, minio, bucket):
+        """
+        :return: RemoteResource to use locally
+        """
+        self._upload(minio=minio, bucket=bucket)
+
+        rr = RemoteResource(self.name, bucket, _uid=self.uid)
+        rr.flags = self.flags
+        return rr
 
 
 class RemoteDirectoryResource(RemoteResource):
@@ -213,6 +219,16 @@ class DirectoryResource(RemoteDirectoryResource, Resource):
         super(DirectoryResource, self).__init__(name, content, *args, **kwargs)
 
         self.flags = [ResourceFlagEnum.DIRECTORY]
+
+    def upload(self, minio, bucket):
+        """
+        :return: DirectoryRemoteResource to use locally
+        """
+        self._upload(minio=minio, bucket=bucket)
+
+        rr = RemoteDirectoryResource(self.name, bucket, _uid=self.uid)
+        rr.flags = self.flags
+        return rr
 
 
 class PayloadBag(dict):
