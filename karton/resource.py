@@ -222,7 +222,7 @@ class DirectoryResource(RemoteDirectoryResource, Resource):
 
     def upload(self, minio, bucket):
         """
-        :return: DirectoryRemoteResource to use locally
+        :return: RemoteDirectoryResource to use locally
         """
         self._upload(minio=minio, bucket=bucket)
 
