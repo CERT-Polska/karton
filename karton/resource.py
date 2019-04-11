@@ -173,6 +173,7 @@ class RemoteDirectoryResource(RemoteResource):
 
     Content extraction should be done through path or zip_file.
     """
+
     @contextlib.contextmanager
     def download_to_temporary_folder(self, minio):
         """
@@ -184,7 +185,9 @@ class RemoteDirectoryResource(RemoteResource):
         :return: path to unpacked contents
         """
         resource = self.download(minio=minio)
-        zip_file = zipfile.ZipFile(resource.content)
+        content = BytesIO(resource.content)
+
+        zip_file = zipfile.ZipFile(content)
 
         tmpdir = tempfile.mkdtemp()
         zip_file.extractall(tmpdir)
@@ -199,8 +202,9 @@ class RemoteDirectoryResource(RemoteResource):
 
         :return: zipfile object from content
         """
-        r = self.download(minio=minio)
-        return zipfile.ZipFile(r.content)
+        resource = self.download(minio=minio)
+        content = BytesIO(resource.content)
+        return zipfile.ZipFile(content)
 
 
 class DirectoryResource(RemoteDirectoryResource, Resource):

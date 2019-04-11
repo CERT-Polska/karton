@@ -134,7 +134,8 @@ class Consumer(KartonBase):
         """
         if not resource.is_directory():
             raise TypeError("Attempted to download resource that is NOT a directory as a directory.")
-        yield resource.download_to_temporary_folder(self.minio)
+        with resource.download_to_temporary_folder(self.minio) as fpath:
+            yield fpath
 
     def download_zip_file(self, resource):
         """
@@ -145,7 +146,7 @@ class Consumer(KartonBase):
         """
         if not resource.is_directory():
             raise TypeError("Attempted to download resource that is NOT a directory as a directory.")
-        yield resource.download_zip_file(self.minio)
+        return resource.download_zip_file(self.minio)
 
     def remove_resource(self, resource):
         """
