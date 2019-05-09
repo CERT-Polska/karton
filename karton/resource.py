@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import uuid
 import zipfile
+import sys
 from io import BytesIO, StringIO
 
 from .utils import zip_dir
@@ -129,12 +130,10 @@ class Resource(RemoteResource):
     def get_size(self, minio):
         return len(self.content)
 
-    def upload(self, minio, bucket):
+    def _upload(self, minio, bucket):
         """
         This is where we sync with remote, never to be used by user explicitly
         Should be invoked while uploading task
-
-        :return: RemoteResource to use locally
         """
         if self.content is None:
             raise NoContentException("Resource does not have any content in it")
@@ -142,17 +141,29 @@ class Resource(RemoteResource):
         if bucket and not minio.bucket_exists(bucket):
             minio.make_bucket(bucket_name=bucket)
 
-        if type(self.content) is str:
-            content = self.content.encode("utf-8")
-        elif type(self.content) is bytes:
-            content = self.content
+        content = self.content
+
+        # Python2 represents binary as str, no need to convert
+        if type(content) is str and sys.version_info >= (3, 0):
+            content = content.encode("utf-8")
+        elif type(content) is bytes:
+            pass
         else:
             raise TypeError("Content can be bytes or str only")
+
         content = BytesIO(content)
 
         minio.put_object(bucket, self.uid, content, len(self.content))
 
-        return RemoteResource(self.name, bucket, _uid=self.uid)
+    def upload(self, minio, bucket):
+        """
+        :return: RemoteResource to use locally
+        """
+        self._upload(minio=minio, bucket=bucket)
+
+        rr = RemoteResource(self.name, bucket, _uid=self.uid)
+        rr.flags = self.flags
+        return rr
 
 
 class RemoteDirectoryResource(RemoteResource):
@@ -162,6 +173,7 @@ class RemoteDirectoryResource(RemoteResource):
 
     Content extraction should be done through path or zip_file.
     """
+
     @contextlib.contextmanager
     def download_to_temporary_folder(self, minio):
         """
@@ -173,7 +185,9 @@ class RemoteDirectoryResource(RemoteResource):
         :return: path to unpacked contents
         """
         resource = self.download(minio=minio)
-        zip_file = zipfile.ZipFile(resource.content)
+        content = BytesIO(resource.content)
+
+        zip_file = zipfile.ZipFile(content)
 
         tmpdir = tempfile.mkdtemp()
         zip_file.extractall(tmpdir)
@@ -188,12 +202,13 @@ class RemoteDirectoryResource(RemoteResource):
 
         :return: zipfile object from content
         """
-        r = self.download(minio=minio)
-        return zipfile.ZipFile(r.content)
+        resource = self.download(minio=minio)
+        content = BytesIO(resource.content)
+        return zipfile.ZipFile(content)
 
 
 class DirectoryResource(RemoteDirectoryResource, Resource):
-    def __init__(self, name, bucket, directory_path, *args, **kwargs):
+    def __init__(self, name, directory_path, *args, **kwargs):
         """
         Resource specialized in handling directories
 
@@ -205,9 +220,19 @@ class DirectoryResource(RemoteDirectoryResource, Resource):
         """
         content = zip_dir(directory_path).getvalue()
 
-        super(DirectoryResource, self).__init__(name, bucket, content, *args, **kwargs)
+        super(DirectoryResource, self).__init__(name, content, *args, **kwargs)
 
         self.flags = [ResourceFlagEnum.DIRECTORY]
+
+    def upload(self, minio, bucket):
+        """
+        :return: RemoteDirectoryResource to use locally
+        """
+        self._upload(minio=minio, bucket=bucket)
+
+        rr = RemoteDirectoryResource(self.name, bucket, _uid=self.uid)
+        rr.flags = self.flags
+        return rr
 
 
 class PayloadBag(dict):
@@ -233,7 +258,7 @@ class PayloadBag(dict):
 
     def resources(self):
         """
-        generator for normal resources that is without DirectoryResources
+        generator for normal resources - that is without DirectoryResources
 
         :return: yields single resource
         """
