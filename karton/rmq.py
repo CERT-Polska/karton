@@ -14,9 +14,9 @@ class RabbitMQConnection(object):
 
     def __init__(self, parameters):
         self._parameters = parameters
-        self._connection = self.__connect()
+        self._connection = self.connect()
 
-    def __connect(self):
+    def connect(self):
         for attempts in range(self.RECONNECT_ATTEMPTS):
             try:
                 logger.info("Connecting to broker...")
@@ -64,6 +64,6 @@ class RabbitMQClient(object):
                 try:
                     return f(self, *args, **kwargs)
                 except (pika.exceptions.AMQPConnectionError, pika.exceptions.AMQPChannelError) as e:
-                    self.connection.__connect()
+                    self.connection.connect()
                 logger.debug("Retrying {} after connection break...".format(f.__name__))
         return retryable_method
