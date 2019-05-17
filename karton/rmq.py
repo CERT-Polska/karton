@@ -14,8 +14,8 @@ class RabbitMQConnection(object):
 
     def __init__(self, parameters):
         self._parameters = parameters
-        self._connection = self.connect()
         self.shutted_down = False
+        self._connection = self.connect()
 
     def connect(self):
         if not self.shutted_down:
