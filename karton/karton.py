@@ -72,6 +72,7 @@ class Consumer(KartonBase):
     def graceful_shutdown(self):
         self.log.info("Gracefully shutting down!")
         self.channel.stop_consuming()
+        self.shutdown()
 
     def process(self):
         """

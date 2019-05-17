@@ -15,25 +15,31 @@ class RabbitMQConnection(object):
     def __init__(self, parameters):
         self._parameters = parameters
         self._connection = self.connect()
+        self.shutted_down = False
 
     def connect(self):
-        for attempts in range(self.RECONNECT_ATTEMPTS):
-            try:
-                logger.info("Connecting to broker...")
-                self._connection = pika.BlockingConnection(self._parameters)
-                return self._connection
-            except pika.exceptions.AMQPConnectionError as e:
-                logger.exception("[{}/{}] Reconnecting after {} seconds - {}".format(
-                    attempts + 1,
-                    self.RECONNECT_ATTEMPTS,
-                    self.RECONNECT_DELAY,
-                    repr(e)
-                ))
-                time.sleep(self.RECONNECT_DELAY)
+        if not self.shutted_down:
+            for attempts in range(self.RECONNECT_ATTEMPTS):
+                try:
+                    logger.info("Connecting to broker...")
+                    self._connection = pika.BlockingConnection(self._parameters)
+                    return self._connection
+                except pika.exceptions.AMQPConnectionError as e:
+                    logger.exception("[{}/{}] Reconnecting after {} seconds - {}".format(
+                        attempts + 1,
+                        self.RECONNECT_ATTEMPTS,
+                        self.RECONNECT_DELAY,
+                        repr(e)
+                    ))
+                    time.sleep(self.RECONNECT_DELAY)
         raise RuntimeError("AMQP broker is unavailable")
 
     def channel(self):
         return self._connection.channel()
+
+    def shutdown(self):
+        self.shutted_down = True
+        self._connection.close()
 
 
 class RabbitMQChannel(object):
@@ -67,3 +73,6 @@ class RabbitMQClient(object):
                     self.connection.connect()
                 logger.debug("Retrying {} after connection break...".format(f.__name__))
         return retryable_method
+
+    def shutdown(self):
+        self.connection.shutdown()

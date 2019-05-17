@@ -13,13 +13,13 @@ class KartonSimple(RabbitMQClient):
 
     def __init__(self, config, **kwargs):
         self.config = config
-        paths = ca_certs_path, keyfile_path, certfile_path = self.config.rmq_config["ca_certs"], \
-                                                     self.config.rmq_config["keyfile"],\
-                                                     self.config.rmq_config["certfile"]
+        paths = self.config.rmq_config["ca_certs"], \
+                self.config.rmq_config["keyfile"], \
+                self.config.rmq_config["certfile"]
+
         for path in paths:
             if not os.path.isabs(path):
                 raise ValueError("Certificate paths must be absolute")
-
 
         parameters = ConnectionParameters(host=self.config.rmq_config["host"],
                                           virtual_host=self.config.rmq_config["vhost"],
