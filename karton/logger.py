@@ -37,10 +37,8 @@ class KartonLogHandler(logging.Handler, RabbitMQClient):
         self.channel.basic_publish(LOGS_QUEUE, "", json.dumps(log_line), pika.BasicProperties())
 
     def get_logger(self, identity):
-        logging.basicConfig()
-        if not identity:
-            return logging.getLogger("karton")
-        logger = logging.getLogger(identity)
+        # Intentionally not using getLogger because we don't want to create singletons!
+        logger = logging.Logger(identity or "karton")
         logger.setLevel(logging.DEBUG)
         stream_handler = logging.StreamHandler()
         stream_handler.setFormatter(logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s"))
