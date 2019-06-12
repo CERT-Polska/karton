@@ -90,6 +90,8 @@ class RemoteResource(object):
         """
         Download RemoteResource into object for local usage
 
+        You probably don't want to use it on your own, rather use Karton.download_resource method
+
         :param minio: minio instance
         :return: :py:class:`karton.Resource` - local resource
         """
@@ -181,6 +183,8 @@ class RemoteDirectoryResource(RemoteResource):
 
         Ensures that the unpacked content is removed after usage.
 
+        You probably don't want to use it on your own, rather use Karton.download_to_temporary_folder method
+
         :param minio: minio instance
         :return: path to unpacked contents
         """
@@ -199,6 +203,8 @@ class RemoteDirectoryResource(RemoteResource):
     def download_zip_file(self, minio):
         """
         When contextmanager cannot be used, user should handle zipfile himself any way he likes.
+
+        You probably don't want to use it on your own, rather use Karton.download_zip_file method
 
         :return: zipfile object from content
         """
