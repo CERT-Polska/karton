@@ -5,6 +5,7 @@ import tempfile
 import uuid
 import zipfile
 import sys
+import hashlib
 from io import BytesIO, StringIO
 
 from .utils import zip_dir
@@ -42,13 +43,14 @@ class RemoteResource(object):
 
     Resources are independent of underlying minio objects for easier local manipulation
     """
-    def __init__(self, name, bucket=None, _uid=None):
+    def __init__(self, name, bucket=None, _uid=None, sha256=None):
         if _uid is None:
             _uid = str(uuid.uuid4())
 
         self.name = name
         self.bucket = bucket
         self.uid = _uid
+        self.sha256 = sha256
 
         self.flags = []
 
@@ -62,7 +64,7 @@ class RemoteResource(object):
         return ResourceFlagEnum.DIRECTORY in self.flags or isinstance(self, RemoteDirectoryResource)
 
     def to_dict(self):
-        return {"uid": self.uid, "name": self.name, "bucket": self.bucket, "flags": self.flags}
+        return {"uid": self.uid, "name": self.name, "bucket": self.bucket, "flags": self.flags, "sha256": self.sha256}
 
     def serialize(self):
         return json.dumps(self.to_dict())
@@ -72,9 +74,10 @@ class RemoteResource(object):
         bucket = data_dict["bucket"]
         name = data_dict["name"]
         _uid = data_dict["uid"]
+        sha256 = data_dict.get("sha256")
         flags = data_dict["flags"]
 
-        new_cls = cls(name, bucket, _uid=_uid)
+        new_cls = cls(name, bucket, _uid=_uid, sha256=sha256)
         new_cls.flags = flags
         return new_cls
 
@@ -118,9 +121,19 @@ class RemoteResource(object):
 
 
 class Resource(RemoteResource):
-    def __init__(self, name, content, size=None, _uid=None):
+    def __init__(self, name, content, size=None, _uid=None, *args, **kwargs):
         super(Resource, self).__init__(name, _uid=_uid)
         self.content = content
+
+        # Python2 represents binary as str, no need to convert
+        if type(content) is str and sys.version_info >= (3, 0):
+            content = content.encode("utf-8")
+        elif type(content) is bytes:
+            pass
+        else:
+            raise TypeError("Content can be bytes or str only")
+
+        self.sha256 = hashlib.sha256(content).hexdigest()
         self.size = len(content) if content is not None else size
 
     def remove(self, minio):
@@ -228,6 +241,7 @@ class DirectoryResource(RemoteDirectoryResource, Resource):
 
         super(DirectoryResource, self).__init__(name, content, *args, **kwargs)
 
+        self.sha256 = hashlib.sha256(content).hexdigest()
         self.flags = [ResourceFlagEnum.DIRECTORY]
 
     def upload(self, minio, bucket):
