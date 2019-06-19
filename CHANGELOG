@@ -1,0 +1,5 @@
+# 1.3.2
+- Header contains magic field "origin" with information about identity of the sender.
+- Remote and Local Resources now contain sha256 field (hopefully will help to prevent unneeded downloads).
+- Add missing examples.rst
+- Added CHANGELOG

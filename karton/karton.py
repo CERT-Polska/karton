@@ -46,8 +46,11 @@ class Producer(KartonBase):
         # Enables delivery confirmation
         self.channel.confirm_delivery()
 
+        headers = task.headers.copy()
+        headers.update({"origin": self.identity})
+
         # Mandatory tasks will fail if they're unroutable
-        delivered = self.channel.basic_publish(TASKS_QUEUE, "", task_json, pika.BasicProperties(headers=task.headers),
+        delivered = self.channel.basic_publish(TASKS_QUEUE, "", task_json, pika.BasicProperties(headers=headers),
                                                mandatory=True)
 
         if delivered:
