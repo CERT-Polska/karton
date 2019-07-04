@@ -24,9 +24,16 @@ before_script:
 test_style:
   stage: test
   script:
-  - apk add python3 python py-pip
+  - apk add python3 python py-pip virtualenv
+  - virtualenv -p python3 venv
+  - . ./venv/bin/activate
   - pip3 install flake8
-  - flake8 . --exclude=venv --max-line-length 120  # imo 120 is way too much
+  - flake8 . --exclude=venv,docs,logo --max-line-length 120
+  - deactivate
+  - virtualenv -p python2 venv
+  - . ./venv/bin/activate
+  - pip install flake8
+  - flake8 . --exclude=venv,docs,logo --max-line-length 120
 
 
 build_image:
