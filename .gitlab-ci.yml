@@ -23,7 +23,7 @@ before_script:
 build_image:
   stage: build
   script:
-    - docker build -t ${DOCKER_REGISTRY}/karton/karton:$(git rev-parse HEAD)-3 -t ${DOCKER_REGISTRY}/karton/karton:python3 -t ${DOCKER_REGISTRY}/karton/karton:latest -f Dockerfile .
+    - docker build -t ${DOCKER_REGISTRY}/karton/karton:$(git rev-parse HEAD)-3 -t ${DOCKER_REGISTRY}/karton/karton:python3-dev -t ${DOCKER_REGISTRY}/karton/karton:latest -f Dockerfile .
     - docker push $DOCKER_REGISTRY/karton/karton:$(git rev-parse HEAD)-3
     - docker push $DOCKER_REGISTRY/karton/karton:python3-dev
     - docker push $DOCKER_REGISTRY/karton/karton:dev
