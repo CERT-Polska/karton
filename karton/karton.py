@@ -90,12 +90,12 @@ class Consumer(KartonBase):
         self.log_handler.set_task(self.current_task)
 
         try:
-            self.log.info("Received new task")
+            self.log.info("Received new task - {}".format(self.current_task.uid))
             self.housekeeper.declare_task_state(self.current_task, TaskState.STARTED, identity=self.identity)
             self.process()
-            self.log.info("Task done")
-        except Exception as e:
-            self.log.exception("Failed to process task")
+            self.log.info("Task done - {}".format(self.current_task.uid))
+        except Exception:
+            self.log.exception("Failed to process task - {}".format(self.current_task.uid))
         finally:
             if not self.current_task.is_asynchronic():
                 self.housekeeper.declare_task_state(self.current_task, TaskState.FINISHED, identity=self.identity)
@@ -110,7 +110,7 @@ class Consumer(KartonBase):
 
         # RMQ in headers doesn't allow multiple filters, se we bind multiple times
         for filter in self.filters:
-            self.log.info("Binding on: %s" % filter)
+            self.log.info("Binding on: {}".format(filter))
             filter.update({"x-match": "all"})
             self.channel.queue_bind(exchange=TASKS_QUEUE, queue=self.identity, routing_key='',
                                     arguments=filter)

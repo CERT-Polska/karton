@@ -69,7 +69,7 @@ class RabbitMQClient(object):
             while True:
                 try:
                     return f(self, *args, **kwargs)
-                except (pika.exceptions.AMQPConnectionError, pika.exceptions.AMQPChannelError) as e:
+                except (pika.exceptions.AMQPConnectionError, pika.exceptions.AMQPChannelError):
                     self.connection.connect()
                 logger.debug("Retrying {} after connection break...".format(f.__name__))
         return retryable_method

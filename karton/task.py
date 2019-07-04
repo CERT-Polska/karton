@@ -192,4 +192,3 @@ class Task(object):
         :return: bool - if task's payload contains payload with given name
         """
         return name in self.payload
-
