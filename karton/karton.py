@@ -30,8 +30,10 @@ class Producer(KartonBase):
         Sends a task to the RabbitMQ queue. Takes care of logging.
         Given task will be child of task we are currently handling (if such exists) - this ensures our log continuity
 
-        :param task: :py:class:`karton.Task` to be sent
-        :return: bool if task was delivered
+        :param task: task to be sent
+        :type task: :py:class:`karton.Task`
+        :rtype: bool
+        :return: if task was delivered
         """
         self.log.debug("Dispatched task {}".format(task.uid))
         if self.current_task is not None:
@@ -63,6 +65,32 @@ class Producer(KartonBase):
 class Consumer(KartonBase):
     """
     Base consumer class, expected to be inherited from
+
+    Usage example:
+
+        .. code-block:: python
+
+            from karton import Consumer
+
+            class Reporter(Consumer):
+                identity = "karton.reporter"
+                filters = [
+                    {
+                        "type": "sample",
+                        "stage": "recognized"
+                    },
+                    {
+                        "type": "config"
+                    }
+                ]
+                def process():
+                    # handle self.current_task, eg.
+                    if self.current_task.headers["type"] == "sample":
+                       return self.process_sample()
+                    else:
+                       return self.process_config()
+
+
     """
     filters = None
 
@@ -81,7 +109,7 @@ class Consumer(KartonBase):
         """
         Expected to be overwritten
 
-        self.current_task contains task that triggered invokation of :py:meth:`karton.Consumer.process`
+        self.current_task contains task that triggered invocation of :py:meth:`karton.Consumer.process`
         """
         raise RuntimeError("Not implemented.")
 
@@ -122,8 +150,10 @@ class Consumer(KartonBase):
         """
         Download remote resource into local resource.
 
-        :param resource: :py:class:`karton.RemoteResource` to download
-        :return: :py:class:`karton.Resource`
+        :param resource: resource to download
+        :type resource: :py:class:`karton.RemoteResource`
+        :rtype: :py:class:`karton.Resource`
+        :return: downloaded resource
         """
         return resource.download(self.minio)
 
@@ -133,7 +163,10 @@ class Consumer(KartonBase):
         Context manager for downloading remote directory resource into local temporary folder.
         It also makes sure that the temporary folder is disposed afterwards.
 
-        :param resource: :py:class:`karton.RemoteDirectoryResource`
+        :param resource: resource to download
+        :type resource: :py:class:`karton.RemoteDirectoryResource`
+        :raises: TypeError
+        :rtype: str
         :return: path to temporary folder with unpacked contents
         """
         if not resource.is_directory():
@@ -145,8 +178,10 @@ class Consumer(KartonBase):
         """
         Download remote directory resource contents into Zipfile object.
 
-        :param resource: :py:class:`karton.RemoteDirectoryResource`
-        :return: :py:class:`zipfile.Zipfile`
+        :param resource: resource to download
+        :type resource: :py:class:`karton.RemoteDirectoryResource`
+        :rtype: :py:class:`zipfile.Zipfile`
+        :return: zipfile with downloaded contents
         """
         if not resource.is_directory():
             raise TypeError("Attempted to download resource that is NOT a directory as a directory.")
@@ -156,7 +191,8 @@ class Consumer(KartonBase):
         """
         Remove remote resource.
 
-        :param resource: :py:class:`karton.RemoteResource` to be removed
+        :param resource: resource to be removed
+        :type resource: :py:class:`karton.RemoteResource`
         """
         return resource.remove(self.minio)
 
@@ -164,8 +200,10 @@ class Consumer(KartonBase):
         """
         Upload local resource to the storage hub
 
-        :param resource: :py:class:`karton.Resource` to upload
-        :return: :py:class:`karton.RemoteResource` representing uploaded resource
+        :param resource: resource to upload
+        :type resource: :py:class:`karton.Resource`
+        :rtype: :py:class:`karton.RemoteResource`
+        :return: representing uploaded resource
         """
         return resource.upload(self.minio)
 

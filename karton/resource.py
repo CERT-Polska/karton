@@ -58,7 +58,8 @@ class RemoteResource(object):
         """
         Helps to identify DirectoryResource vs Resource without type checking
 
-        :return: true if this instance is RemoteDirectoryResource or DirectoryResource
+        :rtype: bool
+        :return: if this instance is derived from :py:class:`karton.RemoteDirectoryResource`
         """
         # both conditions should be identical
         return ResourceFlagEnum.DIRECTORY in self.flags or isinstance(self, RemoteDirectoryResource)
@@ -86,6 +87,7 @@ class RemoteResource(object):
         Remove remote resource from minio storage
 
         :param minio: minio instance
+        :type minio: :py:class:`minio.Minio`
         """
         minio.remove_object(self.bucket, self.uid)
 
@@ -93,10 +95,12 @@ class RemoteResource(object):
         """
         Download RemoteResource into object for local usage
 
-        You probably don't want to use it on your own, rather use Karton.download_resource method
+        You probably don't want to use it on your own, rather use :py:meth:`karton.Karton.download_resource` method
 
         :param minio: minio instance
-        :return: :py:class:`karton.Resource` - local resource
+        :type minio: :py:class:`minio.Minio`
+        :rtype: :py:class:`karton.Resource`
+        :return: local resource
         """
         reader = minio.get_object(self.bucket, self.uid)
         sio = BytesIO(reader.data)
@@ -111,7 +115,10 @@ class RemoteResource(object):
         Download RemoteResource into local filesystem with given file_path.
 
         :param minio: minio instance
+        :type minio: :py:class:`minio.Minio`
         :param file_path: file path where to store the downloaded file
+        :type: str
+        :rtype: str
         :return: file path to the created file
         """
         minio.fget_object(self.bucket, self.uid, file_path)
@@ -122,6 +129,8 @@ class RemoteResource(object):
         Gets size of remote object (without downloading content)
 
         :param minio: minio instance
+        :type minio: :py:class:`minio.Minio`
+        :rtype: int
         :return: size of remote object
         """
         stat = minio.stat_object(self.bucket, self.name)
@@ -132,6 +141,19 @@ class RemoteResource(object):
 
 
 class Resource(RemoteResource):
+    """
+    Resource represents local resource that
+    self._content stores zipfile raw bytes.
+
+    :param name: name of the resource
+    :type name: str
+    :param bucket: minio bucket
+    :type bucket: str, optional
+    :param _uid: uuid
+    :type _uid: str, optional
+    :param sha256: sha256 of object if known
+    :type sha256: str, optional
+    """
     def __init__(self, name, content, size=None, _uid=None, *args, **kwargs):
         super(Resource, self).__init__(name, _uid=_uid)
         self.content = content
@@ -183,7 +205,11 @@ class Resource(RemoteResource):
 
     def upload(self, minio, bucket):
         """
-        :return: RemoteResource to use locally
+        :param minio: minio instance
+        :type minio: :py:class:`minio.Minio`
+        :param bucket: bucket to download from
+        :type bucket: str
+        :rtype: :py:class:`karton.RemoteResource`
         """
         self._upload(minio=minio, bucket=bucket)
 
@@ -197,7 +223,14 @@ class RemoteDirectoryResource(RemoteResource):
     Extension of Resource object, allowing for easy interaction with directories
     self._content stores zipfile raw bytes.
 
-    Content extraction should be done through path or zip_file.
+    :param name: name of the resource
+    :type name: str
+    :param bucket: minio bucket
+    :type bucket: str, optional
+    :param _uid: uuid
+    :type _uid: str, optional
+    :param sha256: sha256 of object if known
+    :type sha256: str, optional
     """
 
     @contextlib.contextmanager
@@ -210,6 +243,8 @@ class RemoteDirectoryResource(RemoteResource):
         You probably don't want to use it on your own, rather use Karton.download_to_temporary_folder method
 
         :param minio: minio instance
+        :type minio: :py:class:`minio.Minio`
+        :rtype: str
         :return: path to unpacked contents
         """
         with tempfile.NamedTemporaryFile() as f:
@@ -231,6 +266,7 @@ class RemoteDirectoryResource(RemoteResource):
 
         You probably don't want to use it on your own, rather use Karton.download_zip_file method
 
+        :rtype: :py:class:`zipfile.Zipfile`
         :return: zipfile object from content
         """
         resource = self.download(minio=minio)
@@ -239,16 +275,21 @@ class RemoteDirectoryResource(RemoteResource):
 
 
 class DirectoryResource(RemoteDirectoryResource, Resource):
-    def __init__(self, name, directory_path, *args, **kwargs):
-        """
-        Resource specialized in handling directories
+    """
+    Resource specialized in handling directories
 
-        :param name: name of the resource
-        :param directory_path: directory to be compressed and used as a minio object later on
-        :param bucket: minio bucket
-        :param _uid: uuid
-        :return: new instance of DirResource
-        """
+    :param name: name of the resource
+    :type name: str
+    :param directory_path: directory to be compressed and used as a minio object later on
+    :type directory_path: str
+    :param bucket: minio bucket
+    :type bucket: str, optional
+    :param _uid: uuid
+    :type _uid: str, optional
+    :param sha256: sha256 of object if known
+    :type sha256: str, optional
+    """
+    def __init__(self, name, directory_path, *args, **kwargs):
         content = zip_dir(directory_path).getvalue()
 
         super(DirectoryResource, self).__init__(name, content, *args, **kwargs)
@@ -258,6 +299,9 @@ class DirectoryResource(RemoteDirectoryResource, Resource):
 
     def upload(self, minio, bucket):
         """
+        :param minio: minio instance
+        :type minio: :py:class:`minio.Minio`
+        :rtype:
         :return: RemoteDirectoryResource to use locally
         """
         self._upload(minio=minio, bucket=bucket)
@@ -272,7 +316,8 @@ class PayloadBag(dict):
         """
         generator for DirectoryResources
 
-        :return: yields simple DirectoryResource
+        :rtype: :py:class:`karton.DirectoryResource`
+        :return: yields single DirectoryResource
         """
         for k, v in self.items():
             if isinstance(v, RemoteResource) and v.is_directory():
@@ -282,7 +327,8 @@ class PayloadBag(dict):
         """
         generator for normal resources that is without DirectoryResources
 
-        :return: yields single resource
+        :rtype: :py:class:`karton.Resource`
+        :return: yields single resource (excluding DirectoryResources)
         """
         for k, v in self.items():
             if isinstance(v, RemoteResource) and not v.is_directory():
@@ -292,6 +338,7 @@ class PayloadBag(dict):
         """
         generator for normal resources - that is without DirectoryResources
 
+        :rtype: :py:class:`karton.DirectoryResource`
         :return: yields single resource
         """
         for k, v in self.items():

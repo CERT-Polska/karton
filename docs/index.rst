@@ -39,7 +39,7 @@ All of the tasks consist of `headers`, `resources` and `payload` information.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Full API:
+   :caption: Karton interface reference:
 
    karton
 
