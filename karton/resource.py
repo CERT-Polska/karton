@@ -6,7 +6,7 @@ import uuid
 import zipfile
 import sys
 import hashlib
-from io import BytesIO, StringIO
+from io import BytesIO
 
 from .utils import zip_dir
 
@@ -106,6 +106,17 @@ class RemoteResource(object):
 
         return Resource(self.name, sio.getvalue(), size, self.uid)
 
+    def download_content_to_file(self, minio, file_path):
+        """
+        Download RemoteResource into local filesystem with given file_path.
+
+        :param minio: minio instance
+        :param file_path: file path where to store the downloaded file
+        :return: file path to the created file
+        """
+        minio.fget_object(self.bucket, self.uid, file_path)
+        return file_path
+
     def get_size(self, minio):
         """
         Gets size of remote object (without downloading content)
@@ -201,17 +212,18 @@ class RemoteDirectoryResource(RemoteResource):
         :param minio: minio instance
         :return: path to unpacked contents
         """
-        resource = self.download(minio=minio)
-        content = BytesIO(resource.content)
+        with tempfile.NamedTemporaryFile() as f:
+            tmp_file = self.download_content_to_file(minio=minio, file_path=f.name)
 
-        zip_file = zipfile.ZipFile(content)
+            zip_file = zipfile.ZipFile(tmp_file)
 
-        tmpdir = tempfile.mkdtemp()
-        zip_file.extractall(tmpdir)
-        try:
-            yield tmpdir
-        finally:
-            shutil.rmtree(tmpdir)
+            tmpdir = tempfile.mkdtemp()
+
+            try:
+                zip_file.extractall(tmpdir)
+                yield tmpdir
+            finally:
+                shutil.rmtree(tmpdir)
 
     def download_zip_file(self, minio):
         """

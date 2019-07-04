@@ -14,8 +14,8 @@ class KartonSimple(RabbitMQClient):
     def __init__(self, config, **kwargs):
         self.config = config
         paths = self.config.rmq_config["ca_certs"], \
-                self.config.rmq_config["keyfile"], \
-                self.config.rmq_config["certfile"]
+            self.config.rmq_config["keyfile"], \
+            self.config.rmq_config["certfile"]
 
         for path in paths:
             if not os.path.isabs(path):
