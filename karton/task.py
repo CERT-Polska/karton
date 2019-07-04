@@ -5,14 +5,16 @@ from .resource import ResourceFlagEnum, RemoteDirectoryResource, RemoteResource,
 
 
 class Task(object):
-    def __init__(self, headers, payload=None):
-        """
-        Task represents some resources + metadata.
+    """
+    Task represents some resources + metadata.
 
-        :param headers: Routing information for other systems, this is what allows for evaluation of given \
-                        system usefulness for given task. Systems filter by these.
-        :param payload: any instance of :py:class:`dict` - contains resources and additional informations
-        """
+    :param headers: Routing information for other systems, this is what allows for evaluation of given \
+                    system usefulness for given task. Systems filter by these.
+    :type headers: :py:class:`dict`
+    :param payload: any instance of :py:class:`dict` - contains resources and additional informations
+    :type payload: :py:class:`dict` or :py:class:`karton.PayloadBag`:
+    """
+    def __init__(self, headers, payload=None):
         payload = payload or {}
         if not isinstance(payload, dict):
             raise ValueError("Payload should be an instance of a dict")
@@ -32,9 +34,12 @@ class Task(object):
         """
         Alternative constructor which copies payload from given task, useful for proxying resource with added metadata.
 
-        :param headers: same as in normal constructor
-        :param task: :py:class:`karton.Task` - task to derive from
-        :return: :py:class:`karton.Task` with new headers
+        :param headers: same as in default constructor
+        :type headers: :py:class:`dict`
+        :param task: task to derive from
+        :type task: :py:class:`karton.Task`
+        :rtype: :py:class:`karton.Task`
+        :return: task with new headers
         """
         new_task = cls(headers=headers, payload=task.payload)
         return new_task
@@ -43,7 +48,8 @@ class Task(object):
         """
         Bind existing Task to parent task
 
-        :param parent: :py:class:`karton.Task` - task to bind to
+        :param parent: task to bind to
+        :type parent: :py:class:`karton.Task`
         """
         self.parent_uid = parent.uid
         self.root_uid = parent.root_uid
@@ -99,7 +105,8 @@ class Task(object):
 
     def is_asynchronic(self):
         """
-        :return: bool - If current task is asynchronic
+        :rtype: bool
+        :return: if current task is asynchronic
         """
         return self.asynchronic
 
@@ -126,8 +133,10 @@ class Task(object):
         """
         Add resource to task
 
+        :type name: str
         :param name: name of the resource
-        :param resource: :py:class:`karton.Resource` - resource to be added
+        :type resource: :py:class:`karton.Resource`
+        :param resource: resource to be added
         """
         self._add_to_payload(name, resource)
 
@@ -135,8 +144,10 @@ class Task(object):
         """
         Add payload to task
 
+        :type name: str
         :param name: name of the payload
-        :param resource: payload to be added
+        :type content: json serializable
+        :param content: payload to be added
         """
         self._add_to_payload(name, content)
 
@@ -144,7 +155,9 @@ class Task(object):
         """
         Get payload from task
 
+        :type name: str
         :param name: name of the payload
+        :type default: object, optional
         :param default: value to be returned if payload is not present
         :return: payload content
         """
@@ -155,25 +168,30 @@ class Task(object):
         Get resource from task
 
         :param name: name of the resource
+        :type name: str
         :param default: value to be returned if resource is not present
+        :type default: object, optional
         :return: :py:class:`karton.Resource` - resource with given name
         """
         return self.payload.get(name, default)
 
     def get_resources(self):
         """
+        :rtype: Iterator[:py:class:`karton.Resource`]
         :return: Generator of all resources present in the :py:class:`karton.PayloadBag`
         """
         return self.payload.resources()
 
     def get_directory_resources(self):
         """
+        :rtype: Iterator[:py:class:`karton.DirectoryResource`]
         :return: Generator of all directory resources present in the :py:class:`karton.PayloadBag`
         """
         return self.payload.directory_resources()
 
     def get_file_resources(self):
         """
+        :rtype: Iterator[:py:class:`karton.Resource`]
         :return: Generator of all file resources present in the :py:class:`karton.PayloadBag`
         """
         return self.payload.file_resources()
@@ -183,12 +201,15 @@ class Task(object):
         Removes payload for the task
 
         :param name: payload name to be removed
+        :type name: str
         """
         del self.payload[name]
 
     def payload_contains(self, name):
         """
         :param name: name of the payload to be checked
-        :return: bool - if task's payload contains payload with given name
+        :type name: str
+        :rtype: bool
+        :return: if task's payload contains payload with given name
         """
         return name in self.payload

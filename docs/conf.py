@@ -25,9 +25,9 @@ copyright = '2019, CERT Polska'
 author = 'CERT Polska'
 
 # The short X.Y version
-version = ''
+version = '1.3.3'
 # The full version, including alpha/beta/rc tags
-release = '1.3'
+release = '1.3.3'
 
 
 # -- General configuration ---------------------------------------------------
@@ -47,7 +47,6 @@ extensions = [
     'sphinx.ext.mathjax',
     'sphinx.ext.ifconfig',
     'sphinx.ext.viewcode',
-    'sphinx_markdown_builder'
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -74,16 +73,12 @@ language = None
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
-# The name of the Pygments (syntax highlighting) style to use.
-pygments_style = "flask_theme_support.FlaskyStyle"
-
-
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'alabaster'
+html_theme = 'sphinxdoc'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -104,15 +99,15 @@ html_static_path = ['_static']
 # default: ``['localtoc.html', 'relations.html', 'sourcelink.html',
 # 'searchbox.html']``.
 #
-html_sidebars = {
-    "**": [
-        "about.html",
-        "navigation.html",
-        "relations.html",
-        "searchbox.html",
-    ]
-}
-
+#html_sidebars = {
+#    "**": [
+#        "about.html",
+#        "navigation.html",
+#        "relations.html",
+#        "searchbox.html",
+#    ]
+#}
+#
 
 # -- Options for HTMLHelp output ---------------------------------------------
 

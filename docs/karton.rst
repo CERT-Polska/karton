@@ -11,9 +11,11 @@ Karton API
     :members:
 .. autoclass:: Resource
     :members:
+.. autoclass:: RemoteResource
+    :members:
 .. autoclass:: DirectoryResource
     :members:
-.. autoclass:: RemoteResource
+.. autoclass:: RemoteDirectoryResource
     :members:
 .. autoclass:: Task
     :members:
