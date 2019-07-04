@@ -21,20 +21,20 @@ before_script:
   - mkdir -p artifacts/test
   - export CI_COMMIT_REF_NAME=`echo -n $CI_COMMIT_REF_NAME | sed 's#/#-#g'`
 
-test_style:
+
+test_style_py2:
   stage: test
   script:
-  - apk add python3 python py-pip virtualenv
-  - virtualenv -p python3 venv
-  - . ./venv/bin/activate
-  - pip3 install flake8
-  - flake8 . --exclude=venv,docs,logo --max-line-length 120
-  - deactivate
-  - virtualenv -p python2 venv
-  - . ./venv/bin/activate
+  - apk add python
   - pip install flake8
   - flake8 . --exclude=venv,docs,logo --max-line-length 120
-
+  
+test_style_py3:
+  stage: test
+  script:
+  - apk add python3 py-pip
+  - pip3 install flake8
+  - flake8 . --exclude=venv,docs,logo --max-line-length 120
 
 build_image:
   stage: build
