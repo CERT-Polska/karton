@@ -10,6 +10,7 @@ services:
   - naskpl/dind
 
 stages:
+  - test
   - build
   - push
 
@@ -19,6 +20,13 @@ before_script:
   - docker login -u "$DOCKER_REGISTRY_LOGIN" -p "$DOCKER_REGISTRY_PASSWORD" "$DOCKER_REGISTRY"
   - mkdir -p artifacts/test
   - export CI_COMMIT_REF_NAME=`echo -n $CI_COMMIT_REF_NAME | sed 's#/#-#g'`
+
+test_style:
+  stage: test
+  script:
+  - pip3 install flake8
+  - flake8 . --exclude=venv --max-line-length 120  # imo 120 is way too much
+
 
 build_image:
   stage: build
