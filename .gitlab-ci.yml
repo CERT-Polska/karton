@@ -24,6 +24,7 @@ before_script:
 test_style:
   stage: test
   script:
+  - apk add python3 python py-pip
   - pip3 install flake8
   - flake8 . --exclude=venv --max-line-length 120  # imo 120 is way too much
 
