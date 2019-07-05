@@ -14,13 +14,21 @@ class Task(object):
     :param payload: any instance of :py:class:`dict` - contains resources and additional informations
     :type payload: :py:class:`dict` or :py:class:`karton.PayloadBag`:
     """
-    def __init__(self, headers, payload=None):
+    def __init__(self, headers, payload=None, root_uid=None, uid=None):
         payload = payload or {}
         if not isinstance(payload, dict):
             raise ValueError("Payload should be an instance of a dict")
 
-        self.uid = str(uuid.uuid4())
-        self.root_uid = self.uid
+        if uid is None:
+            self.uid = str(uuid.uuid4())
+        else:
+            self.uid = uid
+
+        if root_uid is None:
+            self.root_uid = self.uid
+        else:
+            self.root_uid = root_uid
+
         self.parent_uid = None
 
         self.headers = headers
