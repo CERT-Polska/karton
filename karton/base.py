@@ -24,6 +24,7 @@ class KartonSimple(RabbitMQClient):
         parameters = ConnectionParameters(host=self.config.rmq_config["host"],
                                           virtual_host=self.config.rmq_config["vhost"],
                                           credentials=ExternalCredentials(),
+                                          connection_attempts=5,
                                           ssl=True,
                                           ssl_options=dict(
                                               ssl_version=ssl.PROTOCOL_TLSv1,
