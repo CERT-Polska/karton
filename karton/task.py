@@ -13,6 +13,10 @@ class Task(object):
     :type headers: :py:class:`dict`
     :param payload: any instance of :py:class:`dict` - contains resources and additional informations
     :type payload: :py:class:`dict` or :py:class:`karton.PayloadBag`:
+    :param root_uid: root_uid of the task
+    :type root_uid: str
+    :param uid: uid of the task
+    :type uid: str
     """
     def __init__(self, headers, payload=None, root_uid=None, uid=None):
         payload = payload or {}
