@@ -43,6 +43,7 @@ class RemoteResource(object):
 
     Resources are independent of underlying minio objects for easier local manipulation
     """
+
     def __init__(self, name, bucket=None, _uid=None, sha256=None):
         if _uid is None:
             _uid = str(uuid.uuid4())
@@ -62,10 +63,18 @@ class RemoteResource(object):
         :return: if this instance is derived from :py:class:`karton.RemoteDirectoryResource`
         """
         # both conditions should be identical
-        return ResourceFlagEnum.DIRECTORY in self.flags or isinstance(self, RemoteDirectoryResource)
+        return ResourceFlagEnum.DIRECTORY in self.flags or isinstance(
+            self, RemoteDirectoryResource
+        )
 
     def to_dict(self):
-        return {"uid": self.uid, "name": self.name, "bucket": self.bucket, "flags": self.flags, "sha256": self.sha256}
+        return {
+            "uid": self.uid,
+            "name": self.name,
+            "bucket": self.bucket,
+            "flags": self.flags,
+            "sha256": self.sha256,
+        }
 
     def serialize(self):
         return json.dumps(self.to_dict())
@@ -154,6 +163,7 @@ class Resource(RemoteResource):
     :param sha256: sha256 of object if known
     :type sha256: str, optional
     """
+
     def __init__(self, name, content, size=None, _uid=None, *args, **kwargs):
         super(Resource, self).__init__(name, _uid=_uid)
         self.content = content
@@ -289,6 +299,7 @@ class DirectoryResource(RemoteDirectoryResource, Resource):
     :param sha256: sha256 of object if known
     :type sha256: str, optional
     """
+
     def __init__(self, name, directory_path, *args, **kwargs):
         content = zip_dir(directory_path).getvalue()
 

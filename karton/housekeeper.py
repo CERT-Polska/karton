@@ -26,9 +26,16 @@ class KartonHousekeeper(KartonSimple):
         :param task: Task
         :param finished: Is task finished? (task is started if False)
         """
-        self.channel.basic_publish(OPERATIONS_QUEUE, "", json.dumps({
-            "status": status,
-            "identity": identity,
-            "task": task.serialize(),
-            "type": "operation"
-        }), pika.BasicProperties(headers=task.headers))
+        self.channel.basic_publish(
+            OPERATIONS_QUEUE,
+            "",
+            json.dumps(
+                {
+                    "status": status,
+                    "identity": identity,
+                    "task": task.serialize(),
+                    "type": "operation",
+                }
+            ),
+            pika.BasicProperties(headers=task.headers),
+        )

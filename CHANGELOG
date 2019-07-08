@@ -1,3 +1,7 @@
+# 1.3.4
+- Add Producer.continue_asynchronic to use for resuming asynchronous tasks
+- Add black formatter
+
 # 1.3.3a
 - Pika now tried to connect 5 times
 
