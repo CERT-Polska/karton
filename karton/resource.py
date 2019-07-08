@@ -151,8 +151,8 @@ class RemoteResource(object):
 
 class Resource(RemoteResource):
     """
-    Resource represents local resource that
-    self._content stores zipfile raw bytes.
+    Resource represents local resource.
+    self.content stores content of the local resource.
 
     :param name: name of the resource
     :type name: str
