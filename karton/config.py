@@ -2,6 +2,7 @@ try:
     import configparser
 except ImportError:
     import ConfigParser
+
     configparser = ConfigParser
 
 

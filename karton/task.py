@@ -1,7 +1,12 @@
 import json
 import uuid
 
-from .resource import ResourceFlagEnum, RemoteDirectoryResource, RemoteResource, PayloadBag
+from .resource import (
+    ResourceFlagEnum,
+    RemoteDirectoryResource,
+    RemoteResource,
+    PayloadBag,
+)
 
 
 class Task(object):
@@ -18,6 +23,7 @@ class Task(object):
     :param uid: uid of the task
     :type uid: str
     """
+
     def __init__(self, headers, payload=None, root_uid=None, uid=None):
         payload = payload or {}
         if not isinstance(payload, dict):
@@ -77,19 +83,23 @@ class Task(object):
                     return {"__karton_resource__": obj.to_dict()}
                 return json.JSONEncoder.default(kself, obj)
 
-        return json.dumps({"uid": self.uid,
-                           "root_uid": self.root_uid,
-                           "parent_uid": self.parent_uid,
-                           "payload": self.payload},
-                          cls=KartonResourceEncoder)
+        return json.dumps(
+            {
+                "uid": self.uid,
+                "root_uid": self.root_uid,
+                "parent_uid": self.parent_uid,
+                "payload": self.payload,
+            },
+            cls=KartonResourceEncoder,
+        )
 
     @staticmethod
     def unserialize(headers, data):
         resources = {}
 
         def as_resource(resource_dict):
-            if '__karton_resource__' in resource_dict:
-                karton_resource_dict = resource_dict['__karton_resource__']
+            if "__karton_resource__" in resource_dict:
+                karton_resource_dict = resource_dict["__karton_resource__"]
 
                 if ResourceFlagEnum.DIRECTORY in karton_resource_dict["flags"]:
                     resource = RemoteDirectoryResource.from_dict(karton_resource_dict)
@@ -135,6 +145,7 @@ class Task(object):
     Following methods are simple wrappers on self.payload PayloadBag for abstracting out direct access.
     Due to decentralized nature of the project this gives us some room for further changes.
     """
+
     def _add_to_payload(self, name, content):
         if name in self.payload:
             raise ValueError("Payload already exists")

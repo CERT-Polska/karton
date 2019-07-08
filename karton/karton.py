@@ -40,8 +40,13 @@ class Producer(KartonBase):
             task.set_task_parent(self.current_task)
 
         for name, resource in task.payload.resources():
-            if type(resource) is not RemoteResource and type(resource) is not RemoteDirectoryResource:
-                task.payload[name] = resource.upload(self.minio, self.config.minio_config["bucket"])
+            if (
+                type(resource) is not RemoteResource
+                and type(resource) is not RemoteDirectoryResource
+            ):
+                task.payload[name] = resource.upload(
+                    self.minio, self.config.minio_config["bucket"]
+                )
 
         task_json = task.serialize()
 
@@ -52,11 +57,18 @@ class Producer(KartonBase):
         headers.update({"origin": self.identity})
 
         # Mandatory tasks will fail if they're unroutable
-        delivered = self.channel.basic_publish(TASKS_QUEUE, "", task_json, pika.BasicProperties(headers=headers),
-                                               mandatory=True)
+        delivered = self.channel.basic_publish(
+            TASKS_QUEUE,
+            "",
+            task_json,
+            pika.BasicProperties(headers=headers),
+            mandatory=True,
+        )
 
         if delivered:
-            self.housekeeper.declare_task_state(task, TaskState.SPAWNED, identity=self.identity)
+            self.housekeeper.declare_task_state(
+                task, TaskState.SPAWNED, identity=self.identity
+            )
         else:
             self.log.debug("Task {} is unroutable".format(task.uid))
         return delivered
@@ -83,8 +95,9 @@ class Producer(KartonBase):
 
         # Finish task
         if finish:
-            self.housekeeper.declare_task_state(self.current_task, status=TaskState.FINISHED,
-                                                identity=self.identity)
+            self.housekeeper.declare_task_state(
+                self.current_task, status=TaskState.FINISHED, identity=self.identity
+            )
 
         self.current_task = old_current_task
         self.log_handler.set_task(self.current_task)
@@ -120,6 +133,7 @@ class Consumer(KartonBase):
 
 
     """
+
     filters = None
 
     def __init__(self, config):
@@ -147,14 +161,20 @@ class Consumer(KartonBase):
 
         try:
             self.log.info("Received new task - {}".format(self.current_task.uid))
-            self.housekeeper.declare_task_state(self.current_task, TaskState.STARTED, identity=self.identity)
+            self.housekeeper.declare_task_state(
+                self.current_task, TaskState.STARTED, identity=self.identity
+            )
             self.process()
             self.log.info("Task done - {}".format(self.current_task.uid))
         except Exception:
-            self.log.exception("Failed to process task - {}".format(self.current_task.uid))
+            self.log.exception(
+                "Failed to process task - {}".format(self.current_task.uid)
+            )
         finally:
             if not self.current_task.is_asynchronic():
-                self.housekeeper.declare_task_state(self.current_task, TaskState.FINISHED, identity=self.identity)
+                self.housekeeper.declare_task_state(
+                    self.current_task, TaskState.FINISHED, identity=self.identity
+                )
 
     @RabbitMQClient.retryable
     def loop(self):
@@ -168,8 +188,12 @@ class Consumer(KartonBase):
         for filter in self.filters:
             self.log.info("Binding on: {}".format(filter))
             filter.update({"x-match": "all"})
-            self.channel.queue_bind(exchange=TASKS_QUEUE, queue=self.identity, routing_key='',
-                                    arguments=filter)
+            self.channel.queue_bind(
+                exchange=TASKS_QUEUE,
+                queue=self.identity,
+                routing_key="",
+                arguments=filter,
+            )
 
         self.channel.basic_consume(self.internal_process, self.identity, no_ack=True)
         self.channel.start_consuming()
@@ -198,7 +222,9 @@ class Consumer(KartonBase):
         :return: path to temporary folder with unpacked contents
         """
         if not resource.is_directory():
-            raise TypeError("Attempted to download resource that is NOT a directory as a directory.")
+            raise TypeError(
+                "Attempted to download resource that is NOT a directory as a directory."
+            )
         with resource.download_to_temporary_folder(self.minio) as fpath:
             yield fpath
 
@@ -212,7 +238,9 @@ class Consumer(KartonBase):
         :return: zipfile with downloaded contents
         """
         if not resource.is_directory():
-            raise TypeError("Attempted to download resource that is NOT a directory as a directory.")
+            raise TypeError(
+                "Attempted to download resource that is NOT a directory as a directory."
+            )
         return resource.download_zip_file(self.minio)
 
     def remove_resource(self, resource):
