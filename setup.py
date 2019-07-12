@@ -7,11 +7,12 @@ except ImportError:
 
 setup(
     name="karton",
-    version="1.3.4",
+    version="1.3.5",
     description="Base library for karton subsystems",
     package_dir={"karton": "karton"},
     packages=["karton"],
     install_requires=open("requirements.txt").read().splitlines(),
+    scripts=['karton/kpm'],
     classifiers=[
         "Programming Language :: Python",
         "Operating System :: OS Independent",

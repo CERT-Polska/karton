@@ -1,2 +1,4 @@
 pika==0.12.0
 minio
+click
+Jinja2
