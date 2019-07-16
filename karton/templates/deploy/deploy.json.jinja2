@@ -1,0 +1,15 @@
+{
+    "{{ karton_name | lower }}": {
+        "docker": {
+            "image": "{{ prefix }}/{{ karton_name | lower }}",
+            "dockerfile": "deploy/docker/Dockerfile",
+            "dir": "."
+        },
+        "k8s": {
+            "namespace": "karton-prod",
+            "deployment": "karton-{{ karton_name | lower }}",
+            "container": "karton-{{ karton_name | lower }}-container"
+        }
+    }
+}
+
