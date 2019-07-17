@@ -92,6 +92,14 @@ def deploy(ctx):
     deploy_main()
 
 
+def render(from_, to, render_vars):
+    output_text = render_environment.get_template(from_).render(
+        render_vars
+    )
+
+    with open(os.path.join(path, to), "w") as deploy_file:
+        deploy_file.write(output_text)
+
 @karton.command("init", short_help="initialize karton in the current directory")
 def init():
     name = click.prompt("Name of your karton", type=str)
@@ -130,41 +138,20 @@ def init():
         "comments": comments,
         "prefix": c.dockerregistry_prefix,
     }
-    output_text = render_environment.get_template(
-        templates_mapping[karton_type]
-    ).render(render_vars)
 
+    # Generate karton.py/producer.py/consumer.py
     karton_filename = "{}.py".format(name.lower())
-    with open(os.path.join(path, karton_filename), "w") as karton_file:
-        karton_file.write(output_text)
+    template = templates_mapping[karton_type]
+    render(template, karton_filename, render_vars)
 
     # Generate directory for deploy
     os.makedirs(os.path.join(path, "deploy/k8s"), exist_ok=True)
     os.makedirs(os.path.join(path, "deploy/docker"), exist_ok=True)
 
-    # Render deploy.json
-    output_text = render_environment.get_template("deploy/deploy.json.jinja2").render(
-        render_vars
-    )
-
-    with open(os.path.join(path, "deploy/deploy.json"), "w") as deploy_file:
-        deploy_file.write(output_text)
-
-    # Render deployment.yml
-    output_text = render_environment.get_template(
-        "deploy/k8s/deployment.yml.jinja2"
-    ).render(render_vars)
-
-    with open(os.path.join(path, "deploy/k8s/deployment.yml"), "w") as deployment_file:
-        deployment_file.write(output_text)
-
-    # Render Dockerfile
-    output_text = render_environment.get_template(
-        "deploy/docker/Dockerfile.jinja2"
-    ).render(render_vars)
-
-    with open(os.path.join(path, "deploy/docker/Dockerfile"), "w") as docker_file:
-        docker_file.write(output_text)
+    # Render deployment files
+    render("deploy/deploy.json.jinja2", "deploy/deploy.json", render_vars)
+    render("deploy/k8s/deployment.yml.jinja2", "deploy/k8s/deployment.yml", render_vars)
+    render("deploy/docker/Dockerfile.jinja2", "deploy/docker/Dockerfile", render_vars)
 
     # Copy config.ini
     config_template_path = os.path.join(TEMPLATE_FOLDER, "config.ini.template")
