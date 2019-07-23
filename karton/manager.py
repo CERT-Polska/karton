@@ -93,11 +93,15 @@ def deploy(ctx):
 
 
 def render(from_, to, render_vars):
+    render_environment = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(TEMPLATE_FOLDER)
+    )
+
     output_text = render_environment.get_template(from_).render(
         render_vars
     )
 
-    with open(os.path.join(path, to), "w") as deploy_file:
+    with open(to, "w") as deploy_file:
         deploy_file.write(output_text)
 
 @karton.command("init", short_help="initialize karton in the current directory")
@@ -117,9 +121,6 @@ def init():
         "Do you want to generate comments? (recommended for beginners)"
     )
 
-    render_environment = jinja2.Environment(
-        loader=jinja2.FileSystemLoader(TEMPLATE_FOLDER)
-    )
 
     # Render name.py
     templates_mapping = {
@@ -149,9 +150,9 @@ def init():
     os.makedirs(os.path.join(path, "deploy/docker"), exist_ok=True)
 
     # Render deployment files
-    render("deploy/deploy.json.jinja2", "deploy/deploy.json", render_vars)
-    render("deploy/k8s/deployment.yml.jinja2", "deploy/k8s/deployment.yml", render_vars)
-    render("deploy/docker/Dockerfile.jinja2", "deploy/docker/Dockerfile", render_vars)
+    render("deploy/deploy.json.jinja2", os.path.join(path, "deploy/deploy.json"), render_vars)
+    render("deploy/k8s/deployment.yml.jinja2", os.path.join(path, "deploy/k8s/deployment.yml"), render_vars)
+    render("deploy/docker/Dockerfile.jinja2", os.path.join(path, "deploy/docker/Dockerfile"), render_vars)
 
     # Copy config.ini
     config_template_path = os.path.join(TEMPLATE_FOLDER, "config.ini.template")
