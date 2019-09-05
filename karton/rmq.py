@@ -60,6 +60,7 @@ class RabbitMQClient(object):
         else:
             self.connection = RabbitMQConnection(parameters)
         self.channel = RabbitMQChannel(self.connection)
+        self.channel.basic_qos(prefetch_count=1)
 
     @staticmethod
     def retryable(f):

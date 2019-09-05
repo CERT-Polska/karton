@@ -122,19 +122,20 @@ class Task(object):
                 payload[k] = v
 
         payload_persistent = {}
-        for k, v in data["payload_persistent"].items():
-            if "__karton_resource__" in v:
-                karton_resource_dict = v["__karton_resource__"]
+        if "payload_persistent" in data:
+            for k, v in data["payload_persistent"].items():
+                if "__karton_resource__" in v:
+                    karton_resource_dict = v["__karton_resource__"]
 
-                if ResourceFlagEnum.DIRECTORY in karton_resource_dict["flags"]:
-                    resource = RemoteDirectoryResource.from_dict(karton_resource_dict)
+                    if ResourceFlagEnum.DIRECTORY in karton_resource_dict["flags"]:
+                        resource = RemoteDirectoryResource.from_dict(karton_resource_dict)
+                    else:
+                        resource = RemoteResource.from_dict(karton_resource_dict)
+
+                    payload_persistent[resource.uid] = resource
+                    payload_persistent[k] = resource
                 else:
-                    resource = RemoteResource.from_dict(karton_resource_dict)
-
-                payload_persistent[resource.uid] = resource
-                payload_persistent[k] = resource
-            else:
-                payload_persistent[k] = v
+                    payload_persistent[k] = v
 
         task = Task(headers, payload=payload)
         task.uid = data["uid"]

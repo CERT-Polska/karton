@@ -144,6 +144,8 @@ class Consumer(KartonBase):
         raise RuntimeError("Not implemented.")
 
     def internal_process(self, channel, method, properties, body):
+        self.channel.basic_ack(method.delivery_tag)
+
         self.current_task = Task.unserialize(properties.headers, body)
         self.log_handler.set_task(self.current_task)
 
@@ -172,7 +174,7 @@ class Consumer(KartonBase):
             filter.update({"x-match": "all"})
             self.channel.queue_bind(exchange=TASKS_QUEUE, queue=self.identity, routing_key="", arguments=filter)
 
-        self.channel.basic_consume(self.internal_process, self.identity, no_ack=True)
+        self.channel.basic_consume(self.internal_process, self.identity, no_ack=False)
         self.channel.start_consuming()
 
     def download_resource(self, resource):
