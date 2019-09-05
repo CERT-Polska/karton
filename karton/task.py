@@ -74,15 +74,23 @@ class Task(object):
         """
         self.parent_uid = parent.uid
         self.root_uid = parent.root_uid
+
         return self
 
+    def copy_persistent_payload(self, other_task):
+        """
+        Copy persistent payload from another task
+
+        :param other_task: task to copy persistent payload from
+        :type other_task: :py:class:`karton.Task`
+        """
+        self.payload_persistent = other_task.payload_persistent
+
     def serialize(self):
-        resources = {}
 
         class KartonResourceEncoder(json.JSONEncoder):
             def default(kself, obj):
                 if isinstance(obj, RemoteResource):
-                    resources[obj.uid] = obj
                     return {"__karton_resource__": obj.to_dict()}
                 return json.JSONEncoder.default(kself, obj)
 
@@ -92,37 +100,54 @@ class Task(object):
                 "root_uid": self.root_uid,
                 "parent_uid": self.parent_uid,
                 "payload": self.payload,
+                "payload_persistent": self.payload_persistent
             },
             cls=KartonResourceEncoder,
         )
 
     @staticmethod
     def unserialize(headers, data):
-        resources = {}
+        if not isinstance(data, str):
+            data = data.decode("utf8")
 
-        def as_resource(resource_dict):
-            if "__karton_resource__" in resource_dict:
-                karton_resource_dict = resource_dict["__karton_resource__"]
+        data = json.loads(data)
+
+        payload = {}
+        for k, v in data["payload"].items():
+            if "__karton_resource__" in v:
+                karton_resource_dict = v["__karton_resource__"]
 
                 if ResourceFlagEnum.DIRECTORY in karton_resource_dict["flags"]:
                     resource = RemoteDirectoryResource.from_dict(karton_resource_dict)
                 else:
                     resource = RemoteResource.from_dict(karton_resource_dict)
 
-                resources[resource.uid] = resource
-                return resource
-            return resource_dict
+                payload[resource.uid] = resource
+                payload[k] = resource
+            else:
+                payload[k] = v
 
-        if not isinstance(data, str):
-            data = data.decode("utf8")
+        payload_persistent = {}
+        for k, v in data["payload_persistent"].items():
+            if "__karton_resource__" in v:
+                karton_resource_dict = v["__karton_resource__"]
 
-        data = json.loads(data, object_hook=as_resource)
+                if ResourceFlagEnum.DIRECTORY in karton_resource_dict["flags"]:
+                    resource = RemoteDirectoryResource.from_dict(karton_resource_dict)
+                else:
+                    resource = RemoteResource.from_dict(karton_resource_dict)
 
-        task = Task(headers, payload=data["payload"])
+                payload_persistent[resource.uid] = resource
+                payload_persistent[k] = resource
+            else:
+                payload_persistent[k] = v
+
+        task = Task(headers, payload=payload)
         task.uid = data["uid"]
         task.root_uid = data["root_uid"]
         task.parent_uid = data["parent_uid"]
-        task.payload.update(resources)
+        if payload_persistent:
+            task.payload_persistent = PayloadBag(payload_persistent)
         return task
 
     def __repr__(self):
