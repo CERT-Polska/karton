@@ -28,7 +28,7 @@ test_style_py2:
   - apk add python
   - python --version
   - pip install flake8
-  - flake8 . --exclude=venv,docs,logo --max-line-length 120
+  - flake8 . --exclude=venv,docs,logo --max-line-length 121
   
 test_style_py3:
   stage: test
@@ -36,7 +36,7 @@ test_style_py3:
   - apk add python3 py-pip
   - python3 --version
   - pip3 install flake8
-  - flake8 . --exclude=venv,docs,logo --max-line-length 120
+  - flake8 . --exclude=venv,docs,logo --max-line-length 121
 
 build_image:
   stage: build
