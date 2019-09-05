@@ -5,6 +5,7 @@ import os
 import sys
 import json
 import subprocess
+import requests
 from shutil import copyfile
 from deploy import main as deploy_main
 
@@ -22,6 +23,16 @@ class KubernetesNotEnabled(BaseException):
     """
     Kubernetes support disabled in ~/.kpm/config.json
     """
+
+
+class KartonStatusAPI:
+    def __init__(self):
+        self.url = "https://karton-status.cert.pl/"
+
+    def status(self, uid):
+        r = requests.get(self.url + str(uid))
+        r.raise_for_status()
+        return r.json()
 
 
 class Config(dict):
@@ -78,7 +89,7 @@ def karton():
 # cancer.
 @karton.command(
     "deploy",
-    short_help="builds and pushes karton image to repository",
+    short_help="build and push karton image to repository",
     add_help_option=False,
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
 )
@@ -103,6 +114,21 @@ def render(from_, to, render_vars):
 
     with open(to, "w") as deploy_file:
         deploy_file.write(output_text)
+
+
+@karton.command("status", short_help="get task's status in JSON format")
+@click.argument("uid")
+def status(uid):
+    status_api = KartonStatusAPI()
+    status_result = status_api.status(uid)
+    print(status_result)
+
+
+@karton.command("logs", short_help="get task's logs url")
+@click.argument("uid")
+def logs(uid):
+    print("https://buzz.cert.pl:8000/en-GB/app/search/karton_task_information?form.TASKUID={}&form.logthreshold=20".format(uid))
+
 
 @karton.command("init", short_help="initialize karton in the current directory")
 def init():
