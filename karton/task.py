@@ -99,7 +99,7 @@ class Task(object):
                 "root_uid": self.root_uid,
                 "parent_uid": self.parent_uid,
                 "payload": self.payload,
-                "payload_persistent": self.payload_persistent
+                "payload_persistent": self.payload_persistent,
             },
             cls=KartonResourceEncoder,
         )
@@ -223,7 +223,9 @@ class Task(object):
         :param persistent: flag if the param should be persistent
         :return: payload content
         """
-        return self.payload.get(name, default) or self.payload_persistent.get(name, default)
+        return self.payload.get(name, default) or self.payload_persistent.get(
+            name, default
+        )
 
     def get_resource(self, name, default=None):
         """
@@ -235,7 +237,9 @@ class Task(object):
         :type default: object, optional
         :return: :py:class:`karton.Resource` - resource with given name
         """
-        return self.payload.get(name, default) or self.payload_persistent.get(name, default)
+        return self.payload.get(name, default) or self.payload_persistent.get(
+            name, default
+        )
 
     def get_resources(self):
         """

@@ -108,9 +108,7 @@ def render(from_, to, render_vars):
         loader=jinja2.FileSystemLoader(TEMPLATE_FOLDER)
     )
 
-    output_text = render_environment.get_template(from_).render(
-        render_vars
-    )
+    output_text = render_environment.get_template(from_).render(render_vars)
 
     with open(to, "w") as deploy_file:
         deploy_file.write(output_text)
@@ -127,7 +125,11 @@ def status(uid):
 @karton.command("logs", short_help="get task's logs url")
 @click.argument("uid")
 def logs(uid):
-    print("https://buzz.cert.pl:8000/en-GB/app/search/karton_task_information?form.TASKUID={}&form.logthreshold=20".format(uid))
+    print(
+        "https://buzz.cert.pl:8000/en-GB/app/search/karton_task_information?form.TASKUID={}&form.logthreshold=20".format(
+            uid
+        )
+    )
 
 
 @karton.command("init", short_help="initialize karton in the current directory")
@@ -146,7 +148,6 @@ def init():
     comments = click.confirm(
         "Do you want to generate comments? (recommended for beginners)"
     )
-
 
     # Render name.py
     templates_mapping = {
@@ -176,9 +177,21 @@ def init():
     os.makedirs(os.path.join(path, "deploy/docker"), exist_ok=True)
 
     # Render deployment files
-    render("deploy/deploy.json.jinja2", os.path.join(path, "deploy/deploy.json"), render_vars)
-    render("deploy/k8s/deployment.yml.jinja2", os.path.join(path, "deploy/k8s/deployment.yml"), render_vars)
-    render("deploy/docker/Dockerfile.jinja2", os.path.join(path, "deploy/docker/Dockerfile"), render_vars)
+    render(
+        "deploy/deploy.json.jinja2",
+        os.path.join(path, "deploy/deploy.json"),
+        render_vars,
+    )
+    render(
+        "deploy/k8s/deployment.yml.jinja2",
+        os.path.join(path, "deploy/k8s/deployment.yml"),
+        render_vars,
+    )
+    render(
+        "deploy/docker/Dockerfile.jinja2",
+        os.path.join(path, "deploy/docker/Dockerfile"),
+        render_vars,
+    )
 
     # Copy config.ini
     config_template_path = os.path.join(TEMPLATE_FOLDER, "config.ini.template")
