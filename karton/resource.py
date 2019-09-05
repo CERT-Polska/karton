@@ -63,18 +63,10 @@ class RemoteResource(object):
         :return: if this instance is derived from :py:class:`karton.RemoteDirectoryResource`
         """
         # both conditions should be identical
-        return ResourceFlagEnum.DIRECTORY in self.flags or isinstance(
-            self, RemoteDirectoryResource
-        )
+        return ResourceFlagEnum.DIRECTORY in self.flags or isinstance(self, RemoteDirectoryResource)
 
     def to_dict(self):
-        return {
-            "uid": self.uid,
-            "name": self.name,
-            "bucket": self.bucket,
-            "flags": self.flags,
-            "sha256": self.sha256,
-        }
+        return {"uid": self.uid, "name": self.name, "bucket": self.bucket, "flags": self.flags, "sha256": self.sha256}
 
     def serialize(self):
         return json.dumps(self.to_dict())

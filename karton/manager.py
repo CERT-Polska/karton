@@ -104,9 +104,7 @@ def deploy(ctx):
 
 
 def render(from_, to, render_vars):
-    render_environment = jinja2.Environment(
-        loader=jinja2.FileSystemLoader(TEMPLATE_FOLDER)
-    )
+    render_environment = jinja2.Environment(loader=jinja2.FileSystemLoader(TEMPLATE_FOLDER))
 
     output_text = render_environment.get_template(from_).render(render_vars)
 
@@ -140,32 +138,18 @@ def init():
     if do_repository:
         subprocess.check_call(["git", "init", path])
 
-    karton_type = click.prompt(
-        "Producer(p)/Consumer(c)/Karton(k)",
-        type=click.Choice(["p", "c", "k"]),
-        default="k",
-    )
-    comments = click.confirm(
-        "Do you want to generate comments? (recommended for beginners)"
-    )
+    karton_type = click.prompt("Producer(p)/Consumer(c)/Karton(k)", type=click.Choice(["p", "c", "k"]), default="k")
+    comments = click.confirm("Do you want to generate comments? (recommended for beginners)")
 
     # Render name.py
-    templates_mapping = {
-        "k": "karton.jinja2",
-        "p": "producer.jinja2",
-        "c": "consumer.jinja2",
-    }
+    templates_mapping = {"k": "karton.jinja2", "p": "producer.jinja2", "c": "consumer.jinja2"}
 
     if karton_type not in templates_mapping:
         raise ValueError("This shouldn't happen, contact des")
 
     c = Config.from_default_path()
 
-    render_vars = {
-        "karton_name": name,
-        "comments": comments,
-        "prefix": c.dockerregistry_prefix,
-    }
+    render_vars = {"karton_name": name, "comments": comments, "prefix": c.dockerregistry_prefix}
 
     # Generate karton.py/producer.py/consumer.py
     karton_filename = "{}.py".format(name.lower())
@@ -177,21 +161,9 @@ def init():
     os.makedirs(os.path.join(path, "deploy/docker"), exist_ok=True)
 
     # Render deployment files
-    render(
-        "deploy/deploy.json.jinja2",
-        os.path.join(path, "deploy/deploy.json"),
-        render_vars,
-    )
-    render(
-        "deploy/k8s/deployment.yml.jinja2",
-        os.path.join(path, "deploy/k8s/deployment.yml"),
-        render_vars,
-    )
-    render(
-        "deploy/docker/Dockerfile.jinja2",
-        os.path.join(path, "deploy/docker/Dockerfile"),
-        render_vars,
-    )
+    render("deploy/deploy.json.jinja2", os.path.join(path, "deploy/deploy.json"), render_vars)
+    render("deploy/k8s/deployment.yml.jinja2", os.path.join(path, "deploy/k8s/deployment.yml"), render_vars)
+    render("deploy/docker/Dockerfile.jinja2", os.path.join(path, "deploy/docker/Dockerfile"), render_vars)
 
     # Copy config.ini
     config_template_path = os.path.join(TEMPLATE_FOLDER, "config.ini.template")
@@ -203,14 +175,10 @@ def init():
 
     if do_repository:
         subprocess.check_call(["git", "-C", path, "add", "-A"])
-        subprocess.check_call(
-            ["git", "-C", path, "commit", "-m", "KPM initialized this repository."]
-        )
+        subprocess.check_call(["git", "-C", path, "commit", "-m", "KPM initialized this repository."])
 
     if c.use_kubernetes:
-        subprocess.check_call(
-            ["kubectl", "apply", "-f", os.path.join(path, "deploy/k8s")]
-        )
+        subprocess.check_call(["kubectl", "apply", "-f", os.path.join(path, "deploy/k8s")])
 
 
 def main():

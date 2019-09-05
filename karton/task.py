@@ -1,12 +1,7 @@
 import json
 import uuid
 
-from .resource import (
-    ResourceFlagEnum,
-    RemoteDirectoryResource,
-    RemoteResource,
-    PayloadBag,
-)
+from .resource import ResourceFlagEnum, RemoteDirectoryResource, RemoteResource, PayloadBag
 
 
 class Task(object):
@@ -223,9 +218,7 @@ class Task(object):
         :param persistent: flag if the param should be persistent
         :return: payload content
         """
-        return self.payload.get(name, default) or self.payload_persistent.get(
-            name, default
-        )
+        return self.payload.get(name, default) or self.payload_persistent.get(name, default)
 
     def get_resource(self, name, default=None):
         """
@@ -237,9 +230,7 @@ class Task(object):
         :type default: object, optional
         :return: :py:class:`karton.Resource` - resource with given name
         """
-        return self.payload.get(name, default) or self.payload_persistent.get(
-            name, default
-        )
+        return self.payload.get(name, default) or self.payload_persistent.get(name, default)
 
     def get_resources(self):
         """
