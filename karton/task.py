@@ -87,7 +87,6 @@ class Task(object):
         self.payload_persistent = other_task.payload_persistent
 
     def serialize(self):
-
         class KartonResourceEncoder(json.JSONEncoder):
             def default(kself, obj):
                 if isinstance(obj, RemoteResource):
