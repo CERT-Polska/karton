@@ -42,7 +42,10 @@ class Task(object):
         self.parent_uid = None
 
         self.headers = headers
+
         self.payload = PayloadBag()
+        self.payload_persistent = PayloadBag()
+
         self.payload.update(payload)
 
         self.asynchronic = False
@@ -146,13 +149,19 @@ class Task(object):
     Due to decentralized nature of the project this gives us some room for further changes.
     """
 
-    def _add_to_payload(self, name, content):
+    def _add_to_payload(self, name, content, persistent=False):
         if name in self.payload:
             raise ValueError("Payload already exists")
 
-        self.payload[name] = content
+        if name in self.payload_persistent:
+            raise ValueError("Payload already exists in persistents payloads")
 
-    def add_resource(self, name, resource):
+        if not persistent:
+            self.payload[name] = content
+        else:
+            self.payload_persistent[name] = content
+
+    def add_resource(self, name, resource, persistent=False):
         """
         Add resource to task
 
@@ -160,10 +169,12 @@ class Task(object):
         :param name: name of the resource
         :type resource: :py:class:`karton.Resource`
         :param resource: resource to be added
+        :type persistent: bool
+        :param persistent: flag if the param should be persistent
         """
-        self._add_to_payload(name, resource)
+        self._add_to_payload(name, resource, persistent)
 
-    def add_payload(self, name, content):
+    def add_payload(self, name, content, persistent=False):
         """
         Add payload to task
 
@@ -171,8 +182,10 @@ class Task(object):
         :param name: name of the payload
         :type content: json serializable
         :param content: payload to be added
+        :type persistent: bool
+        :param persistent: flag if the param should be persistent
         """
-        self._add_to_payload(name, content)
+        self._add_to_payload(name, content, persistent)
 
     def get_payload(self, name, default=None):
         """
@@ -182,9 +195,11 @@ class Task(object):
         :param name: name of the payload
         :type default: object, optional
         :param default: value to be returned if payload is not present
+        :type persistent: bool
+        :param persistent: flag if the param should be persistent
         :return: payload content
         """
-        return self.payload.get(name, default)
+        return self.payload.get(name, default) or self.payload_persistent.get(name, default)
 
     def get_resource(self, name, default=None):
         """
@@ -196,7 +211,7 @@ class Task(object):
         :type default: object, optional
         :return: :py:class:`karton.Resource` - resource with given name
         """
-        return self.payload.get(name, default)
+        return self.payload.get(name, default) or self.payload_persistent.get(name, default)
 
     def get_resources(self):
         """
@@ -219,6 +234,27 @@ class Task(object):
         """
         return self.payload.file_resources()
 
+    def get_persistent_file_resources(self):
+        """
+        :rtype: Iterator[:py:class:`karton.Resource`]
+        :return: Generator of all persistent file resources present in the :py:class:`karton.PayloadBag`
+        """
+        return self.payload_persistent.file_resources()
+
+    def get_persistent_resources(self):
+        """
+        :rtype: Iterator[:py:class:`karton.Resource`]
+        :return: Generator of all persistent resources present in the :py:class:`karton.PayloadBag`
+        """
+        return self.payload_persistent.resources()
+
+    def get_persistent_directory_resources(self):
+        """
+        :rtype: Iterator[:py:class:`karton.DirectoryResource`]
+        :return: Generator of all persistent directory resources present in the :py:class:`karton.PayloadBag`
+        """
+        return self.payload_persistent.directory_resources()
+
     def remove_payload(self, name):
         """
         Removes payload for the task
@@ -228,6 +264,15 @@ class Task(object):
         """
         del self.payload[name]
 
+    def remove_persistent_payload(self, name):
+        """
+        Removes persistent payload for the task
+
+        :param name: payload name to be removed
+        :type name: str
+        """
+        del self.payload_persistent[name]
+
     def payload_contains(self, name):
         """
         :param name: name of the payload to be checked
@@ -236,3 +281,12 @@ class Task(object):
         :return: if task's payload contains payload with given name
         """
         return name in self.payload
+
+    def persistent_payload_contains(self, name):
+        """
+        :param name: name of the payload to be checked
+        :type name: str
+        :rtype: bool
+        :return: if task's payload contains persistent payload with given name
+        """
+        return name in self.payload_persistent
