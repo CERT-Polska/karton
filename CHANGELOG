@@ -1,6 +1,7 @@
 # 1.3.5
 - Add kpm (karton package manager)
 - Add persistent payloads
+- Use manual acks and prefetch=1
 
 # 1.3.4
 - Add Producer.continue_asynchronic to use for resuming asynchronous tasks
