@@ -2,23 +2,18 @@ import json
 import logging
 import traceback
 
-import pika
-
-from .rmq import RabbitMQClient
-
 LOGS_QUEUE = "karton.logs"
 
 
-class KartonLogHandler(logging.Handler, RabbitMQClient):
-    def __init__(self, **kwargs):
+class KartonLogHandler(logging.Handler):
+    def __init__(self, rs, **kwargs):
         logging.Handler.__init__(self)
-        RabbitMQClient.__init__(self, **kwargs)
+        self.rs = rs
         self.task = None
 
     def set_task(self, task):
         self.task = task
 
-    @RabbitMQClient.retryable
     def emit(self, record):
         ignore_fields = [
             "args",
@@ -47,9 +42,7 @@ class KartonLogHandler(logging.Handler, RabbitMQClient):
         if self.task is not None:
             log_line["task"] = self.task.serialize()
 
-        self.channel.basic_publish(
-            LOGS_QUEUE, "", json.dumps(log_line), pika.BasicProperties()
-        )
+        self.rs.publish(LOGS_QUEUE, json.dumps(log_line))
 
     def get_logger(self, identity):
         # Intentionally not using getLogger because we don't want to create singletons!

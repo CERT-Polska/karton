@@ -89,12 +89,13 @@ class Task(object):
                 "root_uid": self.root_uid,
                 "parent_uid": self.parent_uid,
                 "payload": self.payload,
+                "headers": self.headers
             },
             cls=KartonResourceEncoder,
         )
 
     @staticmethod
-    def unserialize(headers, data):
+    def unserialize(data):
         resources = {}
 
         def as_resource(resource_dict):
@@ -115,7 +116,7 @@ class Task(object):
 
         data = json.loads(data, object_hook=as_resource)
 
-        task = Task(headers, payload=data["payload"])
+        task = Task(data["headers"], payload=data["payload"])
         task.uid = data["uid"]
         task.root_uid = data["root_uid"]
         task.parent_uid = data["parent_uid"]

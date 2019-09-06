@@ -17,4 +17,4 @@ class Config(object):
         self.config.read(path)
 
         self.minio_config = dict(self.config.items("minio"))
-        self.rmq_config = dict(self.config.items("rmq"))
+        self.redis_config = dict(self.config.items("redis"))

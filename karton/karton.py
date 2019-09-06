@@ -2,29 +2,24 @@
 Base library for karton subsystems.
 """
 import contextlib
+import json
 
-import pika
-
-from .base import KartonSimple
+from .base import KartonBase
 from .resource import RemoteResource, RemoteDirectoryResource
 from .task import Task
-from .rmq import RabbitMQClient
-from .housekeeper import KartonHousekeeper, TaskState
 from .utils import GracefulKiller
+
+
+class TaskState(object):
+    SPAWNED = "Spawned"
+    STARTED = "Started"
+    FINISHED = "Finished"
+
 
 TASKS_QUEUE = "karton.tasks"
 
 
-class KartonBase(KartonSimple):
-    identity = ""
-
-    def __init__(self, config, **kwargs):
-        super(KartonBase, self).__init__(config=config, **kwargs)
-        self.housekeeper = KartonHousekeeper(config=config, connection=self.connection)
-
-
 class Producer(KartonBase):
-    @RabbitMQClient.retryable
     def send_task(self, task):
         """
         Sends a task to the RabbitMQ queue. Takes care of logging.
@@ -35,7 +30,7 @@ class Producer(KartonBase):
         :rtype: bool
         :return: if task was delivered
         """
-        self.log.debug("Dispatched task {}".format(task.uid))
+        self.log.debug("Dispatched task")
         if self.current_task is not None:
             task.set_task_parent(self.current_task)
 
@@ -48,30 +43,12 @@ class Producer(KartonBase):
                     self.minio, self.config.minio_config["bucket"]
                 )
 
+        task.headers.update({"origin": self.identity})
         task_json = task.serialize()
 
-        # Enables delivery confirmation
-        self.channel.confirm_delivery()
+        self.rs.rpush(TASKS_QUEUE, task_json)
 
-        headers = task.headers.copy()
-        headers.update({"origin": self.identity})
-
-        # Mandatory tasks will fail if they're unroutable
-        delivered = self.channel.basic_publish(
-            TASKS_QUEUE,
-            "",
-            task_json,
-            pika.BasicProperties(headers=headers),
-            mandatory=True,
-        )
-
-        if delivered:
-            self.housekeeper.declare_task_state(
-                task, TaskState.SPAWNED, identity=self.identity
-            )
-        else:
-            self.log.debug("Task {} is unroutable".format(task.uid))
-        return delivered
+        return True
 
     @contextlib.contextmanager
     def continue_asynchronic(self, task, finish=True):
@@ -95,7 +72,7 @@ class Producer(KartonBase):
 
         # Finish task
         if finish:
-            self.housekeeper.declare_task_state(
+            self.declare_task_state(
                 self.current_task, status=TaskState.FINISHED, identity=self.identity
             )
 
@@ -139,13 +116,14 @@ class Consumer(KartonBase):
     def __init__(self, config):
         super(Consumer, self).__init__(config=config)
 
+        self.registration = None
         self.current_task = None
+        self.shutdown = False
         self.killer = GracefulKiller(self.graceful_shutdown)
 
     def graceful_shutdown(self):
         self.log.info("Gracefully shutting down!")
-        self.channel.stop_consuming()
-        self.shutdown()
+        self.shutdown = True
 
     def process(self):
         """
@@ -155,13 +133,13 @@ class Consumer(KartonBase):
         """
         raise RuntimeError("Not implemented.")
 
-    def internal_process(self, channel, method, properties, body):
-        self.current_task = Task.unserialize(properties.headers, body)
+    def internal_process(self, data):
+        self.current_task = Task.unserialize(data)
         self.log_handler.set_task(self.current_task)
 
         try:
             self.log.info("Received new task - {}".format(self.current_task.uid))
-            self.housekeeper.declare_task_state(
+            self.declare_task_state(
                 self.current_task, TaskState.STARTED, identity=self.identity
             )
             self.process()
@@ -172,31 +150,39 @@ class Consumer(KartonBase):
             )
         finally:
             if not self.current_task.is_asynchronic():
-                self.housekeeper.declare_task_state(
+                self.declare_task_state(
                     self.current_task, TaskState.FINISHED, identity=self.identity
                 )
 
-    @RabbitMQClient.retryable
     def loop(self):
         """
         Blocking loop that consumes tasks and runs :py:meth:`karton.Consumer.process` as a handler
         """
         self.log.info("Service {} started".format(self.identity))
-        self.channel.queue_declare(queue=self.identity, durable=False, auto_delete=True)
 
-        # RMQ in headers doesn't allow multiple filters, se we bind multiple times
-        for filter in self.filters:
-            self.log.info("Binding on: {}".format(filter))
-            filter.update({"x-match": "all"})
-            self.channel.queue_bind(
-                exchange=TASKS_QUEUE,
-                queue=self.identity,
-                routing_key="",
-                arguments=filter,
-            )
+        self.registration = json.dumps(self.filters, sort_keys=True)
+        old_registration = self.rs.hset('karton.binds', self.identity, self.registration)
 
-        self.channel.basic_consume(self.internal_process, self.identity, no_ack=True)
-        self.channel.start_consuming()
+        if not old_registration:
+            self.log.info("Service binds created.")
+        elif old_registration != self.registration:
+            self.log.info("Binds changed, old service instances should exit soon.")
+
+        for task_filter in self.filters:
+            self.log.info("Binding on: {}".format(task_filter))
+
+        self.rs.client_setname(self.identity)
+
+        while not self.shutdown:
+            if self.rs.hget('karton.binds', self.identity) != self.registration:
+                self.log.info("Binds changed, shutting down.")
+                break
+
+            item = self.rs.blpop([self.identity], timeout=30)
+
+            if item:
+                queue, data = item
+                self.internal_process(data)
 
     def download_resource(self, resource):
         """

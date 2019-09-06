@@ -1,46 +1,22 @@
+import json
+
 from minio import Minio
+from redis import StrictRedis
 
 from .logger import KartonLogHandler
-from .rmq import RabbitMQClient
-from pika import ConnectionParameters
-from pika.credentials import ExternalCredentials
-import os
-import ssl
+
+OPERATIONS_QUEUE = "karton.operations"
 
 
-class KartonSimple(RabbitMQClient):
+class KartonBase:
     identity = ""
 
     def __init__(self, config, **kwargs):
         self.config = config
-        paths = (
-            self.config.rmq_config["ca_certs"],
-            self.config.rmq_config["keyfile"],
-            self.config.rmq_config["certfile"],
-        )
-
-        for path in paths:
-            if not os.path.isabs(path):
-                raise ValueError("Certificate paths must be absolute")
-
-        parameters = ConnectionParameters(
-            host=self.config.rmq_config["host"],
-            virtual_host=self.config.rmq_config["vhost"],
-            credentials=ExternalCredentials(),
-            connection_attempts=5,
-            ssl=True,
-            ssl_options=dict(
-                ssl_version=ssl.PROTOCOL_TLSv1,
-                ca_certs=self.config.rmq_config["ca_certs"],
-                keyfile=self.config.rmq_config["keyfile"],
-                certfile=self.config.rmq_config["certfile"],
-                cert_reqs=ssl.CERT_REQUIRED,
-            ),
-        )
-        super(KartonSimple, self).__init__(parameters=parameters, **kwargs)
+        self.rs = StrictRedis(decode_responses=True, **self.config.redis_config)
 
         self.current_task = None
-        self.log_handler = KartonLogHandler(connection=self.connection)
+        self.log_handler = KartonLogHandler(rs=self.rs)
         self.log = self.log_handler.get_logger(self.identity)
 
         self.minio = Minio(
@@ -49,3 +25,16 @@ class KartonSimple(RabbitMQClient):
             self.config.minio_config["secret_key"],
             secure=bool(int(self.config.minio_config.get("secure", True))),
         )
+
+    def declare_task_state(self, task, status, identity=None):
+        """
+        Declare task state
+
+        :param task: Task
+        """
+        self.rs.rpush(OPERATIONS_QUEUE, json.dumps({
+            "status": status,
+            "identity": identity,
+            "task": task.serialize(),
+            "type": "operation"
+        }))
