@@ -1,0 +1,43 @@
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: karton-{{ karton_name | lower }}
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: karton-{{ karton_name | lower }}
+    spec:
+      imagePullSecrets:
+        - name: regcred
+      nodeSelector:
+        kubernetes.io/hostname: karton-node.cert.pl
+      containers:
+        - image: {{ prefix }}/{{ karton_name | lower }}:latest
+          imagePullPolicy: Always
+          name: karton-{{ karton_name | lower }}-container
+          volumeMounts:
+            - mountPath: /app/service/config.ini
+              subPath: config.ini
+              name: karton-config-volume
+            - mountPath: /certs
+              name: karton-certs-volume
+
+      volumes:
+        - name: karton-config-volume
+          secret:
+            secretName: karton-config
+            items:
+            - key: config-file
+              path: config.ini
+        - name: karton-certs-volume
+          secret:
+            secretName: karton-certs
+            items:
+            - key: certca.crt
+              path: certca.crt
+            - key: karton.key
+              path: karton.key
+            - key: karton.pem
+              path: karton.pem

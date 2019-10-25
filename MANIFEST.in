@@ -1,0 +1,4 @@
+include karton/templates/*
+include karton/templates/deploy/*
+include karton/templates/deploy/k8s/*
+include karton/templates/deploy/docker/*
