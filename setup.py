@@ -6,9 +6,9 @@ except ImportError:
     from distutils.core import setup
 
 setup(
-    name="karton2",
+    name="karton",
     version="2.0.0",
-    description="Base library for karton2 subsystems",
+    description="Base library for karton subsystems",
     package_dir={"karton": "karton"},
     packages=["karton"],
     package_data={"": ["karton/templates/*"]},

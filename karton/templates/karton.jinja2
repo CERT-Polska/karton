@@ -1,0 +1,73 @@
+import os
+
+from karton import Karton, Config, Task, Resource
+
+class {{ karton_name }}(Karton):
+    {% if comments %}
+    # identity is used for unique identification of the given subsystem
+    # it will also become a queue name after launch
+    # for horizontal scaling, you can reuse this in multiple instances
+    {% endif %}
+    identity = "karton.{{ karton_name | lower }}"
+    
+    {% if comments %}
+    # filters define what you want to get from the queue
+    # key: value pairs are AND'ed and list elements are OR'ed
+    {% endif %}
+    filters = [
+        # TODO: adjust filters
+        {
+            # "type": "sample",
+            # "kind": "raw"
+        },
+        ...
+    ]
+
+    def process(self):
+        {% if comments %}
+        # self.current_task - stores task which arrival invoked the process() function
+        # self.current_task.headers - dict of headers, useful when multiple filters are used
+        
+        # get_resource() gets remote resource object
+        {% endif %}
+        remote_sample = self.current_task.get_resource("sample")
+        
+        {% if comments %}
+        # download_resource actually downloads content from remote resource
+        {% endif %}
+        sample = self.current_task.download_resource(remote_sample)
+        
+        {% if comments %}
+        # you can access content of resources for processing
+        {% endif %}
+        sample_content = sample.content
+        print(sample_content)
+        
+        {% if comments %}
+        # process
+        # handling of task should either end in creating new task
+        # or adding some newly obtained information to one of the 
+        # persistent storage systems, ie. mwdb
+        {% endif %}
+        if sample_content[:2] == b"MZ":
+            {% if comments %}
+            # derive task from current task, this saves resources of current_task
+            {% endif %}
+            task = Task.derive_task({"type": "sample", "kind": "executable"}, self.current_task)
+            {% if comments %}
+            # send task to queues for further processing
+            {% endif %}
+            self.send_task(task)
+
+        {% if comments %}
+        # Create new task with new resource and send it
+        {% endif %}
+        r = Resource("name", "content")
+        t = Task({"type": "sample", "kind": "raw"}, {"sample": r})
+        self.send_task(t)
+
+if __name__ == "__main__":
+    conf = Config(os.path.join(os.path.dirname(__file__), "config.ini"))
+    k = {{ karton_name }}(config)
+    k.loop()
+    

@@ -30,9 +30,10 @@ class Producer(KartonBase):
         :rtype: bool
         :return: if task was delivered
         """
-        self.log.debug("Dispatched task")
+        self.log.debug("Dispatched task {}".format(task.uid))
         if self.current_task is not None:
             task.set_task_parent(self.current_task)
+            task.copy_persistent_payload(self.current_task)
 
         for name, resource in task.payload.resources():
             if (

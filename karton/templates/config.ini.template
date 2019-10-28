@@ -1,0 +1,13 @@
+[rmq]
+host = archive1.cert.pl
+vhost = karton
+ca_certs = /certs/certca.crt
+certfile = /certs/karton.pem
+keyfile = /certs/karton.key
+
+[minio]
+secret_key = ...
+access_key = cert
+address = minio.cert.pl
+bucket = karton
+secure = 1

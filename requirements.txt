@@ -1,2 +1,5 @@
 redis
 minio
+click
+Jinja2
+python-deploy
