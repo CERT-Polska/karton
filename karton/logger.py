@@ -35,26 +35,36 @@ class KartonLogHandler(logging.Handler, RabbitMQClient):
             "thread",
             "threadName",
         ]
-        log_line = {k: v for k, v in record.__dict__.items() if k not in ignore_fields}
+        log_line = {
+            k: v for k, v in record.__dict__.items() if k not in ignore_fields
+        }
         if record.exc_info:
-            log_line["excText"] = logging.Formatter().formatException(record.exc_info)
+            log_line["excText"] = logging.Formatter().formatException(
+                record.exc_info
+            )
             log_line["excValue"] = str(record.exc_info[1])
             log_line["excType"] = record.exc_info[0].__name__
-            log_line["excTraceback"] = traceback.format_exception(*record.exc_info)
+            log_line["excTraceback"] = traceback.format_exception(
+                *record.exc_info
+            )
 
         log_line["type"] = "log"
 
         if self.task is not None:
             log_line["task"] = self.task.serialize()
 
-        self.channel.basic_publish(LOGS_QUEUE, "", json.dumps(log_line), pika.BasicProperties())
+        self.channel.basic_publish(
+            LOGS_QUEUE, "", json.dumps(log_line), pika.BasicProperties()
+        )
 
     def get_logger(self, identity):
         # Intentionally not using getLogger because we don't want to create singletons!
         logger = logging.Logger(identity or "karton")
         logger.setLevel(logging.DEBUG)
         stream_handler = logging.StreamHandler()
-        stream_handler.setFormatter(logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s"))
+        stream_handler.setFormatter(
+            logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s")
+        )
         logger.addHandler(stream_handler)
         logger.addHandler(self)
         return logger

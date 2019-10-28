@@ -63,10 +63,18 @@ class RemoteResource(object):
         :return: if this instance is derived from :py:class:`karton.RemoteDirectoryResource`
         """
         # both conditions should be identical
-        return ResourceFlagEnum.DIRECTORY in self.flags or isinstance(self, RemoteDirectoryResource)
+        return ResourceFlagEnum.DIRECTORY in self.flags or isinstance(
+            self, RemoteDirectoryResource
+        )
 
     def to_dict(self):
-        return {"uid": self.uid, "name": self.name, "bucket": self.bucket, "flags": self.flags, "sha256": self.sha256}
+        return {
+            "uid": self.uid,
+            "name": self.name,
+            "bucket": self.bucket,
+            "flags": self.flags,
+            "sha256": self.sha256,
+        }
 
     def serialize(self):
         return json.dumps(self.to_dict())
@@ -186,7 +194,9 @@ class Resource(RemoteResource):
         Should be invoked while uploading task
         """
         if self.content is None:
-            raise NoContentException("Resource does not have any content in it")
+            raise NoContentException(
+                "Resource does not have any content in it"
+            )
 
         if bucket and not minio.bucket_exists(bucket):
             minio.make_bucket(bucket_name=bucket)
@@ -250,7 +260,9 @@ class RemoteDirectoryResource(RemoteResource):
         :return: path to unpacked contents
         """
         with tempfile.NamedTemporaryFile() as f:
-            tmp_file = self.download_content_to_file(minio=minio, file_path=f.name)
+            tmp_file = self.download_content_to_file(
+                minio=minio, file_path=f.name
+            )
 
             zip_file = zipfile.ZipFile(tmp_file)
 

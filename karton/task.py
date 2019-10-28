@@ -1,7 +1,12 @@
 import json
 import uuid
 
-from .resource import ResourceFlagEnum, RemoteDirectoryResource, RemoteResource, PayloadBag
+from .resource import (
+    ResourceFlagEnum,
+    RemoteDirectoryResource,
+    RemoteResource,
+    PayloadBag,
+)
 
 
 class Task(object):
@@ -112,7 +117,9 @@ class Task(object):
                 karton_resource_dict = v["__karton_resource__"]
 
                 if ResourceFlagEnum.DIRECTORY in karton_resource_dict["flags"]:
-                    resource = RemoteDirectoryResource.from_dict(karton_resource_dict)
+                    resource = RemoteDirectoryResource.from_dict(
+                        karton_resource_dict
+                    )
                 else:
                     resource = RemoteResource.from_dict(karton_resource_dict)
 
@@ -127,10 +134,17 @@ class Task(object):
                 if "__karton_resource__" in v:
                     karton_resource_dict = v["__karton_resource__"]
 
-                    if ResourceFlagEnum.DIRECTORY in karton_resource_dict["flags"]:
-                        resource = RemoteDirectoryResource.from_dict(karton_resource_dict)
+                    if (
+                        ResourceFlagEnum.DIRECTORY
+                        in karton_resource_dict["flags"]
+                    ):
+                        resource = RemoteDirectoryResource.from_dict(
+                            karton_resource_dict
+                        )
                     else:
-                        resource = RemoteResource.from_dict(karton_resource_dict)
+                        resource = RemoteResource.from_dict(
+                            karton_resource_dict
+                        )
 
                     payload_persistent[resource.uid] = resource
                     payload_persistent[k] = resource
@@ -219,7 +233,9 @@ class Task(object):
         :param persistent: flag if the param should be persistent
         :return: payload content
         """
-        return self.payload.get(name, default) or self.payload_persistent.get(name, default)
+        return self.payload.get(name, default) or self.payload_persistent.get(
+            name, default
+        )
 
     def get_resource(self, name, default=None):
         """
@@ -231,7 +247,9 @@ class Task(object):
         :type default: object, optional
         :return: :py:class:`karton.Resource` - resource with given name
         """
-        return self.payload.get(name, default) or self.payload_persistent.get(name, default)
+        return self.payload.get(name, default) or self.payload_persistent.get(
+            name, default
+        )
 
     def get_resources(self):
         """

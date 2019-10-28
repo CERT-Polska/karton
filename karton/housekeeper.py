@@ -29,6 +29,13 @@ class KartonHousekeeper(KartonSimple):
         self.channel.basic_publish(
             OPERATIONS_QUEUE,
             "",
-            json.dumps({"status": status, "identity": identity, "task": task.serialize(), "type": "operation"}),
+            json.dumps(
+                {
+                    "status": status,
+                    "identity": identity,
+                    "task": task.serialize(),
+                    "type": "operation",
+                }
+            ),
             pika.BasicProperties(headers=task.headers),
         )

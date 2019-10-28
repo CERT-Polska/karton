@@ -22,12 +22,17 @@ class RabbitMQConnection(object):
             for attempts in range(self.RECONNECT_ATTEMPTS):
                 try:
                     logger.info("Connecting to broker...")
-                    self._connection = pika.BlockingConnection(self._parameters)
+                    self._connection = pika.BlockingConnection(
+                        self._parameters
+                    )
                     return self._connection
                 except pika.exceptions.AMQPConnectionError as e:
                     logger.exception(
                         "[{}/{}] Reconnecting after {} seconds - {}".format(
-                            attempts + 1, self.RECONNECT_ATTEMPTS, self.RECONNECT_DELAY, repr(e)
+                            attempts + 1,
+                            self.RECONNECT_ATTEMPTS,
+                            self.RECONNECT_DELAY,
+                            repr(e),
                         )
                     )
                     time.sleep(self.RECONNECT_DELAY)
@@ -69,9 +74,14 @@ class RabbitMQClient(object):
             while True:
                 try:
                     return f(self, *args, **kwargs)
-                except (pika.exceptions.AMQPConnectionError, pika.exceptions.AMQPChannelError):
+                except (
+                    pika.exceptions.AMQPConnectionError,
+                    pika.exceptions.AMQPChannelError,
+                ):
                     self.connection.connect()
-                logger.debug("Retrying {} after connection break...".format(f.__name__))
+                logger.debug(
+                    "Retrying {} after connection break...".format(f.__name__)
+                )
 
         return retryable_method
 
