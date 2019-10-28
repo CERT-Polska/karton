@@ -89,7 +89,7 @@ class Task(object):
                 "root_uid": self.root_uid,
                 "parent_uid": self.parent_uid,
                 "payload": self.payload,
-                "headers": self.headers
+                "headers": self.headers,
             },
             cls=KartonResourceEncoder,
         )
@@ -103,7 +103,9 @@ class Task(object):
                 karton_resource_dict = resource_dict["__karton_resource__"]
 
                 if ResourceFlagEnum.DIRECTORY in karton_resource_dict["flags"]:
-                    resource = RemoteDirectoryResource.from_dict(karton_resource_dict)
+                    resource = RemoteDirectoryResource.from_dict(
+                        karton_resource_dict
+                    )
                 else:
                     resource = RemoteResource.from_dict(karton_resource_dict)
 

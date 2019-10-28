@@ -13,7 +13,9 @@ class KartonBase:
 
     def __init__(self, config, **kwargs):
         self.config = config
-        self.rs = StrictRedis(decode_responses=True, **self.config.redis_config)
+        self.rs = StrictRedis(
+            decode_responses=True, **self.config.redis_config
+        )
 
         self.current_task = None
         self.log_handler = KartonLogHandler(rs=self.rs)
@@ -32,9 +34,14 @@ class KartonBase:
 
         :param task: Task
         """
-        self.rs.rpush(OPERATIONS_QUEUE, json.dumps({
-            "status": status,
-            "identity": identity,
-            "task": task.serialize(),
-            "type": "operation"
-        }))
+        self.rs.rpush(
+            OPERATIONS_QUEUE,
+            json.dumps(
+                {
+                    "status": status,
+                    "identity": identity,
+                    "task": task.serialize(),
+                    "type": "operation",
+                }
+            ),
+        )

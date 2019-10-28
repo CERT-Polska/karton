@@ -194,7 +194,9 @@ class Resource(RemoteResource):
         Should be invoked while uploading task
         """
         if self.content is None:
-            raise NoContentException("Resource does not have any content in it")
+            raise NoContentException(
+                "Resource does not have any content in it"
+            )
 
         if bucket and not minio.bucket_exists(bucket):
             minio.make_bucket(bucket_name=bucket)
@@ -258,7 +260,9 @@ class RemoteDirectoryResource(RemoteResource):
         :return: path to unpacked contents
         """
         with tempfile.NamedTemporaryFile() as f:
-            tmp_file = self.download_content_to_file(minio=minio, file_path=f.name)
+            tmp_file = self.download_content_to_file(
+                minio=minio, file_path=f.name
+            )
 
             zip_file = zipfile.ZipFile(tmp_file)
 

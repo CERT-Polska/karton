@@ -73,7 +73,9 @@ class Producer(KartonBase):
         # Finish task
         if finish:
             self.declare_task_state(
-                self.current_task, status=TaskState.FINISHED, identity=self.identity
+                self.current_task,
+                status=TaskState.FINISHED,
+                identity=self.identity,
             )
 
         self.current_task = old_current_task
@@ -138,7 +140,9 @@ class Consumer(KartonBase):
         self.log_handler.set_task(self.current_task)
 
         try:
-            self.log.info("Received new task - {}".format(self.current_task.uid))
+            self.log.info(
+                "Received new task - {}".format(self.current_task.uid)
+            )
             self.declare_task_state(
                 self.current_task, TaskState.STARTED, identity=self.identity
             )
@@ -151,7 +155,9 @@ class Consumer(KartonBase):
         finally:
             if not self.current_task.is_asynchronic():
                 self.declare_task_state(
-                    self.current_task, TaskState.FINISHED, identity=self.identity
+                    self.current_task,
+                    TaskState.FINISHED,
+                    identity=self.identity,
                 )
 
     def loop(self):
@@ -161,12 +167,16 @@ class Consumer(KartonBase):
         self.log.info("Service {} started".format(self.identity))
 
         self.registration = json.dumps(self.filters, sort_keys=True)
-        old_registration = self.rs.hset('karton.binds', self.identity, self.registration)
+        old_registration = self.rs.hset(
+            "karton.binds", self.identity, self.registration
+        )
 
         if not old_registration:
             self.log.info("Service binds created.")
         elif old_registration != self.registration:
-            self.log.info("Binds changed, old service instances should exit soon.")
+            self.log.info(
+                "Binds changed, old service instances should exit soon."
+            )
 
         for task_filter in self.filters:
             self.log.info("Binding on: {}".format(task_filter))
@@ -174,7 +184,10 @@ class Consumer(KartonBase):
         self.rs.client_setname(self.identity)
 
         while not self.shutdown:
-            if self.rs.hget('karton.binds', self.identity) != self.registration:
+            if (
+                self.rs.hget("karton.binds", self.identity)
+                != self.registration
+            ):
                 self.log.info("Binds changed, shutting down.")
                 break
 
