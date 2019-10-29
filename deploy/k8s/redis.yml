@@ -29,7 +29,7 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    app: karton-prod
+    app: karton2-redis
   ports:
   - protocol: TCP
     port: 6379
