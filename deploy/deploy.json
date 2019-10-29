@@ -2,25 +2,8 @@
     "karton2": {
         "docker": {
             "image": "dr.cert.pl/karton/karton2",
-            "dockerfile": "deploy/docker/karton.Dockerfile",
+            "dockerfile": "deploy/docker/Dockerfile",
             "dir": "."
-        }
-    },
-    "karton2-system": {
-        "docker": {
-            "image": "dr.cert.pl/karton/karton2-system",
-            "dockerfile": "deploy/docker/system.Dockerfile",
-            "dir": "."
-        },
-        "k8s": {
-            "namespace": "feeds-prod",
-            "deployment": "deployment-wtfurl",
-            "container": "container-wtfurl-worker"
-        },
-        "k8s-staging": {
-            "namespace": "feeds-st",
-            "deployment": "deployment-wtfurl",
-            "container": "container-wtfurl-worker"
         }
     }
 }
