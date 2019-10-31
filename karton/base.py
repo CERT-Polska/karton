@@ -8,7 +8,7 @@ from .logger import KartonLogHandler
 OPERATIONS_QUEUE = "karton.operations"
 
 
-class KartonBase:
+class KartonBase(object):
     identity = ""
 
     def __init__(self, config, **kwargs):

@@ -48,7 +48,7 @@ class KartonLogHandler(logging.Handler):
         if self.task is not None:
             log_line["task"] = self.task.serialize()
 
-        self.rs.publish(LOGS_QUEUE, json.dumps(log_line))
+        self.rs.lpush(LOGS_QUEUE, json.dumps(log_line))
 
     def get_logger(self, identity):
         # Intentionally not using getLogger because we don't want to create singletons!
