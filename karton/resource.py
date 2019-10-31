@@ -141,7 +141,7 @@ class RemoteResource(object):
         :rtype: int
         :return: size of remote object
         """
-        stat = minio.stat_object(self.bucket, self.name)
+        stat = minio.stat_object(self.bucket, self.uid)
         return stat.size
 
     def __repr__(self):
