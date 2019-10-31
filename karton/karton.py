@@ -6,17 +6,11 @@ import json
 
 from .base import KartonBase
 from .resource import RemoteResource, RemoteDirectoryResource
-from .task import Task
+from .task import Task, TaskState
 from .utils import GracefulKiller
 
-
-class TaskState(object):
-    SPAWNED = "Spawned"
-    STARTED = "Started"
-    FINISHED = "Finished"
-
-
 TASKS_QUEUE = "karton.tasks"
+TASK_PREFIX = "karton.task:"
 
 
 class Producer(KartonBase):
@@ -30,25 +24,35 @@ class Producer(KartonBase):
         :rtype: bool
         :return: if task was delivered
         """
-        self.log.debug("Dispatched task {}".format(task.uid))
+        task_id = str(task.uid)
+
+        self.log.debug("Dispatched task {}".format(task_id))
+
+        # Complete information about task
         if self.current_task is not None:
             task.set_task_parent(self.current_task)
-            task.copy_persistent_payload(self.current_task)
-
-        for name, resource in task.payload.resources():
-            if (
-                type(resource) is not RemoteResource
-                and type(resource) is not RemoteDirectoryResource
-            ):
-                task.payload[name] = resource.upload(
-                    self.minio, self.config.minio_config["bucket"]
-                )
+            task.merge_persistent_payload(self.current_task)
 
         task.headers.update({"origin": self.identity})
+
+        # Ensure all local resources have good buckets
+        for name, resource in task.get_resources():
+            if type(resource) is not RemoteResource and type(resource) is not RemoteDirectoryResource:
+                resource.bucket = self.config.minio_config["bucket"]
+
         task_json = task.serialize()
 
-        self.rs.rpush(TASKS_QUEUE, task_json)
+        # Declare task
+        self.rs.set(TASK_PREFIX + task_id, task_json)
 
+        # Upload local resources
+        for payload_bag in [task.payload, task.payload_persistent]:
+            for name, resource in payload_bag.resources():
+                if type(resource) is not RemoteResource and type(resource) is not RemoteDirectoryResource:
+                    payload_bag[name] = resource.upload(self.minio, resource.bucket)
+
+        # Add task to TASKS_QUEUE
+        self.rs.rpush(TASKS_QUEUE, task_id)
         return True
 
     @contextlib.contextmanager
@@ -137,8 +141,20 @@ class Consumer(KartonBase):
         raise RuntimeError("Not implemented.")
 
     def internal_process(self, data):
-        self.current_task = Task.unserialize(data)
+        self.current_task = Task.unserialize(self.rs.get("karton.task:" + data))
         self.log_handler.set_task(self.current_task)
+
+        for bind in self.filters:
+            if self.current_task.matches_bind(bind):
+                break
+        else:
+            self.log.info("Task rejected because binds are no longer valid.")
+            self.declare_task_state(
+                self.current_task,
+                TaskState.FINISHED,
+                identity=self.identity,
+            )
+            return
 
         try:
             self.log.info(
@@ -185,14 +201,11 @@ class Consumer(KartonBase):
         self.rs.client_setname(self.identity)
 
         while not self.shutdown:
-            if (
-                self.rs.hget("karton.binds", self.identity)
-                != self.registration
-            ):
+            if self.rs.hget("karton.binds", self.identity) != self.registration:
                 self.log.info("Binds changed, shutting down.")
                 break
 
-            item = self.rs.blpop([self.identity], timeout=30)
+            item = self.rs.blpop([self.identity], timeout=5)
 
             if item:
                 queue, data = item
@@ -242,26 +255,6 @@ class Consumer(KartonBase):
                 "Attempted to download resource that is NOT a directory as a directory."
             )
         return resource.download_zip_file(self.minio)
-
-    def remove_resource(self, resource):
-        """
-        Remove remote resource.
-
-        :param resource: resource to be removed
-        :type resource: :py:class:`karton.RemoteResource`
-        """
-        return resource.remove(self.minio)
-
-    def upload_resource(self, resource):
-        """
-        Upload local resource to the storage hub
-
-        :param resource: resource to upload
-        :type resource: :py:class:`karton.Resource`
-        :rtype: :py:class:`karton.RemoteResource`
-        :return: representing uploaded resource
-        """
-        return resource.upload(self.minio)
 
 
 class Karton(Consumer, Producer):

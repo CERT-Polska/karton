@@ -44,7 +44,7 @@ class RemoteResource(object):
     Resources are independent of underlying minio objects for easier local manipulation
     """
 
-    def __init__(self, name, bucket=None, _uid=None, sha256=None):
+    def __init__(self, name, bucket=None, _uid=None, sha256=None, flags=None):
         if _uid is None:
             _uid = str(uuid.uuid4())
 
@@ -53,7 +53,7 @@ class RemoteResource(object):
         self.uid = _uid
         self.sha256 = sha256
 
-        self.flags = []
+        self.flags = flags or []
 
     def is_directory(self):
         """
@@ -87,8 +87,7 @@ class RemoteResource(object):
         sha256 = data_dict.get("sha256")
         flags = data_dict["flags"]
 
-        new_cls = cls(name, bucket, _uid=_uid, sha256=sha256)
-        new_cls.flags = flags
+        new_cls = cls(name, bucket=bucket, _uid=_uid, sha256=sha256, flags=flags)
         return new_cls
 
     def remove(self, minio):
@@ -198,7 +197,7 @@ class Resource(RemoteResource):
                 "Resource does not have any content in it"
             )
 
-        if bucket and not minio.bucket_exists(bucket):
+        if not minio.bucket_exists(bucket):
             minio.make_bucket(bucket_name=bucket)
 
         content = self.content
@@ -224,10 +223,7 @@ class Resource(RemoteResource):
         :rtype: :py:class:`karton.RemoteResource`
         """
         self._upload(minio=minio, bucket=bucket)
-
-        rr = RemoteResource(self.name, bucket, _uid=self.uid)
-        rr.flags = self.flags
-        return rr
+        return RemoteResource(self.name, bucket, _uid=self.uid, flags=self.flags)
 
 
 class RemoteDirectoryResource(RemoteResource):
@@ -320,10 +316,7 @@ class DirectoryResource(RemoteDirectoryResource, Resource):
         :return: RemoteDirectoryResource to use locally
         """
         self._upload(minio=minio, bucket=bucket)
-
-        rr = RemoteDirectoryResource(self.name, bucket, _uid=self.uid)
-        rr.flags = self.flags
-        return rr
+        return RemoteDirectoryResource(self.name, bucket, _uid=self.uid, flags=self.flags)
 
 
 class PayloadBag(dict):
@@ -331,7 +324,7 @@ class PayloadBag(dict):
         """
         generator for DirectoryResources
 
-        :rtype: :py:class:`karton.DirectoryResource`
+        :rtype: Iterator[:py:class:`karton.DirectoryResource`]
         :return: yields single DirectoryResource
         """
         for k, v in self.items():
@@ -342,7 +335,7 @@ class PayloadBag(dict):
         """
         generator for normal resources that is without DirectoryResources
 
-        :rtype: :py:class:`karton.Resource`
+        :rtype: Iterator[:py:class:`karton.Resource`]
         :return: yields single resource (excluding DirectoryResources)
         """
         for k, v in self.items():
@@ -353,7 +346,7 @@ class PayloadBag(dict):
         """
         generator for normal resources - that is without DirectoryResources
 
-        :rtype: :py:class:`karton.DirectoryResource`
+        :rtype: Iterator[:py:class:`karton.DirectoryResource`]
         :return: yields single resource
         """
         for k, v in self.items():

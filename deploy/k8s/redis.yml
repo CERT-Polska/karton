@@ -27,10 +27,11 @@ metadata:
   name: service-karton2-redis
   namespace: karton-prod
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: karton2-redis
   ports:
   - protocol: TCP
     port: 6379
     targetPort: 6379
+    nodePort: 32223
