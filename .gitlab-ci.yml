@@ -1,67 +1,40 @@
 image: certpl/docker-ci-base:latest
 
-variables:
-  DOCKER_HOST: tcp://naskpl-dind:2375
-  GIT_SSL_NO_VERIFY: "true"
-  DOCKER_REGISTRY: dr.cert.pl
-  DOCKER_DRIVER: overlay2
-
-services:
-  - naskpl/dind
-
 stages:
   - test
-  - build
-  - push
+  - deploy
 
-before_script:
-  - echo "Start job $CI_BUILD_NAME" at `date +%Y-%m-%d-%H-%M-%S`
-  - echo "CI_PIPELINE_ID $CI_PIPELINE_ID"
-  - docker login -u "$DOCKER_REGISTRY_LOGIN" -p "$DOCKER_REGISTRY_PASSWORD" "$DOCKER_REGISTRY"
-  - mkdir -p artifacts/test
-  - export CI_COMMIT_REF_NAME=`echo -n $CI_COMMIT_REF_NAME | sed 's#/#-#g'`
-
+services:
+- docker:dind
 
 test_style_py2:
+  image: python:2.7
   stage: test
   script:
-  - apk add python
   - python --version
   - pip install flake8
   - flake8 . --exclude=venv,docs,logo --max-line-length 121
   
 test_style_py3:
+  image: python:3.6
   stage: test
   script:
-  - apk add python3 py-pip
   - python3 --version
   - pip3 install flake8
   - flake8 . --exclude=venv,docs,logo --max-line-length 121
 
-build_image:
-  stage: build
-  script:
-    - docker build -t ${DOCKER_REGISTRY}/karton/karton:$(git rev-parse HEAD)-3 -t ${DOCKER_REGISTRY}/karton/karton:python3-dev -t ${DOCKER_REGISTRY}/karton/karton:dev -f Dockerfile .
-    - docker push $DOCKER_REGISTRY/karton/karton:$(git rev-parse HEAD)-3
-    - docker push $DOCKER_REGISTRY/karton/karton:python3-dev
-    - docker push $DOCKER_REGISTRY/karton/karton:dev
-    - docker build -t ${DOCKER_REGISTRY}/karton/karton:$(git rev-parse HEAD)-2 -t ${DOCKER_REGISTRY}/karton/karton:python2.7-dev -f Dockerfile2 .
-    - docker push $DOCKER_REGISTRY/karton/karton:$(git rev-parse HEAD)-2
-    - docker push $DOCKER_REGISTRY/karton/karton:python2.7-dev
-
-push_docker_image:
-  stage: push
+deploy_py3:
+  stage: deploy
   only:
-    - master
+  - master
   script:
-    - docker pull ${DOCKER_REGISTRY}/karton/karton:$(git rev-parse HEAD)-3
-    - docker tag ${DOCKER_REGISTRY}/karton/karton:$(git rev-parse HEAD)-3 ${DOCKER_REGISTRY}/karton/karton:python3
-    - docker tag ${DOCKER_REGISTRY}/karton/karton:$(git rev-parse HEAD)-3 ${DOCKER_REGISTRY}/karton/karton:latest
-    - docker pull ${DOCKER_REGISTRY}/karton/karton:$(git rev-parse HEAD)-2
-    - docker tag ${DOCKER_REGISTRY}/karton/karton:$(git rev-parse HEAD)-2 ${DOCKER_REGISTRY}/karton/karton:python2.7
-    
-    - docker push $DOCKER_REGISTRY/karton/karton:python3
-    - docker push $DOCKER_REGISTRY/karton/karton:latest
-    
-    - docker push $DOCKER_REGISTRY/karton/karton:python2.7
-    - "curl -X POST -F token=bd1d3af0da3dd99b547d1bdd205bc3 -F ref=master  https://vcs.cert.pl/api/v4/projects/357/trigger/pipeline"
+  - docker login -u "$DOCKER_REGISTRY_LOGIN" -p "$DOCKER_REGISTRY_PASSWORD" https://dr.cert.pl
+  - deploy --push karton2
+
+deploy_py2:
+  stage: deploy
+  only:
+  - master
+  script:
+  - docker login -u "$DOCKER_REGISTRY_LOGIN" -p "$DOCKER_REGISTRY_PASSWORD" https://dr.cert.pl
+  - deploy --push karton2-py2
