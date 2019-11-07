@@ -2,29 +2,18 @@
 Base library for karton subsystems.
 """
 import contextlib
+import json
 
-import pika
-
-from .base import KartonSimple
+from .base import KartonBase
 from .resource import RemoteResource, RemoteDirectoryResource
-from .task import Task
-from .rmq import RabbitMQClient
-from .housekeeper import KartonHousekeeper, TaskState
+from .task import Task, TaskState
 from .utils import GracefulKiller
 
 TASKS_QUEUE = "karton.tasks"
-
-
-class KartonBase(KartonSimple):
-    identity = ""
-
-    def __init__(self, config, **kwargs):
-        super(KartonBase, self).__init__(config=config, **kwargs)
-        self.housekeeper = KartonHousekeeper(config=config, connection=self.connection)
+TASK_PREFIX = "karton.task:"
 
 
 class Producer(KartonBase):
-    @RabbitMQClient.retryable
     def send_task(self, task):
         """
         Sends a task to the RabbitMQ queue. Takes care of logging.
@@ -35,33 +24,36 @@ class Producer(KartonBase):
         :rtype: bool
         :return: if task was delivered
         """
-        self.log.debug("Dispatched task {}".format(task.uid))
+        task_id = str(task.uid)
+
+        self.log.debug("Dispatched task {}".format(task_id))
+
+        # Complete information about task
         if self.current_task is not None:
             task.set_task_parent(self.current_task)
-            task.copy_persistent_payload(self.current_task)
+            task.merge_persistent_payload(self.current_task)
 
-        for name, resource in task.payload.resources():
+        task.headers.update({"origin": self.identity})
+
+        # Ensure all local resources have good buckets
+        for name, resource in task.get_resources():
             if type(resource) is not RemoteResource and type(resource) is not RemoteDirectoryResource:
-                task.payload[name] = resource.upload(self.minio, self.config.minio_config["bucket"])
+                resource.bucket = self.config.minio_config["bucket"]
 
         task_json = task.serialize()
 
-        # Enables delivery confirmation
-        self.channel.confirm_delivery()
+        # Declare task
+        self.rs.set(TASK_PREFIX + task_id, task_json)
 
-        headers = task.headers.copy()
-        headers.update({"origin": self.identity})
+        # Upload local resources
+        for payload_bag in [task.payload, task.payload_persistent]:
+            for name, resource in payload_bag.resources():
+                if type(resource) is not RemoteResource and type(resource) is not RemoteDirectoryResource:
+                    payload_bag[name] = resource.upload(self.minio, resource.bucket)
 
-        # Mandatory tasks will fail if they're unroutable
-        delivered = self.channel.basic_publish(
-            TASKS_QUEUE, "", task_json, pika.BasicProperties(headers=headers), mandatory=True
-        )
-
-        if delivered:
-            self.housekeeper.declare_task_state(task, TaskState.SPAWNED, identity=self.identity)
-        else:
-            self.log.debug("Task {} is unroutable".format(task.uid))
-        return delivered
+        # Add task to TASKS_QUEUE
+        self.rs.rpush(TASKS_QUEUE, task_id)
+        return True
 
     @contextlib.contextmanager
     def continue_asynchronic(self, task, finish=True):
@@ -85,7 +77,11 @@ class Producer(KartonBase):
 
         # Finish task
         if finish:
-            self.housekeeper.declare_task_state(self.current_task, status=TaskState.FINISHED, identity=self.identity)
+            self.declare_task_state(
+                self.current_task,
+                status=TaskState.FINISHED,
+                identity=self.identity,
+            )
 
         self.current_task = old_current_task
         self.log_handler.set_task(self.current_task)
@@ -127,13 +123,14 @@ class Consumer(KartonBase):
     def __init__(self, config):
         super(Consumer, self).__init__(config=config)
 
+        self.registration = None
         self.current_task = None
+        self.shutdown = False
         self.killer = GracefulKiller(self.graceful_shutdown)
 
     def graceful_shutdown(self):
         self.log.info("Gracefully shutting down!")
-        self.channel.stop_consuming()
-        self.shutdown()
+        self.shutdown = True
 
     def process(self):
         """
@@ -143,39 +140,76 @@ class Consumer(KartonBase):
         """
         raise RuntimeError("Not implemented.")
 
-    def internal_process(self, channel, method, properties, body):
-        self.channel.basic_ack(method.delivery_tag)
-
-        self.current_task = Task.unserialize(properties.headers, body)
+    def internal_process(self, data):
+        self.current_task = Task.unserialize(self.rs.get("karton.task:" + data))
         self.log_handler.set_task(self.current_task)
 
+        for bind in self.filters:
+            if self.current_task.matches_bind(bind):
+                break
+        else:
+            self.log.info("Task rejected because binds are no longer valid.")
+            self.declare_task_state(
+                self.current_task,
+                TaskState.FINISHED,
+                identity=self.identity,
+            )
+            return
+
         try:
-            self.log.info("Received new task - {}".format(self.current_task.uid))
-            self.housekeeper.declare_task_state(self.current_task, TaskState.STARTED, identity=self.identity)
+            self.log.info(
+                "Received new task - {}".format(self.current_task.uid)
+            )
+            self.declare_task_state(
+                self.current_task, TaskState.STARTED, identity=self.identity
+            )
             self.process()
             self.log.info("Task done - {}".format(self.current_task.uid))
         except Exception:
-            self.log.exception("Failed to process task - {}".format(self.current_task.uid))
+            self.log.exception(
+                "Failed to process task - {}".format(self.current_task.uid)
+            )
         finally:
             if not self.current_task.is_asynchronic():
-                self.housekeeper.declare_task_state(self.current_task, TaskState.FINISHED, identity=self.identity)
+                self.declare_task_state(
+                    self.current_task,
+                    TaskState.FINISHED,
+                    identity=self.identity,
+                )
 
-    @RabbitMQClient.retryable
     def loop(self):
         """
         Blocking loop that consumes tasks and runs :py:meth:`karton.Consumer.process` as a handler
         """
         self.log.info("Service {} started".format(self.identity))
-        self.channel.queue_declare(queue=self.identity, durable=False, auto_delete=True)
 
-        # RMQ in headers doesn't allow multiple filters, se we bind multiple times
-        for filter in self.filters:
-            self.log.info("Binding on: {}".format(filter))
-            filter.update({"x-match": "all"})
-            self.channel.queue_bind(exchange=TASKS_QUEUE, queue=self.identity, routing_key="", arguments=filter)
+        self.registration = json.dumps(self.filters, sort_keys=True)
+        old_registration = self.rs.hset(
+            "karton.binds", self.identity, self.registration
+        )
 
-        self.channel.basic_consume(self.internal_process, self.identity, no_ack=False)
-        self.channel.start_consuming()
+        if not old_registration:
+            self.log.info("Service binds created.")
+        elif old_registration != self.registration:
+            self.log.info(
+                "Binds changed, old service instances should exit soon."
+            )
+
+        for task_filter in self.filters:
+            self.log.info("Binding on: {}".format(task_filter))
+
+        self.rs.client_setname(self.identity)
+
+        while not self.shutdown:
+            if self.rs.hget("karton.binds", self.identity) != self.registration:
+                self.log.info("Binds changed, shutting down.")
+                break
+
+            item = self.rs.blpop([self.identity], timeout=5)
+
+            if item:
+                queue, data = item
+                self.internal_process(data)
 
     def download_resource(self, resource):
         """
@@ -201,7 +235,9 @@ class Consumer(KartonBase):
         :return: path to temporary folder with unpacked contents
         """
         if not resource.is_directory():
-            raise TypeError("Attempted to download resource that is NOT a directory as a directory.")
+            raise TypeError(
+                "Attempted to download resource that is NOT a directory as a directory."
+            )
         with resource.download_to_temporary_folder(self.minio) as fpath:
             yield fpath
 
@@ -215,28 +251,10 @@ class Consumer(KartonBase):
         :return: zipfile with downloaded contents
         """
         if not resource.is_directory():
-            raise TypeError("Attempted to download resource that is NOT a directory as a directory.")
+            raise TypeError(
+                "Attempted to download resource that is NOT a directory as a directory."
+            )
         return resource.download_zip_file(self.minio)
-
-    def remove_resource(self, resource):
-        """
-        Remove remote resource.
-
-        :param resource: resource to be removed
-        :type resource: :py:class:`karton.RemoteResource`
-        """
-        return resource.remove(self.minio)
-
-    def upload_resource(self, resource):
-        """
-        Upload local resource to the storage hub
-
-        :param resource: resource to upload
-        :type resource: :py:class:`karton.Resource`
-        :rtype: :py:class:`karton.RemoteResource`
-        :return: representing uploaded resource
-        """
-        return resource.upload(self.minio)
 
 
 class Karton(Consumer, Producer):

@@ -1,7 +1,20 @@
+import itertools
 import json
 import uuid
 
-from .resource import ResourceFlagEnum, RemoteDirectoryResource, RemoteResource, PayloadBag
+from .resource import (
+    ResourceFlagEnum,
+    RemoteDirectoryResource,
+    RemoteResource,
+    PayloadBag,
+)
+
+
+class TaskState(object):
+    DECLARED = "Declared"   # Task declared in TASKS_QUEUE
+    SPAWNED = "Spawned"     # Task spawned into subsystem queue
+    STARTED = "Started"     # Task is running in subsystem
+    FINISHED = "Finished"   # Task finished (ready to forget)
 
 
 class Task(object):
@@ -19,8 +32,9 @@ class Task(object):
     :type uid: str
     """
 
-    def __init__(self, headers, payload=None, root_uid=None, uid=None):
+    def __init__(self, headers, payload=None, payload_persistent=None, parent_uid=None, root_uid=None, uid=None):
         payload = payload or {}
+        payload_persistent = payload_persistent or {}
         if not isinstance(payload, dict):
             raise ValueError("Payload should be an instance of a dict")
 
@@ -34,16 +48,29 @@ class Task(object):
         else:
             self.root_uid = root_uid
 
-        self.parent_uid = None
+        self.parent_uid = parent_uid
 
         self.headers = headers
+        self.status = TaskState.DECLARED
 
         self.payload = PayloadBag()
         self.payload_persistent = PayloadBag()
 
         self.payload.update(payload)
+        self.payload_persistent.update(payload_persistent)
 
         self.asynchronic = False
+
+    def fork_task(self):
+        """
+        Fork task to transfer single task to many queues (but use different UID)
+        """
+        new_task = Task(headers=self.headers,
+                        payload=self.payload,
+                        payload_persistent=self.payload_persistent,
+                        parent_uid=self.parent_uid,
+                        root_uid=self.root_uid)
+        return new_task
 
     @classmethod
     def derive_task(cls, headers, task):
@@ -57,8 +84,17 @@ class Task(object):
         :rtype: :py:class:`karton.Task`
         :return: task with new headers
         """
-        new_task = cls(headers=headers, payload=task.payload)
+        new_task = cls(headers=headers, payload=task.payload, payload_persistent=task.payload_persistent)
         return new_task
+
+    def matches_bind(self, bind):
+        """
+        Checks whether provided task headers are matching filter bind
+        :param bind: Filter bind
+        :return: True if task matches specific bind
+        """
+        return all(self.headers.get(bind_key) == bind_value
+                   for bind_key, bind_value in bind.items())
 
     def set_task_parent(self, parent):
         """
@@ -69,17 +105,20 @@ class Task(object):
         """
         self.parent_uid = parent.uid
         self.root_uid = parent.root_uid
-
         return self
 
-    def copy_persistent_payload(self, other_task):
+    def merge_persistent_payload(self, other_task):
         """
-        Copy persistent payload from another task
+        Merge persistent payload from another task
 
-        :param other_task: task to copy persistent payload from
+        :param other_task: task to merge persistent payload from
         :type other_task: :py:class:`karton.Task`
         """
-        self.payload_persistent = other_task.payload_persistent
+        for name, content in other_task.payload_persistent.items():
+            self.payload_persistent[name] = content
+            if name in self.payload:
+                # Delete conflicting non-persistent payload
+                del self.payload[name]
 
     def serialize(self):
         class KartonResourceEncoder(json.JSONEncoder):
@@ -93,14 +132,16 @@ class Task(object):
                 "uid": self.uid,
                 "root_uid": self.root_uid,
                 "parent_uid": self.parent_uid,
+                "status": self.status,
                 "payload": self.payload,
                 "payload_persistent": self.payload_persistent,
+                "headers": self.headers,
             },
             cls=KartonResourceEncoder,
         )
 
     @staticmethod
-    def unserialize(headers, data):
+    def unserialize(data):
         if not isinstance(data, str):
             data = data.decode("utf8")
 
@@ -108,11 +149,13 @@ class Task(object):
 
         payload = {}
         for k, v in data["payload"].items():
-            if "__karton_resource__" in v:
+            if isinstance(v, dict) and "__karton_resource__" in v:
                 karton_resource_dict = v["__karton_resource__"]
 
                 if ResourceFlagEnum.DIRECTORY in karton_resource_dict["flags"]:
-                    resource = RemoteDirectoryResource.from_dict(karton_resource_dict)
+                    resource = RemoteDirectoryResource.from_dict(
+                        karton_resource_dict
+                    )
                 else:
                     resource = RemoteResource.from_dict(karton_resource_dict)
 
@@ -124,23 +167,31 @@ class Task(object):
         payload_persistent = {}
         if "payload_persistent" in data:
             for k, v in data["payload_persistent"].items():
-                if "__karton_resource__" in v:
+                if isinstance(v, dict) and "__karton_resource__" in v:
                     karton_resource_dict = v["__karton_resource__"]
 
-                    if ResourceFlagEnum.DIRECTORY in karton_resource_dict["flags"]:
-                        resource = RemoteDirectoryResource.from_dict(karton_resource_dict)
+                    if (
+                        ResourceFlagEnum.DIRECTORY
+                        in karton_resource_dict["flags"]
+                    ):
+                        resource = RemoteDirectoryResource.from_dict(
+                            karton_resource_dict
+                        )
                     else:
-                        resource = RemoteResource.from_dict(karton_resource_dict)
+                        resource = RemoteResource.from_dict(
+                            karton_resource_dict
+                        )
 
                     payload_persistent[resource.uid] = resource
                     payload_persistent[k] = resource
                 else:
                     payload_persistent[k] = v
 
-        task = Task(headers, payload=payload)
+        task = Task(data["headers"], payload=payload)
         task.uid = data["uid"]
         task.root_uid = data["root_uid"]
         task.parent_uid = data["parent_uid"]
+        task.status = data["status"]
         if payload_persistent:
             task.payload_persistent = PayloadBag(payload_persistent)
         return task
@@ -174,7 +225,7 @@ class Task(object):
             raise ValueError("Payload already exists")
 
         if name in self.payload_persistent:
-            raise ValueError("Payload already exists in persistents payloads")
+            raise ValueError("Payload already exists in persistent payloads")
 
         if not persistent:
             self.payload[name] = content
@@ -238,42 +289,21 @@ class Task(object):
         :rtype: Iterator[:py:class:`karton.Resource`]
         :return: Generator of all resources present in the :py:class:`karton.PayloadBag`
         """
-        return self.payload.resources()
+        return itertools.chain(self.payload.resources(), self.payload_persistent.resources())
 
     def get_directory_resources(self):
         """
         :rtype: Iterator[:py:class:`karton.DirectoryResource`]
         :return: Generator of all directory resources present in the :py:class:`karton.PayloadBag`
         """
-        return self.payload.directory_resources()
+        return itertools.chain(self.payload.directory_resources(), self.payload_persistent.directory_resources())
 
     def get_file_resources(self):
         """
         :rtype: Iterator[:py:class:`karton.Resource`]
         :return: Generator of all file resources present in the :py:class:`karton.PayloadBag`
         """
-        return self.payload.file_resources()
-
-    def get_persistent_file_resources(self):
-        """
-        :rtype: Iterator[:py:class:`karton.Resource`]
-        :return: Generator of all persistent file resources present in the :py:class:`karton.PayloadBag`
-        """
-        return self.payload_persistent.file_resources()
-
-    def get_persistent_resources(self):
-        """
-        :rtype: Iterator[:py:class:`karton.Resource`]
-        :return: Generator of all persistent resources present in the :py:class:`karton.PayloadBag`
-        """
-        return self.payload_persistent.resources()
-
-    def get_persistent_directory_resources(self):
-        """
-        :rtype: Iterator[:py:class:`karton.DirectoryResource`]
-        :return: Generator of all persistent directory resources present in the :py:class:`karton.PayloadBag`
-        """
-        return self.payload_persistent.directory_resources()
+        return itertools.chain(self.payload.file_resources(), self.payload_persistent.file_resources())
 
     def remove_payload(self, name):
         """
@@ -283,15 +313,6 @@ class Task(object):
         :type name: str
         """
         del self.payload[name]
-
-    def remove_persistent_payload(self, name):
-        """
-        Removes persistent payload for the task
-
-        :param name: payload name to be removed
-        :type name: str
-        """
-        del self.payload_persistent[name]
 
     def payload_contains(self, name):
         """

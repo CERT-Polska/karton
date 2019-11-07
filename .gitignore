@@ -3,3 +3,4 @@
 venv/
 config.ini
 docs/_build
+.mypy_cache

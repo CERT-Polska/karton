@@ -1,6 +1,6 @@
 FROM python:2.7
 
-LABEL maintainer="des <des@cert.pl>"
+LABEL maintainer="cert <info@cert.pl>"
 COPY requirements.txt /tmp/requirements.txt
 
 RUN pip install -r /tmp/requirements.txt

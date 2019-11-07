@@ -1,4 +1,4 @@
-pika==0.12.0
+redis
 minio
 click
 Jinja2
