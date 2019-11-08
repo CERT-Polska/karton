@@ -11,28 +11,43 @@ from .resource import (
 
 
 class TaskState(object):
+    """Enum for task state"""
     DECLARED = "Declared"   # Task declared in TASKS_QUEUE
     SPAWNED = "Spawned"     # Task spawned into subsystem queue
     STARTED = "Started"     # Task is running in subsystem
     FINISHED = "Finished"   # Task finished (ready to forget)
 
 
+class TaskPriority(object):
+    """Enum for priority of tasks"""
+    HIGH = "high"
+    NORMAL = "normal"
+    LOW = "low"
+
+
 class Task(object):
     """
-    Task represents some resources + metadata.
+    Task representation with resources and metadata.
 
     :param headers: Routing information for other systems, this is what allows for evaluation of given \
                     system usefulness for given task. Systems filter by these.
     :type headers: :py:class:`dict`
     :param payload: any instance of :py:class:`dict` - contains resources and additional informations
     :type payload: :py:class:`dict` or :py:class:`karton.PayloadBag`:
+    :param payload_persistent: Persistent payload set for whole task subtree, propagated from root
+    :type payload_persistent: :py:class:`dict` or :py:class:`karton.PayloadBag`:
+    :param priority: Priority of whole task subtree (propagated like `payload_persistent`)
+    :type priority: :class:`TaskPriority`
+    :param parent_uid: parent_uid of the task
+    :type parent_uid: str
     :param root_uid: root_uid of the task
     :type root_uid: str
     :param uid: uid of the task
     :type uid: str
     """
 
-    def __init__(self, headers, payload=None, payload_persistent=None, parent_uid=None, root_uid=None, uid=None):
+    def __init__(self, headers, payload=None, payload_persistent=None,
+                 priority=None, parent_uid=None, root_uid=None, uid=None):
         payload = payload or {}
         payload_persistent = payload_persistent or {}
         if not isinstance(payload, dict):
@@ -53,6 +68,9 @@ class Task(object):
         self.headers = headers
         self.status = TaskState.DECLARED
 
+        self.last_update = None
+        self.priority = priority or TaskPriority.NORMAL
+
         self.payload = PayloadBag()
         self.payload_persistent = PayloadBag()
 
@@ -63,11 +81,13 @@ class Task(object):
 
     def fork_task(self):
         """
-        Fork task to transfer single task to many queues (but use different UID)
+        Fork task to transfer single task to many queues (but use different UID).
+        Used internally by karton-system.
         """
         new_task = Task(headers=self.headers,
                         payload=self.payload,
                         payload_persistent=self.payload_persistent,
+                        priority=self.priority,
                         parent_uid=self.parent_uid,
                         root_uid=self.root_uid)
         return new_task
@@ -121,6 +141,9 @@ class Task(object):
                 del self.payload[name]
 
     def serialize(self):
+        """
+        Serialize task data into JSON string
+        """
         class KartonResourceEncoder(json.JSONEncoder):
             def default(kself, obj):
                 if isinstance(obj, RemoteResource):
@@ -133,6 +156,8 @@ class Task(object):
                 "root_uid": self.root_uid,
                 "parent_uid": self.parent_uid,
                 "status": self.status,
+                "priority": self.priority,
+                "last_update": self.last_update,
                 "payload": self.payload,
                 "payload_persistent": self.payload_persistent,
                 "headers": self.headers,
@@ -142,6 +167,11 @@ class Task(object):
 
     @staticmethod
     def unserialize(data):
+        """
+        Unserialize Task instance from JSON string
+        :param data: JSON-serialized task
+        :type data: str or bytes
+        """
         if not isinstance(data, str):
             data = data.decode("utf8")
 
@@ -192,6 +222,9 @@ class Task(object):
         task.root_uid = data["root_uid"]
         task.parent_uid = data["parent_uid"]
         task.status = data["status"]
+        # Backwards compatibility, remove these .get's after upgrade
+        task.priority = data.get("priority", TaskPriority.NORMAL)
+        task.last_update = data.get("last_update", None)
         if payload_persistent:
             task.payload_persistent = PayloadBag(payload_persistent)
         return task
@@ -266,8 +299,6 @@ class Task(object):
         :param name: name of the payload
         :type default: object, optional
         :param default: value to be returned if payload is not present
-        :type persistent: bool
-        :param persistent: flag if the param should be persistent
         :return: payload content
         """
         return self.payload.get(name, default) or self.payload_persistent.get(name, default)

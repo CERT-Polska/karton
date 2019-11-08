@@ -3,10 +3,11 @@ Base library for karton subsystems.
 """
 import contextlib
 import json
+import time
 
 from .base import KartonBase
 from .resource import RemoteResource, RemoteDirectoryResource
-from .task import Task, TaskState
+from .task import Task, TaskState, TaskPriority
 from .utils import GracefulKiller
 
 TASKS_QUEUE = "karton.tasks"
@@ -32,7 +33,9 @@ class Producer(KartonBase):
         if self.current_task is not None:
             task.set_task_parent(self.current_task)
             task.merge_persistent_payload(self.current_task)
+            task.priority = self.current_task.priority
 
+        task.last_update = time.time()
         task.headers.update({"origin": self.identity})
 
         # Ensure all local resources have good buckets
@@ -205,7 +208,12 @@ class Consumer(KartonBase):
                 self.log.info("Binds changed, shutting down.")
                 break
 
-            item = self.rs.blpop([self.identity], timeout=5)
+            item = self.rs.blpop([
+                self.identity,  # Backwards compatibility, remove after upgrade
+                "karton.queue.{}:{}".format(TaskPriority.HIGH, self.identity),
+                "karton.queue.{}:{}".format(TaskPriority.NORMAL, self.identity),
+                "karton.queue.{}:{}".format(TaskPriority.LOW, self.identity)
+            ], timeout=5)
 
             if item:
                 queue, data = item
