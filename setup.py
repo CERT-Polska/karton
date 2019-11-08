@@ -7,7 +7,7 @@ except ImportError:
 
 setup(
     name="karton2",
-    version="2.0.3",
+    version="2.1.0",
     description="Base library for karton subsystems",
     package_dir={"karton2": "karton"},
     packages=["karton2"],
