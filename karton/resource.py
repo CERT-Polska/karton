@@ -163,7 +163,7 @@ class Resource(RemoteResource):
     :type sha256: str, optional
     """
 
-    def __init__(self, name, content, size=None, _uid=None, *args, **kwargs):
+    def __init__(self, name, content, _uid=None, *args, **kwargs):
         super(Resource, self).__init__(name, _uid=_uid)
         self.content = content
 
@@ -176,7 +176,10 @@ class Resource(RemoteResource):
             raise TypeError("Content can be bytes or str only")
 
         self.sha256 = hashlib.sha256(content).hexdigest()
-        self.size = len(content) if content is not None else size
+
+    @property
+    def size(self):
+        return len(self.content)
 
     def remove(self, minio):
         raise LocalResourceCanNotBeRemoved()
@@ -185,7 +188,7 @@ class Resource(RemoteResource):
         raise LocalResourceCanNotBeDownloaded()
 
     def get_size(self, minio):
-        return len(self.content)
+        return self.size
 
     def _upload(self, minio, bucket):
         """
