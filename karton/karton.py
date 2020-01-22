@@ -141,7 +141,7 @@ class Consumer(KartonBase):
 
         self.current_task contains task that triggered invocation of :py:meth:`karton.Consumer.process`
         """
-        raise RuntimeError("Not implemented.")
+        raise NotImplementedError()
 
     def internal_process(self, data):
         self.current_task = Task.unserialize(self.rs.get("karton.task:" + data))
