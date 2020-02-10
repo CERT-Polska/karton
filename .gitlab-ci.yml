@@ -29,7 +29,7 @@ deploy_py3:
   - master
   script:
   - docker login -u "$DOCKER_REGISTRY_LOGIN" -p "$DOCKER_REGISTRY_PASSWORD" https://dr.cert.pl
-  - deploy --push karton2
+  - deploy push -s karton2
 
 deploy_py2:
   stage: deploy
@@ -37,4 +37,4 @@ deploy_py2:
   - master
   script:
   - docker login -u "$DOCKER_REGISTRY_LOGIN" -p "$DOCKER_REGISTRY_PASSWORD" https://dr.cert.pl
-  - deploy --push karton2-py2
+  - deploy push -s karton2-py2
