@@ -4,10 +4,10 @@ import jinja2
 import os
 import sys
 import json
+import unittest
 import subprocess
 import requests
 from shutil import copyfile
-from deploy import main as deploy_main
 
 TEMPLATE_FOLDER = os.path.join(os.path.dirname(__file__), "templates")
 CONFIG_PATH = os.path.expanduser("~/.kpm/config.json")
@@ -76,7 +76,6 @@ def karton():
     if not os.path.exists(CONFIG_PATH):
         click.echo("This seems like the first run of the kpm")
         click.echo("Let's generate config in ~/.kpm/config.json")
-        os.makedirs(os.path.expanduser("~/.kpm"), exist_ok=True)
         prefix = click.prompt(
             "Docker registry prefix", default="dr.cert.pl/karton"
         )
@@ -88,7 +87,9 @@ def karton():
             "dockerregistry_prefix": prefix,
             "use_kubernetes": kubernetes,
         }
-
+        kpm_path = os.path.expanduser("~/.kpm")
+        if not os.path.isdir(kpm_path):
+            os.makedirs(kpm_path)
         c = Config(config)
         c.save(CONFIG_PATH)
 
@@ -105,6 +106,7 @@ def karton():
 )
 @click.pass_context
 def deploy(ctx):
+    from deploy import main as deploy_main
     c = Config.from_default_path()
     if not c.use_kubernetes:
         raise KubernetesNotEnabled()
@@ -140,6 +142,20 @@ def logs(uid):
             uid
         )
     )
+
+
+@karton.command("test", short_help="run unit tests for karton")
+@click.option("--test-dir", type=str, default="tests",
+              help="Test cases directory")
+@click.pass_context
+def test(ctx, test_dir):
+    # We need current dir in sys.path to import tested subsystem class
+    sys.path.append(os.getcwd())
+    suite = unittest.TestLoader().discover(test_dir)
+    runner = unittest.TextTestRunner()
+    result = runner.run(suite)
+    if not result.wasSuccessful():
+        ctx.abort()
 
 
 @karton.command(
