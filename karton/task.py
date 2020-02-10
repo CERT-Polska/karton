@@ -12,14 +12,16 @@ from .resource import (
 
 class TaskState(object):
     """Enum for task state"""
-    DECLARED = "Declared"   # Task declared in TASKS_QUEUE
-    SPAWNED = "Spawned"     # Task spawned into subsystem queue
-    STARTED = "Started"     # Task is running in subsystem
-    FINISHED = "Finished"   # Task finished (ready to forget)
+
+    DECLARED = "Declared"  # Task declared in TASKS_QUEUE
+    SPAWNED = "Spawned"  # Task spawned into subsystem queue
+    STARTED = "Started"  # Task is running in subsystem
+    FINISHED = "Finished"  # Task finished (ready to forget)
 
 
 class TaskPriority(object):
     """Enum for priority of tasks"""
+
     HIGH = "high"
     NORMAL = "normal"
     LOW = "low"
@@ -46,8 +48,16 @@ class Task(object):
     :type uid: str
     """
 
-    def __init__(self, headers, payload=None, payload_persistent=None,
-                 priority=None, parent_uid=None, root_uid=None, uid=None):
+    def __init__(
+        self,
+        headers,
+        payload=None,
+        payload_persistent=None,
+        priority=None,
+        parent_uid=None,
+        root_uid=None,
+        uid=None,
+    ):
         payload = payload or {}
         payload_persistent = payload_persistent or {}
         if not isinstance(payload, dict):
@@ -84,12 +94,14 @@ class Task(object):
         Fork task to transfer single task to many queues (but use different UID).
         Used internally by karton-system.
         """
-        new_task = Task(headers=self.headers,
-                        payload=self.payload,
-                        payload_persistent=self.payload_persistent,
-                        priority=self.priority,
-                        parent_uid=self.parent_uid,
-                        root_uid=self.root_uid)
+        new_task = Task(
+            headers=self.headers,
+            payload=self.payload,
+            payload_persistent=self.payload_persistent,
+            priority=self.priority,
+            parent_uid=self.parent_uid,
+            root_uid=self.root_uid,
+        )
         return new_task
 
     @classmethod
@@ -104,7 +116,11 @@ class Task(object):
         :rtype: :py:class:`karton.Task`
         :return: task with new headers
         """
-        new_task = cls(headers=headers, payload=task.payload, payload_persistent=task.payload_persistent)
+        new_task = cls(
+            headers=headers,
+            payload=task.payload,
+            payload_persistent=task.payload_persistent,
+        )
         return new_task
 
     def matches_bind(self, bind):
@@ -113,8 +129,10 @@ class Task(object):
         :param bind: Filter bind
         :return: True if task matches specific bind
         """
-        return all(self.headers.get(bind_key) == bind_value
-                   for bind_key, bind_value in bind.items())
+        return all(
+            self.headers.get(bind_key) == bind_value
+            for bind_key, bind_value in bind.items()
+        )
 
     def set_task_parent(self, parent):
         """
@@ -144,6 +162,7 @@ class Task(object):
         """
         Serialize task data into JSON string
         """
+
         class KartonResourceEncoder(json.JSONEncoder):
             def default(kself, obj):
                 if isinstance(obj, RemoteResource):
@@ -183,9 +202,7 @@ class Task(object):
                 karton_resource_dict = v["__karton_resource__"]
 
                 if ResourceFlagEnum.DIRECTORY in karton_resource_dict["flags"]:
-                    resource = RemoteDirectoryResource.from_dict(
-                        karton_resource_dict
-                    )
+                    resource = RemoteDirectoryResource.from_dict(karton_resource_dict)
                 else:
                     resource = RemoteResource.from_dict(karton_resource_dict)
 
@@ -200,17 +217,12 @@ class Task(object):
                 if isinstance(v, dict) and "__karton_resource__" in v:
                     karton_resource_dict = v["__karton_resource__"]
 
-                    if (
-                        ResourceFlagEnum.DIRECTORY
-                        in karton_resource_dict["flags"]
-                    ):
+                    if ResourceFlagEnum.DIRECTORY in karton_resource_dict["flags"]:
                         resource = RemoteDirectoryResource.from_dict(
                             karton_resource_dict
                         )
                     else:
-                        resource = RemoteResource.from_dict(
-                            karton_resource_dict
-                        )
+                        resource = RemoteResource.from_dict(karton_resource_dict)
 
                     payload_persistent[resource.uid] = resource
                     payload_persistent[k] = resource
@@ -301,7 +313,9 @@ class Task(object):
         :param default: value to be returned if payload is not present
         :return: payload content
         """
-        return self.payload.get(name, default) or self.payload_persistent.get(name, default)
+        return self.payload.get(name, default) or self.payload_persistent.get(
+            name, default
+        )
 
     def get_resource(self, name, default=None):
         """
@@ -313,28 +327,37 @@ class Task(object):
         :type default: object, optional
         :return: :py:class:`karton.Resource` - resource with given name
         """
-        return self.payload.get(name, default) or self.payload_persistent.get(name, default)
+        return self.payload.get(name, default) or self.payload_persistent.get(
+            name, default
+        )
 
     def get_resources(self):
         """
         :rtype: Iterator[:py:class:`karton.Resource`]
         :return: Generator of all resources present in the :py:class:`karton.PayloadBag`
         """
-        return itertools.chain(self.payload.resources(), self.payload_persistent.resources())
+        return itertools.chain(
+            self.payload.resources(), self.payload_persistent.resources()
+        )
 
     def get_directory_resources(self):
         """
         :rtype: Iterator[:py:class:`karton.DirectoryResource`]
         :return: Generator of all directory resources present in the :py:class:`karton.PayloadBag`
         """
-        return itertools.chain(self.payload.directory_resources(), self.payload_persistent.directory_resources())
+        return itertools.chain(
+            self.payload.directory_resources(),
+            self.payload_persistent.directory_resources(),
+        )
 
     def get_file_resources(self):
         """
         :rtype: Iterator[:py:class:`karton.Resource`]
         :return: Generator of all file resources present in the :py:class:`karton.PayloadBag`
         """
-        return itertools.chain(self.payload.file_resources(), self.payload_persistent.file_resources())
+        return itertools.chain(
+            self.payload.file_resources(), self.payload_persistent.file_resources()
+        )
 
     def remove_payload(self, name):
         """

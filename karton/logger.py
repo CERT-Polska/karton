@@ -30,18 +30,12 @@ class KartonLogHandler(logging.Handler):
             "thread",
             "threadName",
         ]
-        log_line = {
-            k: v for k, v in record.__dict__.items() if k not in ignore_fields
-        }
+        log_line = {k: v for k, v in record.__dict__.items() if k not in ignore_fields}
         if record.exc_info:
-            log_line["excText"] = logging.Formatter().formatException(
-                record.exc_info
-            )
+            log_line["excText"] = logging.Formatter().formatException(record.exc_info)
             log_line["excValue"] = str(record.exc_info[1])
             log_line["excType"] = record.exc_info[0].__name__
-            log_line["excTraceback"] = traceback.format_exception(
-                *record.exc_info
-            )
+            log_line["excTraceback"] = traceback.format_exception(*record.exc_info)
 
         log_line["type"] = "log"
 

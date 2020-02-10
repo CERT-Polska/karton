@@ -13,9 +13,7 @@ class KartonBase(object):
 
     def __init__(self, config, **kwargs):
         self.config = config
-        self.rs = StrictRedis(
-            decode_responses=True, **self.config.redis_config
-        )
+        self.rs = StrictRedis(decode_responses=True, **self.config.redis_config)
 
         self.current_task = None
         self.log_handler = KartonLogHandler(rs=self.rs)
