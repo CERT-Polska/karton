@@ -304,6 +304,7 @@ class DirectoryResource(RemoteDirectoryResource, Resource):
     """
 
     def __init__(self, name, directory_path, *args, **kwargs):
+        self.directory_path = directory_path
         content = zip_dir(directory_path).getvalue()
 
         super(DirectoryResource, self).__init__(name, content, *args, **kwargs)
