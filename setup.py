@@ -16,7 +16,7 @@ setup(
     install_requires=open("requirements.txt").read().splitlines(),
     extras_require={
         ':python_version < "3"': [
-            'mock'
+            'mock==3.0.5'
         ]
     },
     scripts=["karton/kpm"],
