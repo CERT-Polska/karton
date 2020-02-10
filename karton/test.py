@@ -16,10 +16,7 @@ except ImportError:
     # Py2 compatibility: needs "mock" to be installed
     import mock
 
-__all__ = [
-    "KartonTestCase",
-    "mock"
-]
+__all__ = ["KartonTestCase", "mock"]
 
 
 class KartonTestCase(unittest.TestCase):
@@ -37,24 +34,41 @@ class KartonTestCase(unittest.TestCase):
         self.karton = self._karton_mock(self.config, **(self.kwargs or {}))
 
     def assertPayloadBagEqual(self, payload, other, payload_bag_name):
-        self.assertSetEqual(set(payload.keys()), set(other.keys()),
-                            "Incorrect fields set in {}".format(payload_bag_name))
+        self.assertSetEqual(
+            set(payload.keys()),
+            set(other.keys()),
+            "Incorrect fields set in {}".format(payload_bag_name),
+        )
         for key, value in payload.items():
             other_value = other[key]
             if not isinstance(value, Resource):
-                self.assertEqual(value, other_value, "Incorrect value of {}.{}".format(payload_bag_name, key))
+                self.assertEqual(
+                    value,
+                    other_value,
+                    "Incorrect value of {}.{}".format(payload_bag_name, key),
+                )
                 continue
-            self.assertTrue(isinstance(other_value, Resource),
-                            "Expected Resource type of {}.{}".format(payload_bag_name, key))
-            self.assertEqual(value.is_directory(), other_value.is_directory(),
-                             "Resource type mismatch in {}.{}".format(payload_bag_name, key))
-            self.assertEqual(value.sha256, other_value.sha256,
-                             "Resource content mismatch in {}.{}".format(payload_bag_name, key))
+            self.assertTrue(
+                isinstance(other_value, Resource),
+                "Expected Resource type of {}.{}".format(payload_bag_name, key),
+            )
+            self.assertEqual(
+                value.is_directory(),
+                other_value.is_directory(),
+                "Resource type mismatch in {}.{}".format(payload_bag_name, key),
+            )
+            self.assertEqual(
+                value.sha256,
+                other_value.sha256,
+                "Resource content mismatch in {}.{}".format(payload_bag_name, key),
+            )
 
     def assertTaskEqual(self, task, other):
         self.assertDictEqual(task.headers, other.headers, "Headers mismatch")
         self.assertPayloadBagEqual(task.payload, other.payload, "payload")
-        self.assertPayloadBagEqual(task.payload_persistent, other.payload_persistent, "payload_persistent")
+        self.assertPayloadBagEqual(
+            task.payload_persistent, other.payload_persistent, "payload_persistent"
+        )
 
     def assertTasksEqual(self, tasks, others):
         self.assertEqual(len(tasks), len(others), "Incorrect number of tasks sent")
@@ -84,9 +98,7 @@ class KartonMock(object):
         if "internal_process" in karton_class.__dict__:
             raise TypeError("Karton can't override internal_process method")
 
-        return type(karton_class.__name__ + "Mock",
-                    (cls,),
-                    dict(karton_class.__dict__))
+        return type(karton_class.__name__ + "Mock", (cls,), dict(karton_class.__dict__))
 
     def __init__(self, config, **kwargs):
         self.config = config

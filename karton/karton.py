@@ -40,7 +40,10 @@ class Producer(KartonBase):
 
         # Ensure all local resources have good buckets
         for name, resource in task.get_resources():
-            if type(resource) is not RemoteResource and type(resource) is not RemoteDirectoryResource:
+            if (
+                type(resource) is not RemoteResource
+                and type(resource) is not RemoteDirectoryResource
+            ):
                 resource.bucket = self.config.minio_config["bucket"]
 
         task_json = task.serialize()
@@ -51,7 +54,10 @@ class Producer(KartonBase):
         # Upload local resources
         for payload_bag in [task.payload, task.payload_persistent]:
             for name, resource in payload_bag.resources():
-                if type(resource) is not RemoteResource and type(resource) is not RemoteDirectoryResource:
+                if (
+                    type(resource) is not RemoteResource
+                    and type(resource) is not RemoteDirectoryResource
+                ):
                     payload_bag[name] = resource.upload(self.minio, resource.bucket)
 
         # Add task to TASKS_QUEUE
@@ -81,9 +87,7 @@ class Producer(KartonBase):
         # Finish task
         if finish:
             self.declare_task_state(
-                self.current_task,
-                status=TaskState.FINISHED,
-                identity=self.identity,
+                self.current_task, status=TaskState.FINISHED, identity=self.identity,
             )
 
         self.current_task = old_current_task
@@ -153,16 +157,12 @@ class Consumer(KartonBase):
         else:
             self.log.info("Task rejected because binds are no longer valid.")
             self.declare_task_state(
-                self.current_task,
-                TaskState.FINISHED,
-                identity=self.identity,
+                self.current_task, TaskState.FINISHED, identity=self.identity,
             )
             return
 
         try:
-            self.log.info(
-                "Received new task - {}".format(self.current_task.uid)
-            )
+            self.log.info("Received new task - {}".format(self.current_task.uid))
             self.declare_task_state(
                 self.current_task, TaskState.STARTED, identity=self.identity
             )
@@ -175,9 +175,7 @@ class Consumer(KartonBase):
         finally:
             if not self.current_task.is_asynchronic():
                 self.declare_task_state(
-                    self.current_task,
-                    TaskState.FINISHED,
-                    identity=self.identity,
+                    self.current_task, TaskState.FINISHED, identity=self.identity,
                 )
 
     def loop(self):
@@ -194,9 +192,7 @@ class Consumer(KartonBase):
         if not old_registration:
             self.log.info("Service binds created.")
         elif old_registration != self.registration:
-            self.log.info(
-                "Binds changed, old service instances should exit soon."
-            )
+            self.log.info("Binds changed, old service instances should exit soon.")
 
         for task_filter in self.filters:
             self.log.info("Binding on: {}".format(task_filter))
@@ -208,12 +204,15 @@ class Consumer(KartonBase):
                 self.log.info("Binds changed, shutting down.")
                 break
 
-            item = self.rs.blpop([
-                self.identity,  # Backwards compatibility, remove after upgrade
-                "karton.queue.{}:{}".format(TaskPriority.HIGH, self.identity),
-                "karton.queue.{}:{}".format(TaskPriority.NORMAL, self.identity),
-                "karton.queue.{}:{}".format(TaskPriority.LOW, self.identity)
-            ], timeout=5)
+            item = self.rs.blpop(
+                [
+                    self.identity,  # Backwards compatibility, remove after upgrade
+                    "karton.queue.{}:{}".format(TaskPriority.HIGH, self.identity),
+                    "karton.queue.{}:{}".format(TaskPriority.NORMAL, self.identity),
+                    "karton.queue.{}:{}".format(TaskPriority.LOW, self.identity),
+                ],
+                timeout=5,
+            )
 
             if item:
                 queue, data = item

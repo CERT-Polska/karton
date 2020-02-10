@@ -76,12 +76,8 @@ def karton():
     if not os.path.exists(CONFIG_PATH):
         click.echo("This seems like the first run of the kpm")
         click.echo("Let's generate config in ~/.kpm/config.json")
-        prefix = click.prompt(
-            "Docker registry prefix", default="dr.cert.pl/karton"
-        )
-        kubernetes = click.confirm(
-            "Do you have access to karton-prod(with kubectl)?"
-        )
+        prefix = click.prompt("Docker registry prefix", default="dr.cert.pl/karton")
+        kubernetes = click.confirm("Do you have access to karton-prod(with kubectl)?")
 
         config = {
             "dockerregistry_prefix": prefix,
@@ -99,14 +95,12 @@ def karton():
     "deploy",
     short_help="build and push karton image to repository",
     add_help_option=False,
-    context_settings={
-        "allow_extra_args": True,
-        "ignore_unknown_options": True,
-    },
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
 )
 @click.pass_context
 def deploy(ctx):
     from deploy import main as deploy_main
+
     c = Config.from_default_path()
     if not c.use_kubernetes:
         raise KubernetesNotEnabled()
@@ -145,8 +139,7 @@ def logs(uid):
 
 
 @karton.command("test", short_help="run unit tests for karton")
-@click.option("--test-dir", type=str, default="tests",
-              help="Test cases directory")
+@click.option("--test-dir", type=str, default="tests", help="Test cases directory")
 @click.pass_context
 def test(ctx, test_dir):
     # We need current dir in sys.path to import tested subsystem class
@@ -158,14 +151,10 @@ def test(ctx, test_dir):
         ctx.abort()
 
 
-@karton.command(
-    "init", short_help="initialize karton in the current directory"
-)
+@karton.command("init", short_help="initialize karton in the current directory")
 def init():
     name = click.prompt("Name of your karton", type=str)
-    path = click.prompt(
-        "Path to your karton package", type=str, default=os.getcwd()
-    )
+    path = click.prompt("Path to your karton package", type=str, default=os.getcwd())
     do_repository = click.confirm("Create git repository?")
     if do_repository:
         subprocess.check_call(["git", "init", path])
@@ -234,14 +223,7 @@ def init():
     if do_repository:
         subprocess.check_call(["git", "-C", path, "add", "-A"])
         subprocess.check_call(
-            [
-                "git",
-                "-C",
-                path,
-                "commit",
-                "-m",
-                "KPM initialized this repository.",
-            ]
+            ["git", "-C", path, "commit", "-m", "KPM initialized this repository."]
         )
 
     if c.use_kubernetes:
