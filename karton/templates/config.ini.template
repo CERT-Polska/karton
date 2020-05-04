@@ -1,6 +1,0 @@
-[minio]
-secret_key = ...
-access_key = cert
-address = minio.cert.pl
-bucket = karton
-secure = 1

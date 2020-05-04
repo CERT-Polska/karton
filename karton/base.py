@@ -1,19 +1,27 @@
+import abc
 import json
 
 from minio import Minio
 from redis import StrictRedis
 
+from .config import Config
 from .logger import KartonLogHandler
 
 OPERATIONS_QUEUE = "karton.operations"
 
+# Py2/3 compatible ABC (https://stackoverflow.com/a/38668373)
+ABC = abc.ABCMeta('ABC', (object,), {'__slots__': ()})
 
-class KartonBase(object):
+
+class KartonBase(ABC):
     identity = ""
 
-    def __init__(self, config, **kwargs):
-        self.config = config
-        self.rs = StrictRedis(decode_responses=True, **self.config.redis_config)
+    def __init__(self, config=None, identity=None):
+        self.config = config or Config()
+        if identity is not None:
+            self.identity = identity
+        self.rs = StrictRedis(decode_responses=True,
+                              **self.config.redis_config)
 
         self.current_task = None
         self.log_handler = KartonLogHandler(rs=self.rs)
@@ -27,11 +35,7 @@ class KartonBase(object):
         )
 
     def declare_task_state(self, task, status, identity=None):
-        """
-        Declare task state
-
-        :param task: Task
-        """
+        # Declares task state. Used internally
         self.rs.rpush(
             OPERATIONS_QUEUE,
             json.dumps(
