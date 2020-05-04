@@ -1,5 +1,3 @@
-image: certpl/docker-ci-base:latest
-
 stages:
   - test
   - deploy
@@ -23,18 +21,16 @@ test_style_py3:
   - pip3 install flake8
   - flake8 . --exclude=venv,docs,logo --max-line-length 121
 
-deploy_py3:
+deploy_pypi:
+  image: python:3.6
   stage: deploy
   only:
-  - master
+    refs:
+      - master
+    variables:
+      - $PYPI_LOGIN
+      - $PYPI_PASSWORD
   script:
-  - docker login -u "$DOCKER_REGISTRY_LOGIN" -p "$DOCKER_REGISTRY_PASSWORD" https://dr.cert.pl
-  - deploy push -s karton2
-
-deploy_py2:
-  stage: deploy
-  only:
-  - master
-  script:
-  - docker login -u "$DOCKER_REGISTRY_LOGIN" -p "$DOCKER_REGISTRY_PASSWORD" https://dr.cert.pl
-  - deploy push -s karton2-py2
+    - python setup.py bdist_wheel
+    - pip install twine
+    - twine upload -u "$PYPI_LOGIN" -p "$PYPI_PASSWORD" --skip-existing dist/*

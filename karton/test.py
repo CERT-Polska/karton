@@ -3,12 +3,20 @@ Test stubs for karton subsystem unit tests
 """
 import contextlib
 import logging
+import hashlib
+import shutil
 import unittest
+import tempfile
 import time
 import zipfile
 
 from .karton import Consumer
-from .resource import Resource, DirectoryResource
+from .resource import (
+    RemoteResource,
+    RemoteDirectoryResource,
+    ResourceBase,
+    DirectoryResourceBase,
+)
 
 try:
     from unittest import mock
@@ -19,7 +27,105 @@ except ImportError:
 __all__ = ["KartonTestCase", "mock"]
 
 
+class TestResource(RemoteResource):
+    """
+    LocalResource imitating RemoteResource for test purposes.
+
+    Should be used in test cases instead of LocalResource objects.
+
+    Passing resource as path is not supported.
+
+    :param name: Name of the resource (e.g. name of file)
+    :type name: str
+    :param content: Resource content
+    :type content: bytes or str
+    :param metadata: Resource metadata
+    :type metadata: dict, optional
+    """
+
+    def __init__(self, name, content, metadata=None):
+        super(TestResource, self).__init__(name, metadata=metadata)
+        self._content = content
+
+    def download(self):
+        return self._content
+
+    def unload(self):
+        # Just ignore that call
+        pass
+
+    def download_to_file(self, path):
+        with open(path, "wb") as f:
+            f.write(self._content)
+
+    @contextlib.contextmanager
+    def download_temporary_file(self):
+        with tempfile.NamedTemporaryFile() as f:
+            self.download_to_file(f.name)
+            yield f
+
+
+class TestDirectoryResource(TestResource, RemoteDirectoryResource):
+    """
+    LocalDirectoryResource imitating RemoteDirectoryResource for test purposes.
+
+    Should be used in test cases instead of LocalDirectoryResource objects.
+
+    :param name: Name of the resource (e.g. name of file)
+    :type name: str
+    :param content: ZIP file content to be treated as RemoteDirectoryResource
+    :type content: bytes
+    :param metadata: Resource metadata
+    :type metadata: dict, optional
+    """
+
+    @contextlib.contextmanager
+    def zip_file(self):
+        yield zipfile.ZipFile(self._content)
+
+    def extract_to_directory(self, path):
+        with self.zip_file() as zf:
+            zf.extractall(path)
+
+    @contextlib.contextmanager
+    def extract_temporary(self):
+        tmpdir = tempfile.mkdtemp()
+        try:
+            self.extract_to_directory(tmpdir)
+            yield tmpdir
+        finally:
+            shutil.rmtree(tmpdir)
+
+
 class KartonTestCase(unittest.TestCase):
+    """
+    Unit test case class
+
+    .. code-block:: python
+        from cutter import Cutter
+
+        class CutterTestCase(KartonTestCase):
+            karton_class = Cutter
+
+        def test_kartonik(self):
+            resource = TestResource('incoming', b'put content here')
+            task = Task({
+                'type': 'string'
+            }, payload={
+                'chars': 6,
+                'sample': resource
+            })
+            results = self.run_task(task)
+            self.assertTasksEqual(results, [
+                Task({
+                    'origin': 'karton.cutter',
+                    'type': 'cutted_string'
+                }, payload={
+                    'sample': Resource('outgoing', b'put co')
+                })
+            ])
+    """
+
     karton_class = None
     config = None
     kwargs = None
@@ -33,49 +139,83 @@ class KartonTestCase(unittest.TestCase):
     def setUp(self):
         self.karton = self._karton_mock(self.config, **(self.kwargs or {}))
 
-    def assertPayloadBagEqual(self, payload, other, payload_bag_name):
+    def get_resource_sha256(self, resource):
+        h = hashlib.sha256()
+        if resource._path is not None:
+            with open(resource._path, "rb") as f:
+                while True:
+                    block = f.read(65536)
+                    if not block:
+                        break
+                    h.update(block)
+        else:
+            h.update(resource._content)
+        return h.hexdigest()
+
+    def assertResourceEqual(self, resource, expected, resource_name):
+        self.assertEqual(
+            isinstance(resource, DirectoryResourceBase),
+            isinstance(expected, DirectoryResourceBase),
+            "Resource type mismatch in {}".format(resource_name),
+        )
+        if isinstance(resource, DirectoryResourceBase):
+            # Now we're only checking type
+            return
+        self.assertEqual(
+            self.get_resource_sha256(resource),
+            self.get_resource_sha256(expected),
+            "Resource content mismatch in {}".format(resource_name),
+        )
+
+    def assertPayloadBagEqual(self, payload, expected, payload_bag_name):
         self.assertSetEqual(
             set(payload.keys()),
-            set(other.keys()),
+            set(expected.keys()),
             "Incorrect fields set in {}".format(payload_bag_name),
         )
         for key, value in payload.items():
-            other_value = other[key]
-            if not isinstance(value, Resource):
+            other_value = expected[key]
+            path = "{}.{}".format(payload_bag_name, key)
+            if not isinstance(value, ResourceBase):
                 self.assertEqual(
-                    value,
-                    other_value,
-                    "Incorrect value of {}.{}".format(payload_bag_name, key),
+                    value, other_value, "Incorrect value of {}".format(path),
                 )
-                continue
-            self.assertTrue(
-                isinstance(other_value, Resource),
-                "Expected Resource type of {}.{}".format(payload_bag_name, key),
-            )
-            self.assertEqual(
-                value.is_directory(),
-                other_value.is_directory(),
-                "Resource type mismatch in {}.{}".format(payload_bag_name, key),
-            )
-            self.assertEqual(
-                value.sha256,
-                other_value.sha256,
-                "Resource content mismatch in {}.{}".format(payload_bag_name, key),
-            )
+            else:
+                self.assertResourceEqual(value, other_value, path)
 
-    def assertTaskEqual(self, task, other):
-        self.assertDictEqual(task.headers, other.headers, "Headers mismatch")
-        self.assertPayloadBagEqual(task.payload, other.payload, "payload")
+    def assertTaskEqual(self, task, expected):
+        self.assertDictEqual(task.headers, expected.headers, "Headers mismatch")
+        self.assertPayloadBagEqual(task.payload, expected.payload, "payload")
         self.assertPayloadBagEqual(
-            task.payload_persistent, other.payload_persistent, "payload_persistent"
+            task.payload_persistent, expected.payload_persistent, "payload_persistent"
         )
 
-    def assertTasksEqual(self, tasks, others):
-        self.assertEqual(len(tasks), len(others), "Incorrect number of tasks sent")
-        for task, other in zip(tasks, others):
+    def assertTasksEqual(self, tasks, expected):
+        """
+        Checks whether task lists are equal
+        :param tasks: Result tasks list
+        :type tasks: List[:py:class:`karton.Task`]
+        :param expected: Expected tasks list
+        :type expected: List[:py:class:`karton.Task`]
+        """
+        self.assertEqual(len(tasks), len(expected), "Incorrect number of tasks sent")
+        for task, other in zip(tasks, expected):
             self.assertTaskEqual(task, other)
 
     def run_task(self, task):
+        """
+        Spawns task into tested Karton subsystem instance
+        :param task: Task to be spawned
+        :type task: :py:class:`karton.Task`
+        :return: Result tasks sent by Kartonik
+        :rtype: List[:py:class:`karton.Task`]
+        """
+        for key, resource in task.iterate_resources():
+            if not isinstance(resource, TestResource):
+                raise TypeError(
+                    "Input resources must be instantiated using TestResource "
+                    "instead of plain LocalResource (payload key: '{}')".format(key)
+                )
         return self.karton.run_task(task)
 
 
@@ -137,28 +277,6 @@ class KartonMock(object):
         self.current_task = task
         yield
         self.current_task = old_current_task
-
-    def download_resource(self, resource):
-        if not isinstance(resource, Resource):
-            raise TypeError("Local Resource was expected here")
-        return resource
-
-    @contextlib.contextmanager
-    def download_to_temporary_folder(self, resource):
-        if not resource.is_directory():
-            raise TypeError(
-                "Attempted to download resource that is NOT a directory as a directory."
-            )
-        if not isinstance(resource, DirectoryResource):
-            raise TypeError("Local DirectoryResource was expected here")
-        return resource.directory_path
-
-    def download_zip_file(self, resource):
-        if not resource.is_directory():
-            raise TypeError(
-                "Attempted to download resource that is NOT a directory as a directory."
-            )
-        return zipfile.ZipFile(resource.content)
 
     def process(self):
         """

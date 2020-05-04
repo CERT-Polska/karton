@@ -9,6 +9,17 @@ except ImportError:
 
 
 class Config(object):
+    """
+    Simple config loader.
+
+    Loads configuration from paths specified below (in provided order):
+
+    - /etc/karton/karton.ini (global)
+    - ~/.config/karton/karton.ini (user local)
+    - ./karton.ini (subsystem local)
+
+    :param path: path to additional configuration file
+    """
     SEARCH_PATHS = [
         "/etc/karton/karton.ini",
         os.path.expanduser("~/.config/karton/karton.ini"),
@@ -16,16 +27,6 @@ class Config(object):
     ]
 
     def __init__(self, path=None):
-        """
-        Simple config loader. Minio and redis sections are required, for more information look at config.ini.example
-
-        Loads configuration from paths specified below (in provided order):
-        - /etc/karton/karton.ini (global)
-        - ~/.config/karton/karton.ini (user local)
-        - ./karton.ini (subsystem local)
-
-        :param path: path to additional configuration file
-        """
         if path is not None:
             if not os.path.isfile(path):
                 raise IOError("Configuration file not found in " + path)

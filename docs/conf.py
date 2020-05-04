@@ -18,17 +18,18 @@ import sys
 sys.path.insert(0, os.path.abspath(".."))
 sys.path.insert(0, os.path.abspath("_themes"))
 
+from karton.__version__ import __version__  # noqa: E402
 
 # -- Project information -----------------------------------------------------
 
 project = "karton"
-copyright = "2019, CERT Polska"
+copyright = "2020, CERT Polska"
 author = "CERT Polska"
 
 # The short X.Y version
-version = "1.3.3"
+version = __version__
 # The full version, including alpha/beta/rc tags
-release = "1.3.3"
+release = __version__
 
 
 # -- General configuration ---------------------------------------------------
@@ -43,11 +44,13 @@ release = "1.3.3"
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.doctest",
+    "sphinx.ext.inheritance_diagram",
     "sphinx.ext.todo",
     "sphinx.ext.coverage",
     "sphinx.ext.mathjax",
     "sphinx.ext.ifconfig",
     "sphinx.ext.viewcode",
+    "pallets_sphinx_themes"
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -79,7 +82,7 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = "sphinxdoc"
+html_theme = "flask"
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the

@@ -1,356 +1,501 @@
 import contextlib
-import json
+import os
 import shutil
+import sys
 import tempfile
 import uuid
 import zipfile
-import sys
-import hashlib
+
 from io import BytesIO
 
-from .utils import zip_dir
 
-
-class NoContentException(Exception):
-    pass
-
-
-class ContentDoesNotExist(Exception):
-    pass
-
-
-class NotConfiguredResource(Exception):
-    pass
-
-
-class LocalResourceCanNotBeRemoved(Exception):
-    pass
-
-
-class LocalResourceCanNotBeDownloaded(Exception):
-    pass
-
-
-class ResourceFlagEnum(object):
-    DIRECTORY = "Directory"
-
-
-class RemoteResource(object):
+class ResourceBase(object):
     """
-    Abstraction over remote minio objects.
-
-    This exists to make it easier to share resources across clients
-
-    Resources are independent of underlying minio objects for easier local manipulation
+    Abstract base class for Resource objects.
     """
 
-    def __init__(self, name, bucket=None, _uid=None, sha256=None, flags=None):
-        if _uid is None:
-            _uid = str(uuid.uuid4())
-
+    def __init__(
+        self,
+        name,
+        content=None,
+        path=None,
+        bucket=None,
+        metadata=None,
+        _uid=None,
+        _size=None,
+    ):
         self.name = name
         self.bucket = bucket
-        self.uid = _uid
-        self.sha256 = sha256
+        self.metadata = metadata or {}
 
-        self.flags = flags or []
+        if content and path:
+            raise ValueError("Can't set both path and content for resource")
+        if path:
+            if not os.path.isfile(path):
+                raise IOError("Path {path} doesn't exist or is not a file"
+                              .format(path=path))
+        elif content:
+            if type(content) is str and sys.version_info >= (3, 0):
+                content = content.encode()
+            elif type(content) is not bytes:
+                raise TypeError("Content can be bytes or str only")
 
-    def is_directory(self):
+        # Empty Resource is possible here (e.g. DirectoryResource doesn't have immediate content)
+
+        self._uid = _uid or str(uuid.uuid4())
+        self._content = content
+        self._path = path
+        self._size = _size
+
+    @property
+    def uid(self):
         """
-        Helps to identify DirectoryResource vs Resource without type checking
+        Resource identifier (UUID)
 
-        :rtype: bool
-        :return: if this instance is derived from :py:class:`karton.RemoteDirectoryResource`
+        :rtype: str
         """
-        # both conditions should be identical
-        return ResourceFlagEnum.DIRECTORY in self.flags or isinstance(
-            self, RemoteDirectoryResource
-        )
+        return self._uid
+
+    @property
+    def content(self):
+        """
+        Resource content
+
+        :rtype: Optional[bytes]
+        """
+        return self._content
+
+    @property
+    def size(self):
+        """
+        Resource size
+
+        :rtype: int
+        """
+        if self._size is None:
+            if self._path:
+                self._size = os.path.getsize(self._path)
+            elif self._content:
+                self._size = len(self._content)
+        return self._size
 
     def to_dict(self):
+        # Internal serialization method
         return {
             "uid": self.uid,
             "name": self.name,
             "bucket": self.bucket,
-            "flags": self.flags,
-            "sha256": self.sha256,
+            "size": self.size,
+            "metadata": self.metadata,
+            "flags": [],
+            "sha256": self.metadata.get("sha256")
         }
 
-    def serialize(self):
-        return json.dumps(self.to_dict())
+
+class LocalResource(ResourceBase):
+    """
+    Represents local resource with arbitrary binary data e.g. file contents.
+
+    Local resources will be uploaded to object hub (Minio) during
+    task dispatching.
+
+    .. code-block:: python
+
+        # Creating resource from bytes
+        sample = Resource("original_name.exe", content=b"X5O!P%@AP[4
+        \\PZX54(P^)7CC)7}$EICAR-STANDARD-ANT...")
+
+        # Creating resource from path
+        sample = Resource("original_name.exe", path="sample/original_name.exe")
+
+    :param name: Name of the resource (e.g. name of file)
+    :type name: str
+    :param content: Resource content
+    :type content: bytes or str
+    :param path: Path of file with resource content
+    :type path: str
+    :param bucket: Alternative Minio bucket for resource
+    :type bucket: str, optional
+    :param metadata: Resource metadata
+    :type metadata: dict, optional
+    """
+
+    def __init__(self, name, content=None, path=None, bucket=None, metadata=None):
+        super(LocalResource, self).__init__(
+            name, content=content, path=path, bucket=bucket, metadata=metadata
+        )
+
+    def _upload(self, minio):
+        # Note: never transform resource into Remote (multiple task dispatching with same local,
+        # in that case resource can be deleted between tasks)
+        if self._content:
+            # Upload contents
+            minio.put_object(self.bucket, self.uid, BytesIO(self._content), len(self._content))
+        else:
+            # Upload file provided by path
+            minio.fput_object(self.bucket, self.uid, self._path)
+
+    def upload(self, minio):
+        # Internal local resource upload method
+        if not self._content and not self._path:
+            raise RuntimeError("Can't upload resource without content")
+        return self._upload(minio)
+
+
+Resource = LocalResource
+
+
+class RemoteResource(ResourceBase):
+    """
+    Keeps reference to remote resource object shared between subsystems via object hub (Minio)
+
+    Should never be instantiated directly by subsystem, but can be directly passed to outgoing payload.
+    """
+
+    def __init__(
+        self, name, bucket=None, metadata=None, uid=None, size=None, minio=None
+    ):
+        super(RemoteResource, self).__init__(
+            name, bucket=bucket, metadata=metadata, _uid=uid, _size=size
+        )
+        self._minio = minio
+
+    def loaded(self):
+        """
+        Checks whether resource is loaded into memory
+
+        :rtype: bool
+        """
+        return self._content is not None
 
     @classmethod
-    def from_dict(cls, data_dict):
-        bucket = data_dict["bucket"]
-        name = data_dict["name"]
-        _uid = data_dict["uid"]
-        sha256 = data_dict.get("sha256")
-        flags = data_dict["flags"]
-
-        new_cls = cls(name, bucket=bucket, _uid=_uid, sha256=sha256, flags=flags)
-        return new_cls
-
-    def remove(self, minio):
+    def from_dict(cls, dict, minio):
         """
-        Remove remote resource from minio storage
+        Internal deserialization method for remote resources
 
-        :param minio: minio instance
-        :type minio: :py:class:`minio.Minio`
+        :param dict: Serialized information about resource
+        :type dict: Dict[str, Any]
+        :param minio: Minio binding object
+        :type minio: :class:`minio.Minio`
+
+        :meta private:
         """
-        minio.remove_object(self.bucket, self.uid)
+        # Backwards compatibility
+        metadata = dict.get("metadata", {})
+        if "sha256" in dict:
+            metadata["sha256"] = dict["sha256"]
 
-    def download(self, minio):
-        """
-        Download RemoteResource into object for local usage
-
-        You probably don't want to use it on your own, rather use :py:meth:`karton.Karton.download_resource` method
-
-        :param minio: minio instance
-        :type minio: :py:class:`minio.Minio`
-        :rtype: :py:class:`karton.Resource`
-        :return: local resource
-        """
-        reader = minio.get_object(self.bucket, self.uid)
-        sio = BytesIO(reader.data)
-        content = sio.getvalue()
-
-        size = len(content)
-
-        return Resource(self.name, sio.getvalue(), size, self.uid)
-
-    def download_content_to_file(self, minio, file_path):
-        """
-        Download RemoteResource into local filesystem with given file_path.
-
-        :param minio: minio instance
-        :type minio: :py:class:`minio.Minio`
-        :param file_path: file path where to store the downloaded file
-        :type: str
-        :rtype: str
-        :return: file path to the created file
-        """
-        minio.fget_object(self.bucket, self.uid, file_path)
-        return file_path
-
-    def get_size(self, minio):
-        """
-        Gets size of remote object (without downloading content)
-
-        :param minio: minio instance
-        :type minio: :py:class:`minio.Minio`
-        :rtype: int
-        :return: size of remote object
-        """
-        stat = minio.stat_object(self.bucket, self.uid)
-        return stat.size
-
-    def __repr__(self):
-        return str(self.to_dict())
-
-
-class Resource(RemoteResource):
-    """
-    Resource represents local resource.
-    self.content stores content of the local resource.
-
-    :param name: name of the resource
-    :type name: str
-    :param bucket: minio bucket
-    :type bucket: str, optional
-    :param _uid: uuid
-    :type _uid: str, optional
-    :param sha256: sha256 of object if known
-    :type sha256: str, optional
-    """
-
-    def __init__(self, name, content, _uid=None, *args, **kwargs):
-        super(Resource, self).__init__(name, _uid=_uid)
-        self.content = content
-
-        # Python2 represents binary as str, no need to convert
-        if type(content) is str and sys.version_info >= (3, 0):
-            content = content.encode("utf-8")
-        elif type(content) is bytes:
-            pass
-        else:
-            raise TypeError("Content can be bytes or str only")
-
-        self.sha256 = hashlib.sha256(content).hexdigest()
+        return cls(
+            name=dict["name"],
+            metadata=metadata,
+            bucket=dict["bucket"],
+            uid=dict["uid"],
+            size=dict.get("size"),  # Backwards compatibility
+            minio=minio,
+        )
 
     @property
-    def size(self):
-        return len(self.content)
-
-    def remove(self, minio):
-        raise LocalResourceCanNotBeRemoved()
-
-    def download(self, minio):
-        raise LocalResourceCanNotBeDownloaded()
-
-    def get_size(self, minio):
-        return self.size
-
-    def _upload(self, minio, bucket):
+    def content(self):
         """
-        This is where we sync with remote, never to be used by user explicitly
-        Should be invoked while uploading task
+        Resource content. Performs download when resource was not loaded before.
+
+        Returns None if resource is local and payload is provided by path.
+        :rtype: Optional[bytes]
         """
-        if self.content is None:
-            raise NoContentException("Resource does not have any content in it")
+        if self._content is None:
+            return self.download()
+        return self._content
 
-        if not minio.bucket_exists(bucket):
-            minio.make_bucket(bucket_name=bucket)
-
-        content = self.content
-
-        # Python2 represents binary as str, no need to convert
-        if type(content) is str and sys.version_info >= (3, 0):
-            content = content.encode("utf-8")
-        elif type(content) is bytes:
-            pass
-        else:
-            raise TypeError("Content can be bytes or str only")
-
-        content = BytesIO(content)
-
-        minio.put_object(bucket, self.uid, content, len(self.content))
-
-    def upload(self, minio, bucket):
+    def unload(self):
         """
-        :param minio: minio instance
-        :type minio: :py:class:`minio.Minio`
-        :param bucket: bucket to download from
-        :type bucket: str
-        :rtype: :py:class:`karton.RemoteResource`
+        Unloads resource object from memory
         """
-        self._upload(minio=minio, bucket=bucket)
-        return RemoteResource(self.name, bucket, _uid=self.uid, flags=self.flags)
+        self._content = None
+
+    def remove(self):
+        """
+        Internal remote resource remove method
+
+        :meta private:
+        """
+        self._minio.remove_object(self.bucket, self.uid)
+
+    def download(self):
+        """
+        Downloads remote resource content from object hub into memory.
+
+        .. code-block:: python
+
+            sample = self.current_task.get_resource("sample")
+
+            # Ensure that resource will be downloaded before it will be
+            # passed to processing method
+            sample.download()
+
+            self.process_sample(sample)
+
+        :rtype: bytes
+        """
+        reader = self._minio.get_object(self.bucket, self.uid)
+        sio = BytesIO(reader.data)
+        self._content = sio.getvalue()
+        return self._content
+
+    def download_to_file(self, path):
+        """
+        Downloads remote resource into file.
+
+        .. code-block:: python
+
+            sample = self.current_task.get_resource("sample")
+
+            sample.download_to_file("sample/sample.exe")
+
+            with open("sample/sample.exe", "rb") as f:
+                contents = f.read()
+        """
+        self._minio.fget_object(self.bucket, self.uid, path)
+
+    @contextlib.contextmanager
+    def download_temporary_file(self):
+        """
+        Downloads remote resource into named temporary file.
+
+        .. code-block:: python
+
+            sample = self.current_task.get_resource("sample")
+
+            with sample.download_temporary_file() as f:
+                contents = f.read()
+                path = f.name
+
+            # Temporary file is deleted after exitting the "with" scope
+
+        :rtype: ContextManager[BinaryIO]
+        """
+        # That tempfile-fu is necessary because minio.fget_object removes file under provided path and
+        # and renames its own part-file with downloaded content under previously deleted path
+        # Weird move, but ok...
+        tmp = tempfile.NamedTemporaryFile(delete=False)
+        tmp.close()
+        try:
+            self.download_to_file(tmp.name)
+            with open(tmp.name, "rb") as f:
+                yield f
+        finally:
+            os.remove(tmp.name)
 
 
-class RemoteDirectoryResource(RemoteResource):
+class DirectoryResourceBase(ResourceBase):
     """
-    Extension of Resource object, allowing for easy interaction with directories
-    self._content stores zipfile raw bytes.
+    Abstract base class for DirectoryResource objects.
+    """
 
-    :param name: name of the resource
+    DIRECTORY_FLAG = "Directory"
+
+    def to_dict(self):
+        data = super(DirectoryResourceBase, self).to_dict()
+        data["flags"] += [DirectoryResourceBase.DIRECTORY_FLAG]
+        return data
+
+
+class LocalDirectoryResource(DirectoryResourceBase, LocalResource):
+    """
+    Resource extension, allowing to pass whole directory as a zipped resource.
+
+    Directories tend to be large in size so it's preferred to operate on temporary file storage.
+    Although if you know that your directories won't be that big: in-memory methods are still
+    supported.
+
+    .. code-block:: python
+
+        # Creating directory resource from path
+        dumps = DirectoryResource("dumps", directory_path="dumps/")
+
+    :param name: Name of the resource (e.g. name of directory)
     :type name: str
-    :param bucket: minio bucket
+    :param directory_path: Path of the resource directory
+    :type directory_path: str
+    :param compression: Compression level (default is zipfile.ZIP_DEFLATED)
+    :type compression: int, optional
+    :param bucket: Alternative Minio bucket for resource
     :type bucket: str, optional
-    :param _uid: uuid
-    :type _uid: str, optional
-    :param sha256: sha256 of object if known
-    :type sha256: str, optional
+    :param metadata: Resource metadata
+    :type metadata: dict, optional
+    """
+
+    def __init__(
+        self,
+        name,
+        directory_path,
+        compression=zipfile.ZIP_DEFLATED,
+        bucket=None,
+        metadata=None,
+    ):
+        super(LocalDirectoryResource, self).__init__(
+            name=name, bucket=bucket, metadata=metadata
+        )
+        self._directory_path = directory_path
+        self._compression = compression
+
+    def _make_zip(self, out_stream):
+        # Recursively zips all files in directory_path keeping relative paths
+        # File is zipped into provided out_stream
+        with zipfile.ZipFile(out_stream, "w", compression=self._compression) as zipf:
+            for root, dirs, files in os.walk(self._directory_path):
+                for name in files:
+                    abs_path = os.path.join(root, name)
+                    zipf.write(
+                        abs_path, os.path.relpath(abs_path, self._directory_path)
+                    )
+
+    def make_zip(self):
+        """
+        Prepares in-memory zip. Useful if you don't want to use temporary file storage
+        during zip preparation for upload.
+
+        Raw zip contents are available via :py:attr:`LocalDirectoryResource.content` property
+
+        .. code-block:: python
+
+            dumps = DirectoryResource("dumps", directory_path="dumps/")
+
+            # Create in-memory zip
+            dumps.make_zip()
+
+            zipf = zipfile.ZipFile(BytesIO(dumps.content))
+            print("Fetched dumps: ", zipf.namelist())
+        """
+        result_stream = BytesIO()
+        self._make_zip(result_stream)
+        self._content = result_stream.getvalue()
+
+    @contextlib.contextmanager
+    def _prepare_zip(self):
+        # Prepares zip file to upload
+        if self._content is not None:
+            # If zip contents are available in memory: let's use them!
+            yield
+        else:
+            try:
+                # If not: let's create temporary file with zipped directory
+                with tempfile.NamedTemporaryFile() as f:
+                    # Create zipfile
+                    self._make_zip(f)
+                    # Flush contents
+                    f.flush()
+                    # Set file path
+                    self._path = f.name
+                    yield
+            finally:
+                # Clean-up (just to be tidy)
+                self._path = None
+
+    def upload(self, minio):
+        """
+        Uploads local resource object to minio.
+
+        :param minio: Minio binding
+        :type minio: :class:`minio.Minio`
+
+        :meta private:
+        """
+        with self._prepare_zip():
+            self._upload(minio)
+
+
+DirectoryResource = LocalDirectoryResource
+
+
+class RemoteDirectoryResource(DirectoryResourceBase, RemoteResource):
+    """
+    Keeps reference to remote directory resource object shared between subsystems via object hub (Minio)
+
+    Inherits from RemoteResource. Contents of this resource are raw ZIP file data.
+
+    Should never be instantiated directly by subsystem, but can be directly passed to outgoing payload.
     """
 
     @contextlib.contextmanager
-    def download_to_temporary_folder(self, minio):
+    def zip_file(self):
         """
-        Context manager for using content of the DirResource, this is the preferred way of getting the contents.
+        Allows to operate on ZipFile object.
 
-        Ensures that the unpacked content is removed after usage.
+        .. code-block:: python
 
-        You probably don't want to use it on your own, rather use Karton.download_to_temporary_folder method
+            dumps = self.current_task.get_resource("dumps")
 
-        :param minio: minio instance
-        :type minio: :py:class:`minio.Minio`
-        :rtype: str
-        :return: path to unpacked contents
+            with dumps.zip_file() as zipf:
+                print("Fetched dumps: ", zipf.namelist())
+
+        By default: method downloads zip into temporary file, which is deleted after
+        leaving the context. If you want to load zip into memory,
+        call :py:meth:`RemoteResource.download` first.
+
+        If you want to pre-download Zip under specified path and open it using zipfile module,
+        you need to do this manually:
+
+        .. code-block:: python
+
+            dumps = self.current_task.get_resource("dumps")
+
+            # Download zip file
+            zip_path = "./dumps.zip"
+            dumps.download_to_file(zip_path)
+
+            zipf = zipfile.Zipfile(zip_path)
+
+        :rtype: ContextManager[zipfile.ZipFile]
         """
-        with tempfile.NamedTemporaryFile() as f:
-            tmp_file = self.download_content_to_file(minio=minio, file_path=f.name)
+        if self._content:
+            yield zipfile.ZipFile(BytesIO(self._content))
+        else:
+            with self.download_temporary_file() as f:
+                yield zipfile.ZipFile(f)
 
-            zip_file = zipfile.ZipFile(tmp_file)
-
-            tmpdir = tempfile.mkdtemp()
-
-            try:
-                zip_file.extractall(tmpdir)
-                yield tmpdir
-            finally:
-                shutil.rmtree(tmpdir)
-
-    def download_zip_file(self, minio):
+    def extract_to_directory(self, path):
         """
-        When contextmanager cannot be used, user should handle zipfile himself any way he likes.
+        Extracts files contained in RemoteDirectoryResource into provided path.
 
-        You probably don't want to use it on your own, rather use Karton.download_zip_file method
-
-        :rtype: :py:class:`zipfile.Zipfile`
-        :return: zipfile object from content
+        By default: method downloads zip into temporary file, which is deleted after
+        extraction. If you want to load zip into memory, call :py:meth:`RemoteDirectoryResource.download`
+        first.
         """
-        resource = self.download(minio=minio)
-        content = BytesIO(resource.content)
-        return zipfile.ZipFile(content)
+        with self.zip_file() as zf:
+            zf.extractall(path)
 
-
-class DirectoryResource(RemoteDirectoryResource, Resource):
-    """
-    Resource specialized in handling directories
-
-    :param name: name of the resource
-    :type name: str
-    :param directory_path: directory to be compressed and used as a minio object later on
-    :type directory_path: str
-    :param bucket: minio bucket
-    :type bucket: str, optional
-    :param _uid: uuid
-    :type _uid: str, optional
-    :param sha256: sha256 of object if known
-    :type sha256: str, optional
-    """
-
-    def __init__(self, name, directory_path, *args, **kwargs):
-        self.directory_path = directory_path
-        content = zip_dir(directory_path).getvalue()
-
-        super(DirectoryResource, self).__init__(name, content, *args, **kwargs)
-
-        self.sha256 = hashlib.sha256(content).hexdigest()
-        self.flags = [ResourceFlagEnum.DIRECTORY]
-
-    def upload(self, minio, bucket):
+    @contextlib.contextmanager
+    def extract_temporary(self):
         """
-        :param minio: minio instance
-        :type minio: :py:class:`minio.Minio`
-        :rtype:
-        :return: RemoteDirectoryResource to use locally
+        Extracts files contained in RemoteDirectoryResource to temporary directory.
+
+        Returns path of directory with extracted files. Directory is recursively deleted after
+        leaving the context.
+
+        .. code-block:: python
+
+            dumps = self.current_task.get_resource("dumps")
+
+            with dumps.extract_temporary() as dumps_path:
+                print("Fetched dumps:", os.listdir(dumps_path))
+
+        By default: method downloads zip into temporary file, which is deleted after
+        extraction. If you want to load zip into memory, call :py:meth:`RemoteDirectoryResource.download`
+        first.
+
+        :rtype: ContextManager[str]
         """
-        self._upload(minio=minio, bucket=bucket)
-        return RemoteDirectoryResource(
-            self.name, bucket, _uid=self.uid, flags=self.flags
-        )
+        tmpdir = tempfile.mkdtemp()
+        try:
+            self.extract_to_directory(tmpdir)
+            yield tmpdir
+        finally:
+            shutil.rmtree(tmpdir)
 
 
-class PayloadBag(dict):
-    def directory_resources(self):
-        """
-        generator for DirectoryResources
-
-        :rtype: Iterator[:py:class:`karton.DirectoryResource`]
-        :return: yields single DirectoryResource
-        """
-        for k, v in self.items():
-            if isinstance(v, RemoteResource) and v.is_directory():
-                yield (k, v)
-
-    def file_resources(self):
-        """
-        generator for normal resources that is without DirectoryResources
-
-        :rtype: Iterator[:py:class:`karton.Resource`]
-        :return: yields single resource (excluding DirectoryResources)
-        """
-        for k, v in self.items():
-            if isinstance(v, RemoteResource) and not v.is_directory():
-                yield (k, v)
-
-    def resources(self):
-        """
-        generator for normal resources - that is without DirectoryResources
-
-        :rtype: Iterator[:py:class:`karton.DirectoryResource`]
-        :return: yields single resource
-        """
-        for k, v in self.items():
-            if isinstance(v, RemoteResource):
-                yield (k, v)
+def remote_resource_from_dict(dict, minio):
+    # Internal deserialization method
+    if RemoteDirectoryResource.DIRECTORY_FLAG in dict.get("flags", []):
+        return RemoteDirectoryResource.from_dict(dict, minio)
+    else:
+        return RemoteResource.from_dict(dict, minio)

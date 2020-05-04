@@ -10,7 +10,7 @@ Producer
     import sys
     from karton import Config, Producer, Task, Resource
 
-    config = Config(os.path.join(os.path.dirname(__file__), "config.ini"))
+    config = Config("karton.ini")
     producer = Producer(config)
 
     filename = sys.argv[1]
