@@ -16,12 +16,15 @@ setup(
     version=version_info["__version__"],
     description="Base library for karton subsystems",
     package_dir={"karton2": "karton"},
-    packages=["karton2"],
+    packages=["karton2", "karton2.services"],
     install_requires=open("requirements.txt").read().splitlines(),
     extras_require={
         ':python_version < "3"': [
             'mock==3.0.5'
         ]
+    },
+    entry_points={
+        'console_scripts': ['karton-system=karton2.services.system:main'],
     },
     classifiers=[
         "Programming Language :: Python",
