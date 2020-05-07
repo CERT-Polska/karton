@@ -1,4 +1,2 @@
 redis
 minio
-python-deploy
-requests
