@@ -329,7 +329,7 @@ class Task(object):
         """
         Add resource to task.
 
-        Alias for :py:meth:`add_resource`
+        Alias for :py:meth:`add_payload`
 
         .. deprecated:: 3.0.0
            Use :meth:`add_payload` instead.
