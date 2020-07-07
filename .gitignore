@@ -1,6 +1,8 @@
 *.pyc
 .idea/
+.vscode/
 venv/
+karton.ini
 config.ini
 docs/_build
 .mypy_cache
