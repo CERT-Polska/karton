@@ -40,7 +40,7 @@ Task routing and data exchange is achieved with the help of **Karton-System** - 
            # Get sample object
            packed_sample = self.current_task.get_resource('sample')
            # Log with self.log
-           self.log.info(f"Hi {packed.name}, let me analyze you!")
+           self.log.info(f"Hi {packed_sample.name}, let me analyze you!")
            ...
            # Send our results for further processing or reporting
            task = Task(
@@ -51,7 +51,7 @@ Task routing and data exchange is achieved with the help of **Karton-System** - 
                   "parent": packed_sample,
                   "sample": Resource(filename, unpacked)
                })
-           self.send_task(t)
+           self.send_task(task)
 
    if __name__ == "__main__":
        # Here comes the main loop
