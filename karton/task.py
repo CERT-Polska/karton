@@ -178,7 +178,7 @@ class Task(object):
                 # Delete conflicting non-persistent payload
                 del self.payload[name]
 
-    def serialize(self):
+    def serialize(self, indent=None):
         """
         Serialize task data into JSON string
 
@@ -204,6 +204,8 @@ class Task(object):
                 "headers": self.headers,
             },
             cls=KartonResourceEncoder,
+            indent=indent,
+            sort_keys=True
         )
 
     def walk_payload_bags(self):
