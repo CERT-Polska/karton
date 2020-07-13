@@ -10,6 +10,8 @@ import tempfile
 import time
 import zipfile
 
+from io import BytesIO
+
 from .karton import Consumer
 from .resource import (
     RemoteResource,
@@ -81,7 +83,7 @@ class TestDirectoryResource(TestResource, RemoteDirectoryResource):
 
     @contextlib.contextmanager
     def zip_file(self):
-        yield zipfile.ZipFile(self._content)
+        yield zipfile.ZipFile(BytesIO(self._content))
 
     def extract_to_directory(self, path):
         with self.zip_file() as zf:
