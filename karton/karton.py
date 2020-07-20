@@ -210,24 +210,28 @@ class Consumer(KartonBase):
 
         self.rs.client_setname(self.identity)
 
-        while not self.shutdown:
-            if self.rs.hget("karton.binds", self.identity) != self._registration:
-                self.log.info("Binds changed, shutting down.")
-                break
+        try:
+            while not self.shutdown:
+                if self.rs.hget("karton.binds", self.identity) != self._registration:
+                    self.log.info("Binds changed, shutting down.")
+                    break
 
-            item = self.rs.blpop(
-                [
-                    self.identity,  # Backwards compatibility, remove after upgrade
-                    "karton.queue.{}:{}".format(TaskPriority.HIGH, self.identity),
-                    "karton.queue.{}:{}".format(TaskPriority.NORMAL, self.identity),
-                    "karton.queue.{}:{}".format(TaskPriority.LOW, self.identity),
-                ],
-                timeout=5,
-            )
+                item = self.rs.blpop(
+                    [
+                        self.identity,  # Backwards compatibility, remove after upgrade
+                        "karton.queue.{}:{}".format(TaskPriority.HIGH, self.identity),
+                        "karton.queue.{}:{}".format(TaskPriority.NORMAL, self.identity),
+                        "karton.queue.{}:{}".format(TaskPriority.LOW, self.identity),
+                    ],
+                    timeout=5,
+                )
 
-            if item:
-                queue, data = item
-                self.internal_process(data)
+                if item:
+                    queue, data = item
+                    self.internal_process(data)
+        except KeyboardInterrupt as e:
+            self.log.info("Hard shutting down!")
+            raise e
 
 
 class LogConsumer(KartonBase):
