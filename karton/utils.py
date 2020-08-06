@@ -3,6 +3,13 @@ import inspect
 import sys
 
 
+def get_user_input():
+    if sys.version_info[0] == 2:
+        return raw_input()  # noqa
+    else:
+        return input()
+
+
 def get_function_arg_num(fun):
     if sys.version_info[0] == 2:
         return len(inspect.getargspec(fun).args)

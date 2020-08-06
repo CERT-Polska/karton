@@ -24,7 +24,10 @@ setup(
         ]
     },
     entry_points={
-        'console_scripts': ['karton-system=karton2.services.system:main'],
+        'console_scripts': [
+            'karton-system=karton2.services.system:main',
+            'karton=karton2.main:main'
+        ],
     },
     classifiers=[
         "Programming Language :: Python",
