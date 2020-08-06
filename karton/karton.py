@@ -9,7 +9,7 @@ import time
 from .base import KartonBase
 from .resource import LocalResource
 from .task import Task, TaskState, TaskPriority
-from .utils import GracefulKiller
+from .utils import GracefulKiller, get_function_arg_num
 
 from .__version__ import __version__
 
@@ -143,7 +143,7 @@ class Consumer(KartonBase):
         self.shutdown = True
 
     @abc.abstractmethod
-    def process(self):
+    def process(self, *args):
         """
         Task processing method.
 
@@ -170,7 +170,12 @@ class Consumer(KartonBase):
             self.declare_task_state(
                 self.current_task, TaskState.STARTED, identity=self.identity
             )
-            self.process()
+            # check if the process function expects the current task or not
+            if get_function_arg_num(self.process) == 0:
+                self.process()
+            else:
+                self.process(self.current_task)
+
             self.log.info("Task done - %s", self.current_task.uid)
         except Exception:
             self.log.exception(
