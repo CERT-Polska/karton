@@ -1,4 +1,13 @@
 import signal
+import inspect
+import sys
+
+
+def get_function_arg_num(fun):
+    if sys.version_info[0] == 2:
+        return len(inspect.getargspec(fun).args)
+    else:
+        return len(inspect.signature(fun).parameters)
 
 
 class GracefulKiller:
