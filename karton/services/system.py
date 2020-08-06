@@ -2,12 +2,11 @@ import argparse
 import json
 import time
 
+from ..__version__ import __version__
 from ..base import KartonBase
 from ..config import Config
-from ..task import Task, TaskState, TaskPriority
+from ..task import Task, TaskPriority, TaskState
 from ..utils import GracefulKiller
-
-from ..__version__ import __version__
 
 
 class SystemService(KartonBase):
@@ -201,13 +200,9 @@ class SystemService(KartonBase):
 def main():
     parser = argparse.ArgumentParser(description="Karton message broker.")
     parser.add_argument("--setup-bucket", action="store_true", help="Create missing bucket in Minio")
-    parser.add_argument("--version", action="store_true", help="Show version of Karton library")
+    parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("--config-file", help="Alternative configuration path")
     args = parser.parse_args()
-
-    if args.version:
-        print(__version__)
-        return
 
     config = Config(args.config_file)
     service = SystemService(config)
