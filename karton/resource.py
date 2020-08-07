@@ -118,11 +118,13 @@ class LocalResource(ResourceBase):
     :type bucket: str, optional
     :param metadata: Resource metadata
     :type metadata: dict, optional
+    :param uid: Alternative Minio resource id
+    :type uid: str, optional
     """
 
-    def __init__(self, name, content=None, path=None, bucket=None, metadata=None):
+    def __init__(self, name, content=None, path=None, bucket=None, metadata=None, uid=None):
         super(LocalResource, self).__init__(
-            name, content=content, path=path, bucket=bucket, metadata=metadata
+            name, content=content, path=path, bucket=bucket, metadata=metadata, uid=uid
         )
 
     def _upload(self, minio):
