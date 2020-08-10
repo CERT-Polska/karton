@@ -23,7 +23,7 @@ class TaskPriority(object):
 
 class Task(object):
     """
-    Task representation with resources and metadata.
+    Task representation with headers and resources.
 
     :param headers: Routing information for other systems, this is what allows for evaluation of given \
                     system usefulness for given task. Systems filter by these.
