@@ -182,7 +182,7 @@ Full-blown example below.
             # Producer part
             t = Task({"type": "sample"})
             t.add_resource("sample", Resource(filename, content))
-            self.send_task(t)
+            self.send_task(task)
 
 
 
