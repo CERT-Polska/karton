@@ -165,7 +165,7 @@ Full-blown example below.
             # Download remote resource only when content is needed
             analysis = RemoteDirectoryResource.from_dict(analysis)
             ...
-            with self.download_to_temporary_folder(analysis) as analysis_dir:
+            with analysis.extract_temporary() as analysis_dir:
                 ...
 
         # Method called by Karton library
