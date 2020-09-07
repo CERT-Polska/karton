@@ -2,11 +2,11 @@ import argparse
 import json
 import time
 
-from ..__version__ import __version__
-from ..base import KartonBase
-from ..config import Config
-from ..task import Task, TaskPriority, TaskState
-from ..utils import GracefulKiller
+from karton.core.__version__ import __version__
+from karton.core.base import KartonBase
+from karton.core.config import Config
+from karton.core.task import Task, TaskPriority, TaskState
+from karton.core.utils import GracefulKiller
 
 
 class SystemService(KartonBase):
