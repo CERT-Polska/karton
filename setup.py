@@ -6,17 +6,17 @@ except ImportError:
 
 import os
 
-version_path = os.path.join(os.path.dirname(__file__), "karton/__version__.py")
+version_path = os.path.join(os.path.dirname(__file__), "karton/core/__version__.py")
 version_info = {}
 with open(version_path) as f:
     exec(f.read(), version_info)
 
 setup(
-    name="karton2",
+    name="karton-core",
     version=version_info["__version__"],
-    description="Base library for karton subsystems",
-    package_dir={"karton2": "karton"},
-    packages=["karton2", "karton2.services"],
+    description="Distributed malware analysis orchestration framework",
+    namespace_packages=["karton"],
+    packages=["karton.core", "karton.services"],
     install_requires=open("requirements.txt").read().splitlines(),
     extras_require={
         ':python_version < "3"': [
@@ -25,8 +25,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'karton-system=karton2.services.system:main',
-            'karton=karton2.main:main'
+            'karton-system=karton.system:main',
+            'karton=karton.core.main:main'
         ],
     },
     classifiers=[
