@@ -13,7 +13,7 @@ TBD
 
 .. code-block:: python
 
-    from karton2 import Karton
+    from karton.core import Karton
     import json
 
 

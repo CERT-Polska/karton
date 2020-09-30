@@ -1,52 +1,52 @@
 Karton API reference
 ====================
 
-karton.Producer, karton.Consumer
---------------------------------
+karton.core.Producer, karton.core.Consumer
+------------------------------------------
 
 .. automodule:: karton
 
-.. autoclass:: karton.Producer
+.. autoclass:: karton.core.Producer
    :members:
    :inherited-members:
 
-.. autoclass:: karton.Consumer
+.. autoclass:: karton.core.Consumer
    :members:
    :inherited-members:
 
-.. autoclass:: karton.Karton
+.. autoclass:: karton.core.Karton
    :members:
 
-karton.Resource, karton.DirectoryResource
------------------------------------------
+karton.core.Resource, karton.core.DirectoryResource
+---------------------------------------------------
 
-.. automodule:: karton.resource
+.. automodule:: karton.core.resource
 
-.. inheritance-diagram:: karton.resource
-   :top-classes: karton.resource.ResourceBase
+.. inheritance-diagram:: karton.core.resource
+   :top-classes: karton.core.resource.ResourceBase
 
-.. autoclass:: karton.resource.Resource
+.. autoclass:: karton.core.resource.Resource
 
-.. autoclass:: karton.resource.LocalResource
-   :members:
-   :inherited-members:
-
-.. autoclass:: karton.resource.RemoteResource
+.. autoclass:: karton.core.resource.LocalResource
    :members:
    :inherited-members:
 
-.. autoclass:: karton.resource.DirectoryResource
+.. autoclass:: karton.core.resource.RemoteResource
+   :members:
+   :inherited-members:
 
-.. autoclass:: karton.resource.LocalDirectoryResource
+.. autoclass:: karton.core.resource.DirectoryResource
+
+.. autoclass:: karton.core.resource.LocalDirectoryResource
    :members:
 
-.. autoclass:: karton.resource.RemoteDirectoryResource
+.. autoclass:: karton.core.resource.RemoteDirectoryResource
    :members:
 
-karton.Task
------------
+karton.core.Task
+----------------
 
-.. automodule:: karton.task
+.. automodule:: karton.core.task
 
-.. autoclass:: karton.task.Task
+.. autoclass:: karton.core.task.Task
    :members:
