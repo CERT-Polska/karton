@@ -30,7 +30,7 @@ class Producer(KartonBase):
 
     .. code-block:: python
 
-        from karton import Producer
+        from karton.core import Producer
 
         producer = Producer(identity="karton.mwdb")
         task = Task(

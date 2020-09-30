@@ -68,7 +68,7 @@ This is also the (hacky) way to remove persistent queue from the system. Just la
 
 .. code-block:: python
 
-    from karton2 import Karton
+    from karton.core import Karton
 
     class DeleteThisConsumer(Karton):
         identity = "karton.identity-to-be-removed"

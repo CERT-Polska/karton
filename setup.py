@@ -16,7 +16,7 @@ setup(
     version=version_info["__version__"],
     description="Distributed malware analysis orchestration framework",
     namespace_packages=["karton"],
-    packages=["karton.core", "karton.services"],
+    packages=["karton.core", "karton.system"],
     install_requires=open("requirements.txt").read().splitlines(),
     extras_require={
         ':python_version < "3"': [
