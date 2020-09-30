@@ -26,7 +26,7 @@ To use karton you have to provide class that inherits from Karton.
 
 
 ```python
-from karton import Karton, Task, Resource
+from karton.core import Karton, Task, Resource
 
 class GenericUnpacker(Karton):
     """

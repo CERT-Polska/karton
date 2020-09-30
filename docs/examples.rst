@@ -8,7 +8,7 @@ Producer
 .. code-block:: python
 
     import sys
-    from karton import Config, Producer, Task, Resource
+    from karton.core import Config, Producer, Task, Resource
 
     config = Config("karton.ini")
     producer = Producer(config)
@@ -41,7 +41,7 @@ Elements in the list are OR'ed and items inside dicts are AND'ed.
 .. code-block:: python
 
     import sys
-    from karton import Config, Consumer, Task, Resource
+    from karton.core import Config, Consumer, Task, Resource
 
     class Reporter(Consumer):
         identity = "karton.reporter"
@@ -144,7 +144,7 @@ Full-blown example below.
 
 .. code-block:: python
 
-    from karton ...
+    from karton.core ...
 
     class SomeNameKarton(Karton):
         # Define identity and filters as you would in the Consumer class

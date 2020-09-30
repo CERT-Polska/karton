@@ -21,7 +21,7 @@ Task routing and data exchange is achieved with the help of **Karton-System** - 
 
 .. code-block:: python
 
-   from karton2 import Karton, Task, Resource
+   from karton.core import Karton, Task, Resource
 
    class GenericUnpacker(Karton):
        """
@@ -64,6 +64,7 @@ Task routing and data exchange is achieved with the help of **Karton-System** - 
 
    what_new
    getting_started
+   examples
    task_headers_payloads
    advanced_concepts
    unit_tests
