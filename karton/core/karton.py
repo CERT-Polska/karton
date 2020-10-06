@@ -138,6 +138,9 @@ class Consumer(KartonBase):
         self.shutdown = False
         self.killer = GracefulKiller(self.graceful_shutdown)
 
+        self._pre_hooks = []
+        self._post_hooks = []
+
     def graceful_shutdown(self):
         self.log.info("Gracefully shutting down!")
         self.shutdown = True
@@ -170,11 +173,21 @@ class Consumer(KartonBase):
             self.declare_task_state(
                 self.current_task, TaskState.STARTED, identity=self.identity
             )
+
+            self._run_pre_hooks()
+
             # check if the process function expects the current task or not
-            if get_function_arg_num(self.process) == 0:
-                self.process()
-            else:
-                self.process(self.current_task)
+            try:
+                if get_function_arg_num(self.process) == 0:
+                    self.process()
+                else:
+                    self.process(self.current_task)
+                saved_exception = None
+            except Exception as exc:
+                saved_exception = exc
+                raise
+            finally:
+                self._run_post_hooks(saved_exception)
 
             self.log.info("Task done - %s", self.current_task.uid)
         except Exception:
@@ -195,6 +208,54 @@ class Consumer(KartonBase):
             "filters": self.filters,
             "persistent": self.persistent
         }, sort_keys=True)
+
+    def add_pre_hook(self, callback, name=None):
+        """
+        Add a function to be called before processing each task.
+
+        :param callback: Function of the form ``callback(task)`` where ``task``
+            is a :class:`karton.Task`
+        :type callback: function
+        :param name: Name of the pre-hook
+        :type name: str, optional
+        """
+        self._pre_hooks.append((name, callback))
+
+    def add_post_hook(self, callback, name=None):
+        """
+        Add a function to be called after processing each task.
+
+        :param callback: Function of the form ``callback(task, exception)``
+            where ``task`` is a :class:`karton.Task` and ``exception`` is
+            an exception thrown by the :meth:`karton.Consumer.process` function
+            or ``None``.
+        :type callback: function
+        :param name: Name of the post-hook
+        :type name: str, optional
+        """
+        self._post_hooks.append((name, callback))
+
+    def _run_pre_hooks(self):
+        """ Run registered preprocessing hooks """
+        for name, callback in self._pre_hooks:
+            try:
+                callback(self.current_task)
+            except Exception:
+                if name:
+                    self.log.exception("Pre-hook (%s) failed", name)
+                else:
+                    self.log.exception("Pre-hook failed")
+
+    def _run_post_hooks(self, exception):
+        """ Run registered postprocessing hooks """
+        for name, callback in self._post_hooks:
+            try:
+                callback(self.current_task, exception)
+            except Exception:
+                if name:
+                    self.log.exception("Post-hook (%s) failed", name)
+                else:
+                    self.log.exception("Post-hook failed")
 
     def loop(self):
         """
