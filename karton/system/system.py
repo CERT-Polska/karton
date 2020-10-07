@@ -199,7 +199,7 @@ class SystemService(KartonBase):
 
 def main():
     parser = argparse.ArgumentParser(description="Karton message broker.")
-    parser.add_argument("--setup-bucket", action="store_true", help="Create missing bucket in Minio")
+    parser.add_argument("--setup-bucket", action="store_true", help="Create missing bucket in MinIO")
     parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("--config-file", help="Alternative configuration path")
     args = parser.parse_args()

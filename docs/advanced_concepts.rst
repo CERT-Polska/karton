@@ -32,7 +32,7 @@ Because task headers can be accepted by more than one consumer - task need to be
 
 Task life cycle
 ```````````````
-When :py:meth:`karton.Producer.send_task` is called: **unrouted task** starts its journey in `Declared` state. Task is registered in Redis with references to the Resource objects. After task declaration, :class:`karton.LocalResource` objects are uploaded to Minio. Finally, task identifier is placed in **unrouted tasks queue** and is waiting for **Karton-System** to route it to appropriate consumers.
+When :py:meth:`karton.Producer.send_task` is called: **unrouted task** starts its journey in `Declared` state. Task is registered in Redis with references to the Resource objects. After task declaration, :class:`karton.LocalResource` objects are uploaded to MinIO. Finally, task identifier is placed in **unrouted tasks queue** and is waiting for **Karton-System** to route it to appropriate consumers.
 
 <image>
 
@@ -274,7 +274,7 @@ Status tracker part:
     while True:
         for analysis_id in redis_queue.hkeys("sandbox-tasks"):
             task_uid = self.rs.hget("sandbox-tasks", analysis_id)
-            # This will fetch the task_uid from redis and restart processing
+            # This will fetch the task_uid from Redis and restart processing
             # inside our SandboxResultProcessor
             sandbox_processor.analysis_id = analysis_id
             sandbox_processor.internal_process(task_uid)

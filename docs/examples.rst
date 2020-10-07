@@ -185,6 +185,7 @@ Full-blown example below.
             self.send_task(task)
 
 
+.. _example-overriding-config:
 
 Overriding Config
 -------------------
