@@ -96,7 +96,7 @@ class LocalResource(ResourceBase):
     """
     Represents local resource with arbitrary binary data e.g. file contents.
 
-    Local resources will be uploaded to object hub (Minio) during
+    Local resources will be uploaded to object hub (MinIO) during
     task dispatching.
 
     .. code-block:: python
@@ -114,11 +114,11 @@ class LocalResource(ResourceBase):
     :type content: bytes or str
     :param path: Path of file with resource content
     :type path: str
-    :param bucket: Alternative Minio bucket for resource
+    :param bucket: Alternative MinIO bucket for resource
     :type bucket: str, optional
     :param metadata: Resource metadata
     :type metadata: dict, optional
-    :param uid: Alternative Minio resource id
+    :param uid: Alternative MinIO resource id
     :type uid: str, optional
     """
 
@@ -149,7 +149,7 @@ Resource = LocalResource
 
 class RemoteResource(ResourceBase):
     """
-    Keeps reference to remote resource object shared between subsystems via object hub (Minio)
+    Keeps reference to remote resource object shared between subsystems via object hub (MinIO)
 
     Should never be instantiated directly by subsystem, but can be directly passed to outgoing payload.
     """
@@ -320,7 +320,7 @@ class LocalDirectoryResource(DirectoryResourceBase, LocalResource):
     :type directory_path: str
     :param compression: Compression level (default is zipfile.ZIP_DEFLATED)
     :type compression: int, optional
-    :param bucket: Alternative Minio bucket for resource
+    :param bucket: Alternative MinIO bucket for resource
     :type bucket: str, optional
     :param metadata: Resource metadata
     :type metadata: dict, optional
@@ -411,7 +411,7 @@ DirectoryResource = LocalDirectoryResource
 
 class RemoteDirectoryResource(DirectoryResourceBase, RemoteResource):
     """
-    Keeps reference to remote directory resource object shared between subsystems via object hub (Minio)
+    Keeps reference to remote directory resource object shared between subsystems via object hub (MinIO)
 
     Inherits from RemoteResource. Contents of this resource are raw ZIP file data.
 
