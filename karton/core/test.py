@@ -249,7 +249,7 @@ class KartonMock(object):
 
     @property
     def minio(self):
-        raise RuntimeError("Karton shouldn't interact directly with Minio")
+        raise RuntimeError("Karton shouldn't interact directly with MinIO")
 
     @property
     def rs(self):

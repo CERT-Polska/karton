@@ -2,7 +2,7 @@
 
 ![LOGO](/logo/logo.png)
 
-Distributed malware processing framework based on Python, Redis, Splunk and Minio.
+Distributed malware processing framework based on Python, Redis, Splunk and MinIO.
 
 ### The idea
 

@@ -59,7 +59,7 @@ The bad news (for porting):
     
       If you need to check whether your resource is directory, use :code:`isinstance(resource, DirectoryResourceBase)` instead.
 
-    - Remote resources are now lazy-objects bound with Minio, so we can directly get the contents instead of using proxy methods.
+    - Remote resources are now lazy-objects bound with MinIO, so we can directly get the contents instead of using proxy methods.
 
       Code from 2.x:
 
