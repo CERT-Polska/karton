@@ -15,9 +15,9 @@ class Config(object):
 
     Loads configuration from paths specified below (in provided order):
 
-    - /etc/karton/karton.ini (global)
-    - ~/.config/karton/karton.ini (user local)
-    - ./karton.ini (subsystem local)
+    - ``/etc/karton/karton.ini`` (global)
+    - ``~/.config/karton/karton.ini`` (user local)
+    - ``./karton.ini`` (subsystem local)
 
     It is also possible to pass configuration via environment variables.
     Any variable named KARTON_FOO_BAR is equivalent to setting 'bar' variable
