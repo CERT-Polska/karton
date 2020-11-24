@@ -161,6 +161,7 @@ By default - configuration is searched in the following locations (by searching 
 - :code:`/etc/karton/karton.ini`
 - :code:`~/.config/karton/karton.ini`
 - :code:`./karton.ini`
+- environment variables
 
 Each next level overrides and merges with the values loaded from the previous path. It means that we can provide karton-wide configuration and specialized instance-wide extended configuration specific for subsystem.
 

@@ -50,3 +50,9 @@ karton.core.Task
 
 .. autoclass:: karton.core.task.Task
    :members:
+
+
+karton.core.Config
+------------------
+
+.. autoclass:: karton.core.config.Config
