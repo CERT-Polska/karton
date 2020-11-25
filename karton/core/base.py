@@ -1,5 +1,6 @@
 import abc
 import json
+import logging
 
 from minio import Minio
 from redis import StrictRedis
@@ -25,7 +26,11 @@ class KartonBase(ABC):
 
         self.current_task = None
         self.log_handler = KartonLogHandler(rs=self.rs)
-        self.log = self.log_handler.get_logger(self.identity)
+        log_level = logging.INFO
+        if self.config.config.has_section("logging"):
+            log_level = self.config["logging"].get("level", logging.INFO)
+
+        self.log = self.log_handler.get_logger(self.identity, level=log_level)
 
         self.minio = Minio(
             self.config.minio_config["address"],
