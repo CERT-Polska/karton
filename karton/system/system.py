@@ -9,6 +9,10 @@ from karton.core.task import Task, TaskPriority, TaskState
 from karton.core.utils import GracefulKiller
 
 
+METRICS_ASSIGNED = "karton.metrics.assigned"
+METRICS_GARBAGE_COLLECTED = "karton.metrics.garbage-collected"
+
+
 class SystemService(KartonBase):
     """
     Message broker and garbage collector.
@@ -64,13 +68,14 @@ class SystemService(KartonBase):
         current_time = time.time()
         for task in tasks:
             root_tasks.add(task.root_uid)
+            will_delete = False
             if (
                     task.status == TaskState.DECLARED and
                     task.uid not in enqueued_tasks and
                     task.last_update is not None and
                     current_time > task.last_update + self.TASK_DISPATCHED_TIMEOUT
             ):
-                self.rs.delete("karton.task:" + task.uid)
+                will_delete = True
                 self.log.warning("Task %s is in Dispatched state more than %d seconds. Killed. (origin: %s)",
                                  task.uid, self.TASK_DISPATCHED_TIMEOUT, task.headers.get("origin", "<unknown>"))
             elif (
@@ -80,12 +85,16 @@ class SystemService(KartonBase):
             ):
                 # todo: Asynchronic tasks are just dispatched to another (system) queue
                 # todo: Maybe these asynchronic things are just bad idea?
-                self.rs.delete("karton.task:" + task.uid)
+                will_delete = True
                 self.log.warning("Task %s is in Started state more than %d seconds. Killed. (receiver: %s)",
                                  task.uid, self.TASK_STARTED_TIMEOUT, task.headers.get("receiver", "<unknown>"))
             elif task.status == TaskState.FINISHED:
-                self.rs.delete("karton.task:" + task.uid)
+                will_delete = True
                 self.log.debug("GC: Finished task %s", task.uid)
+            if will_delete:
+                self.rs.delete("karton.task:" + task.uid)
+                receiver = task.headers.get("receiver", "unknown")
+                self.rs.hincrby(METRICS_GARBAGE_COLLECTED, receiver, 1)
             else:
                 running_root_tasks.add(task.root_uid)
         for finished_root_task in root_tasks.difference(running_root_tasks):
@@ -155,6 +164,7 @@ class SystemService(KartonBase):
                     routed_task_body = routed_task.serialize()
                     self.rs.set("karton.task:" + routed_task.uid, routed_task_body)
                     self.rs.rpush("karton.queue.{}:{}".format(task.priority, identity), routed_task.uid)
+                    self.rs.hincrby(METRICS_ASSIGNED, identity, 1)
                     self.declare_task_state(routed_task, TaskState.SPAWNED, identity=identity)
                     # Matched at least one bind: go to next identity
                     break
