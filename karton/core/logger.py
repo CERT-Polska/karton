@@ -44,10 +44,14 @@ class KartonLogHandler(logging.Handler):
 
         self.rs.lpush(LOGS_QUEUE, json.dumps(log_line))
 
-    def get_logger(self, identity):
+    def get_logger(self, identity, level=logging.INFO):
+        log_level = level
+        if type(log_level) is str and log_level.isdigit():
+            log_level = int(log_level)
+
         # Intentionally not using getLogger because we don't want to create singletons!
         logger = logging.Logger(identity or "karton")
-        logger.setLevel(logging.DEBUG)
+        logger.setLevel(log_level)
         stream_handler = logging.StreamHandler()
         stream_handler.setFormatter(
             logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s")
