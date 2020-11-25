@@ -1,8 +1,10 @@
 import json
 import uuid
+import warnings
 
 from .resource import ResourceBase, remote_resource_from_dict
 
+warnings.simplefilter("once", DeprecationWarning)
 
 class TaskState(object):
     """Enum for task state"""
@@ -343,6 +345,8 @@ class Task(object):
         :type persistent: bool
         :param persistent: flag if the param should be persistent
         """
+        warnings.warn("add_resource is deprecated, use add_payload instead",
+                      DeprecationWarning, stacklevel=2)
         self.add_payload(name, resource, persistent)
 
     def get_payload(self, name, default=None):
