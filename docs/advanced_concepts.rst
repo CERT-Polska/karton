@@ -30,8 +30,17 @@ Because task headers can be accepted by more than one consumer - task need to be
     Currently we don't keep the relationship between routed and unrouted task identifier, so there could be additional difficulty in task flow tracking when Kartonik spawns more than one task (**parent_uid** will be the same for all of them)
 
 
+Handling logging
+----------------
+By default, all systems inheriting from :py:meth:`karton.core.KartonBase` will have a custom :py:meth:`logging.Logger` instance exposed as :py:meth:`log`. It deliver all logged messages to a queue on the central Redis database.
+
+In order to store the logs into a more persistent storage like Splunk or Rsyslog you have to implement a service that will consume the log entries and send them to the final database, for an example of such service see :ref:`example-consuming-logs`.
+
+The logging level can be configured using the standard karton config and setting `level` in the `logging` section to appropriate level like :code:`"DEBUG"`, :code:`"INFO"` or :code:`"ERROR"`.
+
+
 Task life cycle
-```````````````
+---------------
 When :py:meth:`karton.Producer.send_task` is called: **unrouted task** starts its journey in `Declared` state. Task is registered in Redis with references to the Resource objects. After task declaration, :class:`karton.LocalResource` objects are uploaded to MinIO. Finally, task identifier is placed in **unrouted tasks queue** and is waiting for **Karton-System** to route it to appropriate consumers.
 
 <image>

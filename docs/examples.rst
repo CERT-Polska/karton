@@ -188,7 +188,7 @@ Full-blown example below.
 .. _example-overriding-config:
 
 Overriding Config
--------------------
+-----------------
 Popular use case is to have another custom configuration in addition to the one needed for karton to work.
 
 This can be easily done by overriding `Config` class and using that for `Karton` initialization.
@@ -211,3 +211,39 @@ This can be easily done by overriding `Config` class and using that for `Karton`
                     self.mwdb_config["password"])
             return mwdb
 
+
+.. _example-consuming-logs:
+
+Log consumer
+------------
+
+.. code-block:: python
+
+    class RandomLoggerService(KartonBase):
+        identity = "karton.random-logger"
+        persistent = True
+
+        def graceful_shutdown(self) -> None:
+            self.log.info("Gracefully shutting down!")
+            self.shutdown = True
+
+        def loop(self) -> None:
+            self.log.info(f"Service {self.identity} started")
+
+            while not self.shutdown:
+                data = self.rs.blpop("karton.logs")
+                if data:
+                    _, body = data
+                    try:
+                        if not isinstance(body, str):
+                            body = body.decode("utf-8")
+                        body = json.loads(body)
+                        if "task" in body and isinstance(body["task"], str):
+                            body["task"] = json.loads(body["task"])
+                        submit_log(event=json.dumps(body))
+                    except Exception as e:
+                        """
+                        This is log handler exception, so DO NOT USE self.log HERE!
+                        """
+                        import traceback
+                        traceback.print_exc()
