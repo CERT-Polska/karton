@@ -124,7 +124,7 @@ class LocalResource(ResourceBase):
 
     def __init__(self, name, content=None, path=None, bucket=None, metadata=None, uid=None):
         super(LocalResource, self).__init__(
-            name, content=content, path=path, bucket=bucket, metadata=metadata, uid=uid
+            name, content=content, path=path, bucket=bucket, metadata=metadata, _uid=uid
         )
 
     def _upload(self, minio):
