@@ -2,11 +2,14 @@
 Base library for karton subsystems.
 """
 import abc
+import argparse
 import contextlib
 import json
+import textwrap
 import time
 
 from .base import KartonBase
+from .config import Config
 from .resource import LocalResource
 from .task import Task, TaskState, TaskPriority
 from .utils import GracefulKiller, get_function_arg_num
@@ -130,6 +133,7 @@ class Consumer(KartonBase):
 
     filters = None
     persistent = True
+    version = None
 
     def __init__(self, config=None, identity=None):
         super(Consumer, self).__init__(config=config, identity=identity)
@@ -298,6 +302,40 @@ class Consumer(KartonBase):
         except KeyboardInterrupt as e:
             self.log.info("Hard shutting down!")
             raise e
+
+    # Consumer service CLI methods
+
+    @classmethod
+    def args_description(cls):
+        """
+        Returns short description for argument parser.
+        """
+        if not cls.__doc__:
+            return ""
+        return textwrap.dedent(cls.__doc__).strip().splitlines()[0]
+
+    @classmethod
+    def args_parser(cls):
+        """
+        Returns ArgumentParser for main() class method.
+
+        Extend this method if you want to add more arguments.
+        """
+        parser = argparse.ArgumentParser(description=cls.args_description())
+        parser.add_argument("--version", action="version", version=cls.version)
+        parser.add_argument("--config-file", help="Alternative configuration path")
+        return parser
+
+    @classmethod
+    def main(cls):
+        """
+        Main method invoked from CLI.
+        """
+        parser = cls.args_parser()
+        args = parser.parse_args()
+        config = Config(args.config_file)
+        service = cls(config)
+        service.loop()
 
 
 class LogConsumer(KartonBase):
