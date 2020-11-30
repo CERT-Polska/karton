@@ -262,9 +262,12 @@ class Consumer(KartonBase):
         Blocking loop that consumes tasks and runs :py:meth:`karton.Consumer.process` as a handler
         """
         self.log.info("Service %s started", self.identity)
-        old_registration = self.rs.hset(
-            "karton.binds", self.identity, self._registration
-        )
+
+        # get the old binds and set the new ones atomically
+        with self.rs.pipeline(transaction=True) as pipe:
+            pipe.hget("karton.binds", self.identity)
+            pipe.hset("karton.binds", self.identity, self._registration)
+            old_registration, _ = pipe.execute()
 
         if not old_registration:
             self.log.info("Service binds created.")
