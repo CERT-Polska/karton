@@ -13,8 +13,12 @@ from .utils import GracefulKiller, get_function_arg_num
 
 from .__version__ import __version__
 
+
 TASKS_QUEUE = "karton.tasks"
 TASK_PREFIX = "karton.task:"
+METRICS_PRODUCED = "karton.metrics.produced"
+METRICS_CONSUMED = "karton.metrics.consumed"
+METRICS_ERRORED = "karton.metrics.errored"
 
 
 class Producer(KartonBase):
@@ -86,6 +90,7 @@ class Producer(KartonBase):
 
         # Add task to TASKS_QUEUE
         self.rs.rpush(TASKS_QUEUE, task.uid)
+        self.rs.hincrby(METRICS_PRODUCED, self.identity, 1)
         return True
 
     @contextlib.contextmanager
@@ -191,10 +196,12 @@ class Consumer(KartonBase):
 
             self.log.info("Task done - %s", self.current_task.uid)
         except Exception:
+            self.rs.hincrby(METRICS_ERRORED, self.identity, 1)
             self.log.exception(
                 "Failed to process task - %s", self.current_task.uid
             )
         finally:
+            self.rs.hincrby(METRICS_CONSUMED, self.identity, 1)
             if not self.current_task.is_asynchronic():
                 self.declare_task_state(
                     self.current_task, TaskState.FINISHED, identity=self.identity,
