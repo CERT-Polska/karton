@@ -34,7 +34,7 @@ class ResourceBase(object):
         sha256 = sha256 or metadata.get("sha256")
 
         # flag indicating whether we have to calculate the resource sha256 inside constructor
-        calculate_hash = not bool(sha256) and not _skip_sha256
+        calculate_hash = sha256 is not None and not _skip_sha256
 
         if content and path:
             raise ValueError("Can't set both path and content for resource")
@@ -107,7 +107,7 @@ class ResourceBase(object):
         """
         sha256 = self.metadata.get("sha256")
         if sha256 is None:
-            raise Exception("Resource is missing sha256")
+            raise ValueError("Resource is missing sha256")
         return sha256
 
     def to_dict(self):
