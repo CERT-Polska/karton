@@ -5,6 +5,7 @@ import sys
 import tempfile
 import uuid
 import zipfile
+import hashlib
 
 from io import BytesIO
 
@@ -21,12 +22,19 @@ class ResourceBase(object):
         path=None,
         bucket=None,
         metadata=None,
+        sha256=None,
         _uid=None,
         _size=None,
+        _skip_sha256=False
     ):
         self.name = name
         self.bucket = bucket
         self.metadata = metadata or {}
+        # the sha256 identifier can be passed as an argument or inside the metadata
+        sha256 = sha256 or metadata.get("sha256")
+
+        # flag indicating whether we have to calculate the resource sha256 inside constructor
+        calculate_hash = not bool(sha256) and not _skip_sha256
 
         if content and path:
             raise ValueError("Can't set both path and content for resource")
@@ -34,13 +42,24 @@ class ResourceBase(object):
             if not os.path.isfile(path):
                 raise IOError("Path {path} doesn't exist or is not a file"
                               .format(path=path))
+            if calculate_hash:
+                with open(path, "rb") as f:
+                    sha256 = hashlib.sha256(f.read())
         elif content:
             if type(content) is str and sys.version_info >= (3, 0):
                 content = content.encode()
             elif type(content) is not bytes:
                 raise TypeError("Content can be bytes or str only")
+            if calculate_hash:
+                sha256 = hashlib.sha256(content)
 
         # Empty Resource is possible here (e.g. DirectoryResource doesn't have immediate content)
+
+        # All normal Resources have to have a sha256 value that identifies them
+        if sha256 is None and not _skip_sha256:
+            raise Exception("Trying to create a new resource without a sha256 identifier")
+
+        self.metadata["sha256"] = sha256
 
         self._uid = _uid or str(uuid.uuid4())
         self._content = content
@@ -78,6 +97,18 @@ class ResourceBase(object):
             elif self._content:
                 self._size = len(self._content)
         return self._size
+
+    @property
+    def sha256(self):
+        """
+        Resource sha256
+
+        :rtype: str
+        """
+        sha256 = self.metadata.get("sha256")
+        if sha256 is None:
+            raise Exception("Resource is missing sha256")
+        return sha256
 
     def to_dict(self):
         # Internal serialization method
@@ -122,9 +153,9 @@ class LocalResource(ResourceBase):
     :type uid: str, optional
     """
 
-    def __init__(self, name, content=None, path=None, bucket=None, metadata=None, uid=None):
+    def __init__(self, name, content=None, path=None, bucket=None, metadata=None, uid=None, sha256=None):
         super(LocalResource, self).__init__(
-            name, content=content, path=path, bucket=bucket, metadata=metadata, _uid=uid
+            name, content=content, path=path, bucket=bucket, metadata=metadata, _sha256=sha256, uid=uid
         )
 
     def _upload(self, minio):
@@ -155,10 +186,10 @@ class RemoteResource(ResourceBase):
     """
 
     def __init__(
-        self, name, bucket=None, metadata=None, uid=None, size=None, minio=None
+        self, name, bucket=None, metadata=None, uid=None, size=None, minio=None, sha256=None
     ):
         super(RemoteResource, self).__init__(
-            name, bucket=bucket, metadata=metadata, _uid=uid, _size=size
+            name, bucket=bucket, metadata=metadata, sha256=sha256, _uid=uid, _size=size
         )
         self._minio = minio
 
@@ -335,7 +366,7 @@ class LocalDirectoryResource(DirectoryResourceBase, LocalResource):
         metadata=None,
     ):
         super(LocalDirectoryResource, self).__init__(
-            name=name, bucket=bucket, metadata=metadata
+            name=name, bucket=bucket, metadata=metadata, _skip_sha256=True
         )
         self._directory_path = directory_path
         self._compression = compression
