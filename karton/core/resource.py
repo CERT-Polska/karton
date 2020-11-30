@@ -14,6 +14,7 @@ class ResourceBase(object):
     """
     Abstract base class for Resource objects.
     """
+    DIRECTORY_FLAG = "Directory"
 
     def __init__(
         self,
@@ -25,7 +26,7 @@ class ResourceBase(object):
         sha256=None,
         _uid=None,
         _size=None,
-        _skip_sha256=False
+        _flags=None
     ):
         self.name = name
         self.bucket = bucket
@@ -33,34 +34,29 @@ class ResourceBase(object):
         # the sha256 identifier can be passed as an argument or inside the metadata
         sha256 = sha256 or metadata.get("sha256")
 
-        # flag indicating whether we have to calculate the resource sha256 inside constructor
-        calculate_hash = sha256 is not None and not _skip_sha256
-
         if content and path:
             raise ValueError("Can't set both path and content for resource")
         if path:
             if not os.path.isfile(path):
                 raise IOError("Path {path} doesn't exist or is not a file"
                               .format(path=path))
-            if calculate_hash:
-                sha256_hash = hashlib.sha256()
-                with open(path, "rb") as f:
-                    for byte_block in iter(lambda: f.read(4096), b""):
-                        sha256_hash.update(byte_block)
-                sha256 = sha256_hash.hexdigest()
+            sha256_hash = hashlib.sha256()
+            with open(path, "rb") as f:
+                for byte_block in iter(lambda: f.read(4096), b""):
+                    sha256_hash.update(byte_block)
+            sha256 = sha256_hash.hexdigest()
         elif content:
             if type(content) is str and sys.version_info >= (3, 0):
                 content = content.encode()
             elif type(content) is not bytes:
                 raise TypeError("Content can be bytes or str only")
-            if calculate_hash:
-                sha256 = hashlib.sha256(content)
+            sha256 = hashlib.sha256(content)
 
-        # Empty Resource is possible here (e.g. DirectoryResource doesn't have immediate content)
+        # Empty Resource is possible here (e.g. RemoteResource)
 
         # All normal Resources have to have a sha256 value that identifies them
-        if sha256 is None and not _skip_sha256:
-            raise Exception("Trying to create a new resource without a sha256 identifier")
+        if sha256 is None:
+            raise Exception("Trying to create a new resource without known sha256 identifier")
 
         self.metadata["sha256"] = sha256
 
@@ -68,6 +64,8 @@ class ResourceBase(object):
         self._content = content
         self._path = path
         self._size = _size
+        # Flags needed by 3.x.x Karton services
+        self._flags = _flags or []
 
     @property
     def uid(self):
@@ -108,10 +106,7 @@ class ResourceBase(object):
 
         :rtype: str
         """
-        sha256 = self.metadata.get("sha256")
-        if sha256 is None:
-            raise ValueError("Resource is missing sha256")
-        return sha256
+        return self.metadata.get("sha256")
 
     def to_dict(self):
         # Internal serialization method
@@ -121,8 +116,8 @@ class ResourceBase(object):
             "bucket": self.bucket,
             "size": self.size,
             "metadata": self.metadata,
-            "flags": [],
-            "sha256": self.metadata.get("sha256")
+            "flags": self._flags,
+            "sha256": self.sha256
         }
 
 
@@ -155,11 +150,71 @@ class LocalResource(ResourceBase):
     :param uid: Alternative MinIO resource id
     :type uid: str, optional
     """
-
-    def __init__(self, name, content=None, path=None, bucket=None, metadata=None, uid=None, sha256=None):
+    def __init__(self, name, content=None, path=None, bucket=None, metadata=None, uid=None, sha256=None,
+                 _fd=None, _flags=None):
         super(LocalResource, self).__init__(
-            name, content=content, path=path, bucket=bucket, metadata=metadata, sha256=sha256, _uid=uid
+            name, content=content, path=path, bucket=bucket, metadata=metadata, sha256=sha256, _uid=uid, _flags=_flags
         )
+        self._fd = _fd
+
+    @classmethod
+    def from_directory(
+        cls,
+        name,
+        directory_path,
+        compression=zipfile.ZIP_DEFLATED,
+        in_memory=False,
+        bucket=None,
+        metadata=None,
+        uid=None
+    ):
+        """
+        Resource extension, allowing to pass whole directory as a zipped resource.
+
+        Reads all files contained in directory_path recursively and packs them into zip file.
+
+        .. code-block:: python
+
+            # Creating zipped resource from path
+            dumps = LocalResource.from_directory("dumps", directory_path="dumps/")
+
+        :param name: Name of the resource (e.g. name of file)
+        :type name: str
+        :param directory_path: Path of the resource directory
+        :type directory_path: str
+        :param compression: Compression level (default is zipfile.ZIP_DEFLATED)
+        :type compression: int, optional
+        :param in_memory: Don't create temporary file and make in-memory zip file (default: False)
+        :type in_memory: bool, optional
+        :param bucket: Alternative MinIO bucket for resource
+        :type bucket: str, optional
+        :param metadata: Resource metadata
+        :type metadata: dict, optional
+        :param uid: Alternative MinIO resource id
+        :type uid: str, optional
+        :return: :class:`LocalResource` instance with zipped contents
+        """
+        out_stream = BytesIO() if in_memory else tempfile.NamedTemporaryFile()
+
+        # Recursively zips all files in directory_path keeping relative paths
+        # File is zipped into provided out_stream
+        with zipfile.ZipFile(out_stream, "w", compression=compression) as zipf:
+            for root, dirs, files in os.walk(directory_path):
+                for name in files:
+                    abs_path = os.path.join(root, name)
+                    zipf.write(
+                        abs_path, os.path.relpath(abs_path, directory_path)
+                    )
+
+        # Flag is required by Karton 3.x.x services to recognize that resource as DirectoryResource
+        flags = [ResourceBase.DIRECTORY_FLAG]
+
+        if in_memory:
+            return cls(name, content=out_stream.getvalue(), bucket=bucket, metadata=metadata,
+                       uid=uid, _flags=flags)
+        else:
+            return cls(name, path=out_stream.name, bucket=bucket, metadata=metadata, uid=uid,
+                       _fd=out_stream, _flags=flags)
 
     def _upload(self, minio):
         # Note: never transform resource into Remote (multiple task dispatching with same local,
@@ -170,6 +225,9 @@ class LocalResource(ResourceBase):
         else:
             # Upload file provided by path
             minio.fput_object(self.bucket, self.uid, self._path)
+        # If file descriptor is managed by Resource, close it after upload
+        if self._fd:
+            self._fd.close()
 
     def upload(self, minio):
         # Internal local resource upload method
@@ -189,10 +247,10 @@ class RemoteResource(ResourceBase):
     """
 
     def __init__(
-        self, name, bucket=None, metadata=None, uid=None, size=None, minio=None, sha256=None
+        self, name, bucket=None, metadata=None, uid=None, size=None, minio=None, sha256=None, _flags=None
     ):
         super(RemoteResource, self).__init__(
-            name, bucket=bucket, metadata=metadata, sha256=sha256, _uid=uid, _size=size
+            name, bucket=bucket, metadata=metadata, sha256=sha256, _uid=uid, _size=size, _flags=_flags
         )
         self._minio = minio
 
@@ -226,8 +284,9 @@ class RemoteResource(ResourceBase):
             metadata=metadata,
             bucket=dict["bucket"],
             uid=dict["uid"],
-            size=dict.get("size"),  # Backwards compatibility
+            size=dict.get("size"),  # Backwards compatibility (2.x.x)
             minio=minio,
+            _flags=dict.get("flags") # Backwards compatibility (3.x.x)
         )
 
     @property
@@ -321,141 +380,11 @@ class RemoteResource(ResourceBase):
         finally:
             os.remove(tmp.name)
 
-
-class DirectoryResourceBase(ResourceBase):
-    """
-    Abstract base class for DirectoryResource objects.
-    """
-
-    DIRECTORY_FLAG = "Directory"
-
-    def to_dict(self):
-        data = super(DirectoryResourceBase, self).to_dict()
-        data["flags"] += [DirectoryResourceBase.DIRECTORY_FLAG]
-        return data
-
-
-class LocalDirectoryResource(DirectoryResourceBase, LocalResource):
-    """
-    Resource extension, allowing to pass whole directory as a zipped resource.
-
-    Directories tend to be large in size so it's preferred to operate on temporary file storage.
-    Although if you know that your directories won't be that big: in-memory methods are still
-    supported.
-
-    .. code-block:: python
-
-        # Creating directory resource from path
-        dumps = DirectoryResource("dumps", directory_path="dumps/")
-
-    :param name: Name of the resource (e.g. name of directory)
-    :type name: str
-    :param directory_path: Path of the resource directory
-    :type directory_path: str
-    :param compression: Compression level (default is zipfile.ZIP_DEFLATED)
-    :type compression: int, optional
-    :param bucket: Alternative MinIO bucket for resource
-    :type bucket: str, optional
-    :param metadata: Resource metadata
-    :type metadata: dict, optional
-    """
-
-    def __init__(
-        self,
-        name,
-        directory_path,
-        compression=zipfile.ZIP_DEFLATED,
-        bucket=None,
-        metadata=None,
-    ):
-        super(LocalDirectoryResource, self).__init__(
-            name=name, bucket=bucket, metadata=metadata, _skip_sha256=True
-        )
-        self._directory_path = directory_path
-        self._compression = compression
-
-    def _make_zip(self, out_stream):
-        # Recursively zips all files in directory_path keeping relative paths
-        # File is zipped into provided out_stream
-        with zipfile.ZipFile(out_stream, "w", compression=self._compression) as zipf:
-            for root, dirs, files in os.walk(self._directory_path):
-                for name in files:
-                    abs_path = os.path.join(root, name)
-                    zipf.write(
-                        abs_path, os.path.relpath(abs_path, self._directory_path)
-                    )
-
-    def make_zip(self):
-        """
-        Prepares in-memory zip. Useful if you don't want to use temporary file storage
-        during zip preparation for upload.
-
-        Raw zip contents are available via :py:attr:`LocalDirectoryResource.content` property
-
-        .. code-block:: python
-
-            dumps = DirectoryResource("dumps", directory_path="dumps/")
-
-            # Create in-memory zip
-            dumps.make_zip()
-
-            zipf = zipfile.ZipFile(BytesIO(dumps.content))
-            print("Fetched dumps: ", zipf.namelist())
-        """
-        result_stream = BytesIO()
-        self._make_zip(result_stream)
-        self._content = result_stream.getvalue()
-
-    @contextlib.contextmanager
-    def _prepare_zip(self):
-        # Prepares zip file to upload
-        if self._content is not None:
-            # If zip contents are available in memory: let's use them!
-            yield
-        else:
-            try:
-                # If not: let's create temporary file with zipped directory
-                with tempfile.NamedTemporaryFile() as f:
-                    # Create zipfile
-                    self._make_zip(f)
-                    # Flush contents
-                    f.flush()
-                    # Set file path
-                    self._path = f.name
-                    yield
-            finally:
-                # Clean-up (just to be tidy)
-                self._path = None
-
-    def upload(self, minio):
-        """
-        Uploads local resource object to minio.
-
-        :param minio: Minio binding
-        :type minio: :class:`minio.Minio`
-
-        :meta private:
-        """
-        with self._prepare_zip():
-            self._upload(minio)
-
-
-DirectoryResource = LocalDirectoryResource
-
-
-class RemoteDirectoryResource(DirectoryResourceBase, RemoteResource):
-    """
-    Keeps reference to remote directory resource object shared between subsystems via object hub (MinIO)
-
-    Inherits from RemoteResource. Contents of this resource are raw ZIP file data.
-
-    Should never be instantiated directly by subsystem, but can be directly passed to outgoing payload.
-    """
-
     @contextlib.contextmanager
     def zip_file(self):
         """
-        Allows to operate on ZipFile object.
+        If resource contains a Zip file, downloads it to the temporary file
+        and wraps it with ZipFile object.
 
         .. code-block:: python
 
@@ -491,10 +420,10 @@ class RemoteDirectoryResource(DirectoryResourceBase, RemoteResource):
 
     def extract_to_directory(self, path):
         """
-        Extracts files contained in RemoteDirectoryResource into provided path.
+        If resource contains a Zip file, extracts files contained in Zip into provided path.
 
         By default: method downloads zip into temporary file, which is deleted after
-        extraction. If you want to load zip into memory, call :py:meth:`RemoteDirectoryResource.download`
+        extraction. If you want to load zip into memory, call :py:meth:`RemoteResource.download`
         first.
         """
         with self.zip_file() as zf:
@@ -503,7 +432,7 @@ class RemoteDirectoryResource(DirectoryResourceBase, RemoteResource):
     @contextlib.contextmanager
     def extract_temporary(self):
         """
-        Extracts files contained in RemoteDirectoryResource to temporary directory.
+        If resource contains a Zip file, extracts files contained in Zip to the temporary directory.
 
         Returns path of directory with extracted files. Directory is recursively deleted after
         leaving the context.
@@ -516,7 +445,7 @@ class RemoteDirectoryResource(DirectoryResourceBase, RemoteResource):
                 print("Fetched dumps:", os.listdir(dumps_path))
 
         By default: method downloads zip into temporary file, which is deleted after
-        extraction. If you want to load zip into memory, call :py:meth:`RemoteDirectoryResource.download`
+        extraction. If you want to load zip into memory, call :py:meth:`RemoteResource.download`
         first.
 
         :rtype: ContextManager[str]
@@ -527,11 +456,3 @@ class RemoteDirectoryResource(DirectoryResourceBase, RemoteResource):
             yield tmpdir
         finally:
             shutil.rmtree(tmpdir)
-
-
-def remote_resource_from_dict(dict, minio):
-    # Internal deserialization method
-    if RemoteDirectoryResource.DIRECTORY_FLAG in dict.get("flags", []):
-        return RemoteDirectoryResource.from_dict(dict, minio)
-    else:
-        return RemoteResource.from_dict(dict, minio)

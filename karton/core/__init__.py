@@ -1,10 +1,9 @@
 from .karton import Karton, Producer, Consumer
 from .task import Task
 from .resource import (
-    LocalResource, Resource,
-    LocalDirectoryResource, DirectoryResource,
+    LocalResource,
+    Resource,
     RemoteResource,
-    RemoteDirectoryResource,
 )
 from .config import Config
 
@@ -17,7 +16,4 @@ __all__ = [
     "LocalResource",
     "Resource",
     "RemoteResource",
-    "LocalDirectoryResource",
-    "DirectoryResource",
-    "RemoteDirectoryResource",
 ]
