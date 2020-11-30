@@ -15,9 +15,11 @@ METRICS_GARBAGE_COLLECTED = "karton.metrics.garbage-collected"
 
 class SystemService(KartonBase):
     """
-    Message broker and garbage collector.
+    Karton message broker.
     """
     identity = "karton.system"
+    version = __version__
+
     GC_INTERVAL = 3 * 60
     TASK_DISPATCHED_TIMEOUT = 24 * 3600
     TASK_STARTED_TIMEOUT = 24 * 3600
@@ -206,32 +208,35 @@ class SystemService(KartonBase):
                     self.rs.lpush("karton.logs", body)
             self.gc_collect()
 
+    @classmethod
+    def args_parser(cls):
+        parser = super().args_parser()
+        parser.add_argument("--setup-bucket", action="store_true", help="Create missing bucket in MinIO")
+        return parser
 
-def main():
-    parser = argparse.ArgumentParser(description="Karton message broker.")
-    parser.add_argument("--setup-bucket", action="store_true", help="Create missing bucket in MinIO")
-    parser.add_argument("--version", action="version", version=__version__)
-    parser.add_argument("--config-file", help="Alternative configuration path")
-    args = parser.parse_args()
+    @classmethod
+    def main(cls):
+        parser = cls.args_parser()
+        args = parser.parse_args()
 
-    config = Config(args.config_file)
-    service = SystemService(config)
+        config = Config(args.config_file)
+        service = SystemService(config)
 
-    bucket_name = config.minio_config["bucket"]
+        bucket_name = config.minio_config["bucket"]
 
-    if not service.minio.bucket_exists(bucket_name):
-        if args.setup_bucket:
-            service.log.info(
-                "Bucket %s is missing. Creating new one...",
-                bucket_name
-            )
-            service.minio.make_bucket(bucket_name)
-        else:
-            service.log.error(
-                "Bucket %s is missing! If you're sure that name is correct and "
-                "you don't want to create it manually, use --setup-bucket option",
-                bucket_name
-            )
-            return
+        if not service.minio.bucket_exists(bucket_name):
+            if args.setup_bucket:
+                service.log.info(
+                    "Bucket %s is missing. Creating new one...",
+                    bucket_name
+                )
+                service.minio.make_bucket(bucket_name)
+            else:
+                service.log.error(
+                    "Bucket %s is missing! If you're sure that name is correct and "
+                    "you don't want to create it manually, use --setup-bucket option",
+                    bucket_name
+                )
+                return
 
-    service.loop()
+        service.loop()

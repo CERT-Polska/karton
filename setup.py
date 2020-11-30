@@ -25,7 +25,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'karton-system=karton.system:main',
+            'karton-system=karton.system:SystemService.main',
             'karton=karton.core.main:main'
         ],
     },
