@@ -43,8 +43,11 @@ class ResourceBase(object):
                 raise IOError("Path {path} doesn't exist or is not a file"
                               .format(path=path))
             if calculate_hash:
+                sha256_hash = hashlib.sha256()
                 with open(path, "rb") as f:
-                    sha256 = hashlib.sha256(f.read())
+                    for byte_block in iter(lambda: f.read(4096), b""):
+                        sha256_hash.update(byte_block)
+                sha256 = sha256_hash.hexdigest()
         elif content:
             if type(content) is str and sys.version_info >= (3, 0):
                 content = content.encode()
@@ -155,7 +158,7 @@ class LocalResource(ResourceBase):
 
     def __init__(self, name, content=None, path=None, bucket=None, metadata=None, uid=None, sha256=None):
         super(LocalResource, self).__init__(
-            name, content=content, path=path, bucket=bucket, metadata=metadata, _sha256=sha256, uid=uid
+            name, content=content, path=path, bucket=bucket, metadata=metadata, sha256=sha256, _uid=uid
         )
 
     def _upload(self, minio):
