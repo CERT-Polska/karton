@@ -272,6 +272,7 @@ class Consumer(KartonServiceBase):
         """
         Blocking loop that consumes tasks and runs :py:meth:`karton.Consumer.process` as a handler
         """
+        self.setup_logger()
         self.log.info("Service %s started", self.identity)
 
         # get the old binds and set the new ones atomically
@@ -335,6 +336,7 @@ class LogConsumer(KartonServiceBase):
         raise NotImplementedError()
 
     def loop(self):
+        self.setup_logger()
         self.log.info("Logger %s started", self.identity)
 
         while not self.shutdown:
