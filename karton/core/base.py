@@ -65,9 +65,7 @@ class KartonServiceBase(KartonBase):
 
     @classmethod
     def args_description(cls):
-        """
-        Return short description for argument parser.
-        """
+        """Return short description for argument parser."""
         if not cls.__doc__:
             return ""
         return textwrap.dedent(cls.__doc__).strip().splitlines()[0]
@@ -86,9 +84,7 @@ class KartonServiceBase(KartonBase):
 
     @classmethod
     def main(cls):
-        """
-        Main method invoked from CLI.
-        """
+        """Main method invoked from CLI."""
         parser = cls.args_parser()
         args = parser.parse_args()
         config = Config(args.config_file)
