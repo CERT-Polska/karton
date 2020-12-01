@@ -60,7 +60,7 @@ class ResourceBase(object):
 
         # All normal Resources have to have a sha256 value that identifies them
         if sha256 is None:
-            raise Exception("Trying to create a new resource without known sha256 identifier")
+            raise ValueError("Trying to create a new resource without known sha256 identifier")
 
         self.metadata["sha256"] = sha256
 
