@@ -66,7 +66,7 @@ class KartonServiceBase(KartonBase):
     @classmethod
     def args_description(cls):
         """
-        Returns short description for argument parser.
+        Return short description for argument parser.
         """
         if not cls.__doc__:
             return ""
@@ -75,9 +75,9 @@ class KartonServiceBase(KartonBase):
     @classmethod
     def args_parser(cls):
         """
-        Returns ArgumentParser for main() class method.
+        Return ArgumentParser for main() class method.
 
-        Extend this method if you want to add more arguments.
+        This method should be overridden if you want to add more arguments.
         """
         parser = argparse.ArgumentParser(description=cls.args_description())
         parser.add_argument("--version", action="version", version=cls.version)
