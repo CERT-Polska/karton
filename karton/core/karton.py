@@ -8,7 +8,7 @@ import json
 import textwrap
 import time
 
-from .base import KartonBase
+from .base import KartonBase, KartonServiceBase
 from .config import Config
 from .resource import LocalResource
 from .task import Task, TaskState, TaskPriority
@@ -131,7 +131,7 @@ class Producer(KartonBase):
         self.log_handler.set_task(self.current_task)
 
 
-class Consumer(KartonBase):
+class Consumer(KartonServiceBase):
     """
     Base consumer class
     """
@@ -313,42 +313,8 @@ class Consumer(KartonBase):
             self.log.info("Hard shutting down!")
             raise e
 
-    # Consumer service CLI methods
 
-    @classmethod
-    def args_description(cls):
-        """
-        Returns short description for argument parser.
-        """
-        if not cls.__doc__:
-            return ""
-        return textwrap.dedent(cls.__doc__).strip().splitlines()[0]
-
-    @classmethod
-    def args_parser(cls):
-        """
-        Returns ArgumentParser for main() class method.
-
-        Extend this method if you want to add more arguments.
-        """
-        parser = argparse.ArgumentParser(description=cls.args_description())
-        parser.add_argument("--version", action="version", version=cls.version)
-        parser.add_argument("--config-file", help="Alternative configuration path")
-        return parser
-
-    @classmethod
-    def main(cls):
-        """
-        Main method invoked from CLI.
-        """
-        parser = cls.args_parser()
-        args = parser.parse_args()
-        config = Config(args.config_file)
-        service = cls(config)
-        service.loop()
-
-
-class LogConsumer(KartonBase):
+class LogConsumer(KartonServiceBase):
     """
     Base class for log consumer subsystems
     """

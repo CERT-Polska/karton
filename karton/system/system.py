@@ -3,7 +3,7 @@ import json
 import time
 
 from karton.core.__version__ import __version__
-from karton.core.base import KartonBase
+from karton.core.base import KartonServiceBase
 from karton.core.config import Config
 from karton.core.task import Task, TaskPriority, TaskState
 from karton.core.utils import GracefulKiller
@@ -13,7 +13,7 @@ METRICS_ASSIGNED = "karton.metrics.assigned"
 METRICS_GARBAGE_COLLECTED = "karton.metrics.garbage-collected"
 
 
-class SystemService(KartonBase):
+class SystemService(KartonServiceBase):
     """
     Karton message broker.
     """
