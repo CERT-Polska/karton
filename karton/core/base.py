@@ -1,6 +1,8 @@
 import abc
+import argparse
 import json
 import logging
+import textwrap
 
 from minio import Minio
 from redis import StrictRedis
@@ -52,3 +54,39 @@ class KartonBase(ABC):
                 }
             ),
         )
+
+
+class KartonServiceBase(KartonBase):
+    # Base class for Karton services
+    @abc.abstractmethod
+    def loop(self):
+        # Karton service entrypoint
+        raise NotImplementedError
+
+    @classmethod
+    def args_description(cls):
+        """Return short description for argument parser."""
+        if not cls.__doc__:
+            return ""
+        return textwrap.dedent(cls.__doc__).strip().splitlines()[0]
+
+    @classmethod
+    def args_parser(cls):
+        """
+        Return ArgumentParser for main() class method.
+
+        This method should be overridden if you want to add more arguments.
+        """
+        parser = argparse.ArgumentParser(description=cls.args_description())
+        parser.add_argument("--version", action="version", version=cls.version)
+        parser.add_argument("--config-file", help="Alternative configuration path")
+        return parser
+
+    @classmethod
+    def main(cls):
+        """Main method invoked from CLI."""
+        parser = cls.args_parser()
+        args = parser.parse_args()
+        config = Config(args.config_file)
+        service = cls(config)
+        service.loop()
