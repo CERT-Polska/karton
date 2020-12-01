@@ -6,7 +6,7 @@ LOGS_QUEUE = "karton.logs"
 
 
 class KartonLogHandler(logging.Handler):
-    def __init__(self, rs, **kwargs):
+    def __init__(self, rs):
         logging.Handler.__init__(self)
         self.rs = rs
         self.task = None
@@ -43,19 +43,3 @@ class KartonLogHandler(logging.Handler):
             log_line["task"] = self.task.serialize()
 
         self.rs.lpush(LOGS_QUEUE, json.dumps(log_line))
-
-    def get_logger(self, identity, level=logging.INFO):
-        log_level = level
-        if type(log_level) is str and log_level.isdigit():
-            log_level = int(log_level)
-
-        # Intentionally not using getLogger because we don't want to create singletons!
-        logger = logging.Logger(identity or "karton")
-        logger.setLevel(log_level)
-        stream_handler = logging.StreamHandler()
-        stream_handler.setFormatter(
-            logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s")
-        )
-        logger.addHandler(stream_handler)
-        logger.addHandler(self)
-        return logger

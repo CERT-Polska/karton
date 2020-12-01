@@ -21,6 +21,7 @@ class KartonBase(ABC):
 
     def __init__(self, config=None, identity=None):
         self.config = config or Config()
+        # If not passed via constructor - get it from class
         if identity is not None:
             self.identity = identity
         self.rs = StrictRedis(decode_responses=True,
@@ -28,18 +29,57 @@ class KartonBase(ABC):
 
         self.current_task = None
         self.log_handler = KartonLogHandler(rs=self.rs)
-        log_level = logging.INFO
-        if self.config.config.has_section("logging"):
-            log_level = self.config["logging"].get("level", logging.INFO)
-
-        self.log = self.log_handler.get_logger(self.identity, level=log_level)
-
         self.minio = Minio(
             self.config.minio_config["address"],
             self.config.minio_config["access_key"],
             self.config.minio_config["secret_key"],
             secure=bool(int(self.config.minio_config.get("secure", True))),
         )
+
+    def setup_logger(self, level=None):
+        """
+        Setup logger for Karton service (StreamHandler and `karton.logs` handler)
+
+        Called by :py:meth:`Consumer.loop`. If you want to use logger for Producer,
+        you need to call it yourself, but remember to set the identity.
+
+        :param level: Logging level. Default is logging.INFO (unless different value is set in Karton config)
+        """
+        if level is None:
+            log_level = logging.INFO
+            if self.config.config.has_section("logging"):
+                log_level = self.config["logging"].get("level", logging.INFO)
+        else:
+            log_level = level
+        if type(log_level) is str and log_level.isdigit():
+            log_level = int(log_level)
+
+        if not self.identity:
+            raise ValueError("Can't setup logger without identity")
+
+        logger = logging.getLogger(self.identity)
+        logger.setLevel(log_level)
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(
+            logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s")
+        )
+        logger.addHandler(stream_handler)
+        logger.addHandler(self.log_handler)
+
+    @property
+    def log(self):
+        """
+        Return Logger instance for Karton service
+
+        If you want to use it in code that is outside of the Consumer class,
+        use :func:`logging.getLogger`:
+
+        .. code-block:: python
+
+            import logging
+            logging.getLogger("<identity>")
+        """
+        return logging.getLogger(self.identity)
 
     def declare_task_state(self, task, status, identity=None):
         # Declares task state. Used internally
@@ -57,6 +97,10 @@ class KartonBase(ABC):
 
 
 class KartonServiceBase(KartonBase):
+    def __init__(self, config=None, identity=None):
+        super().__init__(config=config, identity=identity)
+        self.setup_logger()
+
     # Base class for Karton services
     @abc.abstractmethod
     def loop(self):
