@@ -110,7 +110,11 @@ class ResourceBase(object):
 
         :rtype: str
         """
-        return self.metadata.get("sha256")
+        sha256 = self.metadata.get("sha256")
+        if sha256 is None:
+            # SHA256 can be missing in resources from older Karton versions
+            raise ValueError("Resource is missing sha256")
+        return sha256
 
     def to_dict(self):
         # Internal serialization method
