@@ -54,7 +54,7 @@ class ResourceBase(object):
             elif type(content) is not bytes:
                 raise TypeError("Content can be bytes or str only")
             if calculate_hash:
-                sha256 = hashlib.sha256(content)
+                sha256 = hashlib.sha256(content).hexdigest()
 
         # Empty Resource is possible here (e.g. RemoteResource)
 
