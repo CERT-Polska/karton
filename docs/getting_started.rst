@@ -8,7 +8,7 @@ You can get the karton framework from pip:
 
 .. code-block:: console
 
-    python -m pip install karton2
+    python -m pip install karton-core
 
 Or, if you're feeling adventurous, download the sources using git and install them manually.
 In addition to karton, you'll also need to setup `MinIO <https://docs.min.io/docs/minio-quickstart-guide.html>`_ and `Redis-server <https://redis.io/topics/quickstart>`_.
