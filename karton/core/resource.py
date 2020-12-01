@@ -34,23 +34,27 @@ class ResourceBase(object):
         # the sha256 identifier can be passed as an argument or inside the metadata
         sha256 = sha256 or metadata.get("sha256")
 
+        calculate_hash = sha256 is None
+
         if content and path:
             raise ValueError("Can't set both path and content for resource")
         if path:
             if not os.path.isfile(path):
                 raise IOError("Path {path} doesn't exist or is not a file"
                               .format(path=path))
-            sha256_hash = hashlib.sha256()
-            with open(path, "rb") as f:
-                for byte_block in iter(lambda: f.read(4096), b""):
-                    sha256_hash.update(byte_block)
-            sha256 = sha256_hash.hexdigest()
+            if calculate_hash:
+                sha256_hash = hashlib.sha256()
+                with open(path, "rb") as f:
+                    for byte_block in iter(lambda: f.read(4096), b""):
+                        sha256_hash.update(byte_block)
+                sha256 = sha256_hash.hexdigest()
         elif content:
             if type(content) is str and sys.version_info >= (3, 0):
                 content = content.encode()
             elif type(content) is not bytes:
                 raise TypeError("Content can be bytes or str only")
-            sha256 = hashlib.sha256(content)
+            if calculate_hash:
+                sha256 = hashlib.sha256(content)
 
         # Empty Resource is possible here (e.g. RemoteResource)
 
