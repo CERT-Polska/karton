@@ -38,7 +38,7 @@ class KartonBase(ABC):
 
     def setup_logger(self, level=None):
         """
-        Sets logger for Karton service (StreamHandler and `karton.logs` handler)
+        Setup logger for Karton service (StreamHandler and `karton.logs` handler)
 
         Called by :py:meth:`Consumer.loop`. If you want to use logger for Producer,
         you need to call it yourself, but remember to set the identity.
@@ -68,6 +68,17 @@ class KartonBase(ABC):
 
     @property
     def log(self):
+        """
+        Return Logger instance for Karton service
+
+        If you want to use it in code that is outside of the Consumer class,
+        use :func:`logging.getLogger`:
+
+        .. code-block:: python
+
+            import logging
+            logging.getLogger("<identity>")
+        """
         return logging.getLogger(self.identity)
 
     def declare_task_state(self, task, status, identity=None):
@@ -86,6 +97,10 @@ class KartonBase(ABC):
 
 
 class KartonServiceBase(KartonBase):
+    def __init__(self, config=None, identity=None):
+        super().__init__(config=config, identity=identity)
+        self.setup_logger()
+
     # Base class for Karton services
     @abc.abstractmethod
     def loop(self):
