@@ -2,7 +2,7 @@ import json
 import uuid
 import warnings
 
-from .resource import ResourceBase, remote_resource_from_dict
+from .resource import ResourceBase, RemoteResource
 
 class TaskState(object):
     """Enum for task state"""
@@ -232,14 +232,13 @@ class Task(object):
 
     def unserialize_resources(self, minio):
         """
-        Transforms __karton_resource__ serialized entries into
-        Remote(Directory)Resource object instances
+        Transforms __karton_resource__ serialized entries into RemoteResource object instances
 
         :meta private:
         """
         for payload_bag, key, value in self.walk_payload_bags():
             if isinstance(value, dict) and "__karton_resource__" in value:
-                payload_bag[key] = remote_resource_from_dict(
+                payload_bag[key] = RemoteResource.from_dict(
                     value["__karton_resource__"], minio
                 )
 
