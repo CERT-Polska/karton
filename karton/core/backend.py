@@ -39,7 +39,7 @@ class KartonBackend:
                 "filters": bind.filters,
                 "persistent": bind.persistent
             },
-            sorted_keys=True
+            sort_keys=True
         )
 
     @staticmethod
