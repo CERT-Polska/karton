@@ -15,9 +15,7 @@ from io import BytesIO
 from .karton import Consumer
 from .resource import (
     RemoteResource,
-    RemoteDirectoryResource,
     ResourceBase,
-    DirectoryResourceBase,
 )
 
 try:
@@ -65,21 +63,6 @@ class TestResource(RemoteResource):
         with tempfile.NamedTemporaryFile() as f:
             self.download_to_file(f.name)
             yield f
-
-
-class TestDirectoryResource(TestResource, RemoteDirectoryResource):
-    """
-    LocalDirectoryResource imitating RemoteDirectoryResource for test purposes.
-
-    Should be used in test cases instead of LocalDirectoryResource objects.
-
-    :param name: Name of the resource (e.g. name of file)
-    :type name: str
-    :param content: ZIP file content to be treated as RemoteDirectoryResource
-    :type content: bytes
-    :param metadata: Resource metadata
-    :type metadata: dict, optional
-    """
 
     @contextlib.contextmanager
     def zip_file(self):
@@ -155,14 +138,10 @@ class KartonTestCase(unittest.TestCase):
         return h.hexdigest()
 
     def assertResourceEqual(self, resource, expected, resource_name):
-        self.assertEqual(
-            isinstance(resource, DirectoryResourceBase),
-            isinstance(expected, DirectoryResourceBase),
+        self.assertTrue(
+            isinstance(resource, ResourceBase),
             "Resource type mismatch in {}".format(resource_name),
         )
-        if isinstance(resource, DirectoryResourceBase):
-            # Now we're only checking type
-            return
         self.assertEqual(
             self.get_resource_sha256(resource),
             self.get_resource_sha256(expected),
