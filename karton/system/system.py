@@ -23,6 +23,7 @@ class SystemService(KartonServiceBase):
     GC_INTERVAL = 3 * 60
     TASK_DISPATCHED_TIMEOUT = 24 * 3600
     TASK_STARTED_TIMEOUT = 24 * 3600
+    TASK_CRASHED_TIMEOUT = 3 * 24 * 3600
 
     def __init__(self, config):
         super(SystemService, self).__init__(config=config)
@@ -93,6 +94,18 @@ class SystemService(KartonServiceBase):
             elif task.status == TaskState.FINISHED:
                 will_delete = True
                 self.log.debug("GC: Finished task %s", task.uid)
+            elif (
+                task.status == TaskState.CRASHED
+                and task.last_update is not None
+                and current_time > task.last_update + self.TASK_CRASHED_TIMEOUT
+            ):
+                will_delete = True
+                self.log.debug(
+                    "GC: Task %s is in Crashed state more than %d seconds. Killed. (receiver: %s)",
+                    task.uid,
+                    self.TASK_CRASHED_TIMEOUT,
+                    task.headers.get("receiver", "<unknown>"),
+                )
             if will_delete:
                 self.rs.delete("karton.task:" + task.uid)
                 receiver = task.headers.get("receiver", "unknown")
