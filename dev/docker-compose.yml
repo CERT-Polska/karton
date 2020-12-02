@@ -1,0 +1,30 @@
+# ONLY FOR LOCAL DEVELOPMENT
+version: "3"
+services:
+  redis:
+    image: library/redis
+    ports:
+      - "127.0.0.1:6379:6379"
+  minio:
+    image: minio/minio
+    command: server /data
+    volumes:
+      - /tmp/minio:/data
+    ports:
+      - "127.0.0.1:9000:9000"
+    environment:
+      - MINIO_ACCESS_KEY=karton-test-access
+      - MINIO_SECRET_KEY=karton-test-key
+  system:
+    build:
+      context: .
+      dockerfile: system.Dockerfile
+    depends_on:
+      - minio
+      - redis
+  logger:
+    build:
+      context: .
+      dockerfile: logger.Dockerfile
+    depends_on:
+      - system
