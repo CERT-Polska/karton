@@ -9,6 +9,7 @@ import textwrap
 import time
 
 from .base import KartonBase, KartonServiceBase
+from .backend import KartonBind
 from .config import Config
 from .resource import LocalResource
 from .task import Task, TaskState, TaskPriority
@@ -167,10 +168,7 @@ class Consumer(KartonServiceBase):
         self.current_task = Task.unserialize(self.rs.get("karton.task:" + data), minio=self.minio)
         self.log_handler.set_task(self.current_task)
 
-        for bind in self.filters:
-            if self.current_task.matches_bind(bind):
-                break
-        else:
+        if not self.current_task.matches_filters(self.filters):
             self.log.info("Task rejected because binds are no longer valid.")
             self.declare_task_state(
                 self.current_task, TaskState.FINISHED, identity=self.identity,
@@ -212,13 +210,14 @@ class Consumer(KartonServiceBase):
                 )
 
     @property
-    def _registration(self):
-        return json.dumps({
-            "info": self.__class__.__doc__,
-            "version": __version__,
-            "filters": self.filters,
-            "persistent": self.persistent
-        }, sort_keys=True)
+    def _bind(self):
+        return KartonBind(
+            identity=self.identity,
+            info=self.__class__.__doc__,
+            version=__version__,
+            filters=self.filters,
+            persistent=self.persistent
+        )
 
     def add_pre_hook(self, callback, name=None):
         """
@@ -274,15 +273,12 @@ class Consumer(KartonServiceBase):
         """
         self.log.info("Service %s started", self.identity)
 
-        # get the old binds and set the new ones atomically
-        with self.rs.pipeline(transaction=True) as pipe:
-            pipe.hget("karton.binds", self.identity)
-            pipe.hset("karton.binds", self.identity, self._registration)
-            old_registration, _ = pipe.execute()
+        # Get the old binds and set the new ones atomically
+        old_bind = self.backend.register_bind(self._bind)
 
-        if not old_registration:
+        if not old_bind:
             self.log.info("Service binds created.")
-        elif old_registration != self._registration:
+        elif old_bind != self._bind:
             self.log.info("Binds changed, old service instances should exit soon.")
 
         for task_filter in self.filters:
@@ -292,7 +288,7 @@ class Consumer(KartonServiceBase):
 
         try:
             while not self.shutdown:
-                if self.rs.hget("karton.binds", self.identity) != self._registration:
+                if self.backend.get_bind(self.identity) != self._bind:
                     self.log.info("Binds changed, shutting down.")
                     break
 

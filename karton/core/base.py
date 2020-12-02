@@ -7,6 +7,7 @@ import textwrap
 from minio import Minio
 from redis import StrictRedis
 
+from .backend import KartonBackend
 from .config import Config
 from .logger import KartonLogHandler
 
@@ -35,6 +36,7 @@ class KartonBase(ABC):
             self.config.minio_config["secret_key"],
             secure=bool(int(self.config.minio_config.get("secure", True))),
         )
+        self.backend = KartonBackend(self.config)
 
     def setup_logger(self, level=None):
         """
