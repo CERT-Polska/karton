@@ -17,14 +17,14 @@ services:
       - MINIO_SECRET_KEY=karton-test-key
   system:
     build:
-      context: .
-      dockerfile: system.Dockerfile
+      context: ..
+      dockerfile: dev/system.Dockerfile
     depends_on:
       - minio
       - redis
   logger:
     build:
-      context: .
-      dockerfile: logger.Dockerfile
+      context: ..
+      dockerfile: dev/logger.Dockerfile
     depends_on:
       - system

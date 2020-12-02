@@ -1,11 +1,14 @@
 FROM python:3.7
 
-COPY requirements.txt /app/
+COPY requirements.txt /karton/
+COPY setup.py /karton/
+COPY karton/ /karton/karton/
 
-RUN python -m pip install --no-cache-dir -r /app/requirements.txt
+RUN pip install --no-cache-dir /karton
 
-COPY karton.ini.dev /etc/karton/karton.ini
-COPY stdout_logger.py /app/
+COPY dev/karton.ini.dev /etc/karton/karton.ini
+
+COPY dev/stdout_logger.py /app/
 
 WORKDIR /app/
 
