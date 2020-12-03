@@ -136,18 +136,19 @@ class Task(object):
         )
         return new_task
 
-    def matches_bind(self, bind):
+    def matches_filters(self, filters):
         """
-        Checks whether provided task headers are matching filter bind
+        Checks whether provided task headers are matching filters
 
-        :param bind: Filter bind
-        :return: True if task matches specific bind
+        :param filters: Task header filters
+        :return: True if task headers match specific filters
 
         :meta private:
         """
         return all(
             self.headers.get(bind_key) == bind_value
-            for bind_key, bind_value in bind.items()
+            for task_filter in filters
+            for bind_key, bind_value in task_filter.items()
         )
 
     def set_task_parent(self, parent):

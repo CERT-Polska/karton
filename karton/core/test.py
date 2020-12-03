@@ -275,10 +275,7 @@ class KartonMock(object):
         """
         self._result_tasks = []
         self.current_task = task
-        for bind in self.filters:
-            if self.current_task.matches_bind(bind):
-                break
-        else:
+        if not self.current_task.matches_filters(self.filters):
             raise RuntimeError("Provided task doesn't match any of filters")
         self.process()
         return self._result_tasks
