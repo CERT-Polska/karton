@@ -15,7 +15,7 @@ KartonBind = namedtuple(
 class KartonBackend:
     def __init__(self, config):
         self.redis = StrictRedis(host=config["redis"]["host"],
-                                 port=config["redis"]["port"],
+                                 port=int(config["redis"].get("port", 6379)),
                                  decode_responses=True)
         self.minio = Minio(
             config["minio"]["address"],
