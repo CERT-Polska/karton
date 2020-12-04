@@ -31,7 +31,7 @@ As a part of its housekeeping, ``Karton.System`` removes all ``TaskState.Finishe
 Task tree (analysis) and task life cycle
 ----------------------------------------
 
-Every analysis starts from `initial task` spawned by :class:`karton.Producer`. `Initial task` is consumed by consumers, which then are producing next tasks for further processing. These various tasks originating from initial task can be grouped together into **task tree**, representing the analysis.
+Every analysis starts from `initial task` spawned by :class:`karton.Producer`. `Initial task` is consumed by consumers, which then produce next tasks for further processing. These various tasks originating from initial task can be grouped together into **task tree**, representing the analysis.
 
 .. image:: forking-task.svg
 
