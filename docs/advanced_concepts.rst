@@ -1,12 +1,39 @@
 Advanced concepts
 =================
 
+Routed and unrouted tasks (task forking)
+----------------------------------------
+
+During its lifetime, the task will transfer between various states and its reference will be passed through several queues, a simple way to understand it is to see how the tasks state changes in various moments:
+
+.. image:: task-lifetime.svg
+
+Each new task is registered in the system by a call to :py:meth:`karton.Producer.send_task` and starts its life in the **unrouted task queue** with a ``TaskState.Declared`` state.
+``Karton.tasks`` is **the** queue where all task data will be stored, other queues will be always only holding a reference to a record from this place.
+
+The main broker - ``Karton.System`` constantly looks over this queue and keeps the tasks running as well as clears up leftover unneeded data.
+
+Because task headers can be accepted by more than one consumer the task has to be forked before it goes to the appropriate **consumer (routed) queues**. Based on **unrouted task**, ``Karton.System`` generates as many **routed tasks** as there are matching queues. These tasks are separate, independent instances, so they have different **uid** than original unrouted task.
+
+.. note::
+    
+    While **uid** of routed and unrouted tasks are different, **parent_uid** stays the same. **parent_uid** always identifies the routed task.
+
+    Currently we don't keep the relationship between routed and unrouted task identifier, so there could be additional difficulty in task flow tracking when Kartonik spawns more than one task (**parent_uid** will be the same for all of them)
+
+Each registered consumer monitors its (routed) queue and performs analysis on all tasks that appear there. As soon as the consumer starts working on a given task, it sends a signal to the broker to mark the tasks state as ``TaskState.Started``.
+
+If everything goes smoothly, the consumer finishes the tasks and sends a similiar signal, this time marking the task as ``TaskState.Finished``. If there is a problem and an exception is thrown within the ``self.process`` function, ``TaskState.Crashed`` is used instead.
+
+As a part of its housekeeping, ``Karton.System`` removes all ``TaskState.Finished`` tasks immediately and ``TaskState.Crashed`` tasks after a certain grace period to allow for inspection and optional retry.
+
+
 Task tree (analysis) and task life cycle
 ----------------------------------------
 
 Every analysis starts from `initial task` spawned by :class:`karton.Producer`. `Initial task` is consumed by consumers, which then are producing next tasks for further processing. These various tasks originating from initial task can be grouped together into **task tree**, representing the analysis.
 
-<image>
+.. image:: forking-task.svg
 
 Each task is identified by a tuple of three identifiers:
 
@@ -14,20 +41,10 @@ Each task is identified by a tuple of three identifiers:
 - **parent_uid** - identifier of task that spawned current task as a result of processing
 - **root_uid** - task tree identifier (analysis identifier, derived from uid of initial **unrouted** task)
 
-Routed and unrouted tasks (task forking)
-````````````````````````````````````````
+In order to better understand how those identifiers are inherited and passed between tasks take a look at the following example:
 
-Brand-new :class:`karton.Task` instance is initialized with unique identifier. After call of :py:meth:`karton.Producer.send_task` method, it starts its life in **unrouted task queue**.
+.. image:: task-tree.svg
 
-.. image:: forking-task.svg
-
-Because task headers can be accepted by more than one consumer - task need to be forked before it goes to the appropriate **consumer queues**. Based on **unrouted task**, **Karton-system** generates as many **routed tasks** as there are matching queues. These tasks are separate, independent instances, so they have different **uid** than original unrouted task.
-
-.. note::
-    
-    While **uid** of routed and unrouted tasks are different, **parent_uid** stays the same. **parent_uid** always identifies the routed task.
-
-    Currently we don't keep the relationship between routed and unrouted task identifier, so there could be additional difficulty in task flow tracking when Kartonik spawns more than one task (**parent_uid** will be the same for all of them)
 
 
 Handling logging
