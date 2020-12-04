@@ -30,12 +30,27 @@ By default, the config class will look for the config file in several places, bu
     access_key = minioadmin
     address = localhost:9000
     bucket = karton
+    secure = 0
 
     [redis]
     host=localhost
     port=6379
 
 If everything was configured correctly, you should now be able to run the `karton-system` broker and get `Manager karton.system started` signaling that it's able to connect to Redis and MinIO correctly.
+
+
+Docker-compose development setup
+--------------------------------
+
+If you're just trying Karton out or you want a quick & easy environment setup checkout the ``dev`` folder in the root directory.
+It contains a small docker-compose setup that will setup the minimal development environment for you.
+All you have to do is run
+
+.. code-block:: console
+
+    docker-compose up --build
+
+And then connect additional karton systems using the ``karton.ini.dev`` config file.
 
 
 Writing your first Producer and Consumer

@@ -43,9 +43,9 @@ Consumers are listening for specific set of headers, which is defined by `filter
             }
         ]
 
-        def process(self):
+        def process(self, task: Task) -> None:
             # Get incoming task headers
-            headers = self.current_task.headers
+            headers = task.headers
             self.log.info("Got %s sample from %s", headers["kind"], headers["origin"])
 
 If Karton find that task matches any of subsets defined by consumer queue filters: task will be routed to that queue.
@@ -58,9 +58,9 @@ Headers can be used to process our input differently, depending on the kind of s
     class GenericUnpacker(Karton):
         ...
 
-        def process(self):
+        def process(self, task):
             # Get incoming task headers
-            headers = self.current_task.headers
+            headers = task.headers
             if headers["kind"] == "runnable":
                 self.process_runnable()
             elif headers["kind"] == "script":
@@ -74,7 +74,7 @@ Few headers have special meaning and are added automatically by Karton to incomi
 Task payload
 ------------
 
-Payload is also a dictionary, but it's not required to be a flat structure like headers are. Its contents does not affect the routing so task semantics must be defined by headers.
+Payload is also a dictionary, but it's not required to be a flat structure like headers are. Its contents do not affect the routing so task semantics must be defined by headers.
 
 .. code-block:: python
 
@@ -97,8 +97,8 @@ Payload can be accessed by Consumer using :py:meth:`Task.get_payload` method.
 
     class Kartonik(Karton):
         ...
-        def process(self):
-            entrypoints = self.current_task.get_payload("entrypoints", default=[])
+        def process(self, task: Task) -> None:
+            entrypoints = task.get_payload("entrypoints", default=[])
 
 But payload dictionary itself still must be **lightweight and JSON-encodable**, because it's stored in Redis along with the whole task definition. 
 
@@ -130,9 +130,9 @@ RemoteResource is lazy object that allows to download the object contents via :p
         def unpack(self, packed_content: bytes) -> bytes:
             ...
 
-        def process(self):
+        def process(self, task: Task) -> None:
             # Get sample resource
-            sample = self.current_task.get_resource("sample")
+            sample = task.get_resource("sample")
             # Do the job
             unpacked = self.unpack(sample.content)
             # Publish the results
@@ -153,8 +153,8 @@ If expected resource is too big for in-memory processing or we want to launch ex
 
     class Kartonik(Karton):
         ...
-        def process(self):
-            archive = self.current_task.get_resource("archive")
+        def process(self, task: Task) -> None:
+            archive = task.get_resource("archive")
             with archive.download_temporary_file() as f:
                 # f is file-like named object
                 archive_path = f.name
@@ -192,7 +192,7 @@ Directory resource objects
 
 Resource objects work well for single files, but sometimes we need to deal with bunch of artifacts e.g. process memory dumps from dynamic analysis. Very common way to do that is to pack them into Zip archive using Python `zipfile module <https://docs.python.org/3/library/zipfile.html>`_ facilities.
 
-Karton library includes specialized Resource class for that kind of archives, called :class:`DirectoryResource`.
+Karton library includes a helper method for that kind of archives, called :func:`LocalResource.from_directory`.
 
 .. code-block:: python
 
@@ -201,8 +201,8 @@ Karton library includes specialized Resource class for that kind of archives, ca
             "type": "analysis"
         },
         payload={
-            "dumps": DirectoryResource(analysis_id, 
-                                       directory_path=f"analyses/{analysis_id}/dumps"),
+            "dumps": LocalResource.from_directory(analysis_id, 
+                                                  directory_path=f"analyses/{analysis_id}/dumps"),
         }
     )
     self.send_task(task)
@@ -211,12 +211,14 @@ Files contained in `directory_path` are stored under relative paths to the provi
 
 Directory resources are deserialized on the consumer side to the :class:`RemoteDirectoryResource` objects that are specialized version of :class:`RemoteResource` and contain additional methods, allowing us to extract Zip to the temporary folder.
 
+Directory resources are deserialized to the usual :class:`RemoteResource` objects but in contrary to the usual resources they for example be extracted to directories using :func:`RemoteResource.extract_temporary`
+
 .. code-block:: python
 
     class Kartonik(Karton):
         ...
-        def process(self):
-            dumps = self.current_task.get_resource("dumps")
+        def process(self, task):
+            dumps = task.get_resource("dumps")
             with dumps.extract_temporary() as dumps_path:
                 ...
 
@@ -226,8 +228,8 @@ If we don't want to extract all files, we can work directly with :class:`zipfile
 
     class Kartonik(Karton):
         ...
-        def process(self):
-            dumps = self.current_task.get_resource("dumps")
+        def process(self, task: Task) -> None:
+            dumps = task.get_resource("dumps")
 
             with dumps.zip_file() as zipf:
                 with zipf.open("sample_info.txt") as info:
@@ -256,10 +258,10 @@ Incoming persistent payload (task received by Kartonik) is merged by Karton libr
 
     class Kartonik(Karton):
         ...
-        def process(self):
-            uploader = self.current_task.get_payload("uploader")
+        def process(self, task):
+            uploader = task.get_payload("uploader")
 
-            assert self.current_task.is_payload_persistent("uploader")
+            assert task.is_payload_persistent("uploader")
 
             task = Task(
                 headers=...,

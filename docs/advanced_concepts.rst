@@ -36,7 +36,7 @@ By default, all systems inheriting from :py:meth:`karton.core.KartonBase` will h
 
 In order to store the logs into a more persistent storage like Splunk or Rsyslog you have to implement a service that will consume the log entries and send them to the final database, for an example of such service see :ref:`example-consuming-logs`.
 
-The logging level can be configured using the standard karton config and setting `level` in the `logging` section to appropriate level like :code:`"DEBUG"`, :code:`"INFO"` or :code:`"ERROR"`.
+The logging level can be configured using the standard karton config and setting ``level`` in the ``logging`` section to appropriate level like :code:`"DEBUG"`, :code:`"INFO"` or :code:`"ERROR"`.
 
 
 Task life cycle
@@ -70,7 +70,7 @@ We can turn off queue persistence using the :code:`persistent = False` attribute
         filters = ...
         persistent = False
 
-        def process(self):
+        def process(self, task: Task) -> None:
             ...
 
 This is also the (hacky) way to remove persistent queue from the system. Just launch empty consumer with identity you want to remove, wait until all tasks will be consumed and shut down the consumer.
@@ -84,7 +84,7 @@ This is also the (hacky) way to remove persistent queue from the system. Just la
         filters = {}
         persistent = False
 
-        def process(self):
+        def process(self, task: Task) -> None:
             pass
 
     DeleteThisConsumer().loop()
@@ -136,8 +136,8 @@ For example, if we need to communicate with Malwarecage, we can make Malwarecage
     class GenericUnpacker(Karton):
         ...
 
-        def process(self):
-            file_hash = self.current_task.get_payload("file_hash")
+        def process(self, task):
+            file_hash = task.get_payload("file_hash")
             sample = self.config.mwdb.query_file(file_hash)
 
     if __name__ == "__main__":
@@ -165,7 +165,7 @@ and provide additional section in `karton.ini` file:
 Karton-wide and instance-wide configuration
 ```````````````````````````````````````````
 
-By default - configuration is searched in the following locations (by searching order):
+By default the configuration is searched in the following locations (by searching order):
 
 - :code:`/etc/karton/karton.ini`
 - :code:`~/.config/karton/karton.ini`
@@ -214,8 +214,8 @@ The most simple way to do that is to perform all of these actions synchronously,
 
 .. code-block:: python
     
-    def process(self):
-        sample = self.current_task.get_resource("sample")
+    def process(self, task: Task) -> None:
+        sample = task.get_resource("sample")
         
         # Dispatch task, getting the analysis_id
         with sample.download_temporary_file() as f:
@@ -250,17 +250,17 @@ Dispatcher part can look similar to this:
         
         filters = ...
 
-        def process(self):
-            sample = self.current_task.get_resource("sample")
+        def process(self, task: Task) -> None:
+            sample = task.get_resource("sample")
         
             # Dispatch task, getting the analysis_id
             with sample.download_temporary_file() as f:
                 analysis_id = sandbox.push_file(f)
                 # Mark task as asynchronic, so it won't be finished
                 # after we go out of self.process() method
-                self.current_task.make_asynchronic()
+                task.make_asynchronic()
                 # Store tracking information
-                self.rs.hsetnx("sandbox-tasks", analysis_id, self.current_task.uid)
+                self.rs.hsetnx("sandbox-tasks", analysis_id, task.uid)
                 
 Status tracker part:
 
@@ -273,7 +273,7 @@ Status tracker part:
 
         # We need to provide the same identity and filters!
     
-        def process(self):
+        def process(self, task: Task) -> None:
             analysis = sandbox.get_results(self.analysis_id)
             self.process_results(analysis)
             # Asynchronic state is not stored anywhere, so task will 
@@ -293,7 +293,7 @@ Status tracker part:
 
 But this approach is still (very, very) far from ideal:
 
-- hacking your own library is never a good idea (:at_least_not_yet:)
+- hacking your own library is never a good idea
 - all incoming tasks in SandboxDispatcher are immediately started, even if they are waiting in sandbox queue. This means that we can't reasonably track processing time and there is a risk that task will be prematurely terminated. We need to limit number of fetched tasks by SandboxDispatcher to the concurrency limit provided by sandbox (e.g. using counting Redis-based semaphore)
 
 So... this approach is not completely bad, but it needs to be more supported by Karton library. TODO.

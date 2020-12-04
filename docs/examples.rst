@@ -96,8 +96,8 @@ Next step is to define `process` method, this is handler for incoming tasks that
 
 .. code-block:: python
 
-    def process(self):
-       if self.current_task.headers["type"] == "sample":
+    def process(self, task):
+       if task.headers["type"] == "sample":
            return self.process_sample()
        else:
            return self.process_config()
@@ -112,15 +112,14 @@ Next step is to define `process` method, this is handler for incoming tasks that
         # ...
 
 
-`self.current_task.headers` gives you information on why task was routed and methods like `get_resource` or `get_payload` allow you to get resources or metadata from task.
+``task.headers`` gives you information on why task was routed and methods like `get_resource` or `get_payload` allow you to get resources or metadata from task.
 
 Finally, we need to run our module, we get this done with `loop` method, which blocks on listening for new tasks, running `process` when needed.
 
 .. code-block:: python
 
     if __name__ == "__main__":
-        config = Config(os.path.join(os.path.dirname(__file__), "config.ini"))
-        c = Reporter(config)
+        c = Reporter()
         c.loop()
 
 
@@ -138,13 +137,13 @@ As defined in `karton/karton.py`:
     """
 
 Receiving data is done exactly like in Consumer.
-Using producer is no different as well, just use `self.send_task`.
+Using producer is no different as well, just use ``self.send_task``.
 
 Full-blown example below.
 
 .. code-block:: python
 
-    from karton.core ...
+    from karton.core import Karton, Task
 
     class SomeNameKarton(Karton):
         # Define identity and filters as you would in the Consumer class
@@ -158,21 +157,12 @@ Full-blown example below.
                 "kind": "cuckoo1"
             },
         ]
-        # Custom processing method
-        def process_matching(self,
-                             analysis: Dict[str, Any],
-                             config: Dict[str, Any]) -> None:
-            # Download remote resource only when content is needed
-            analysis = RemoteDirectoryResource.from_dict(analysis)
-            ...
-            with analysis.extract_temporary() as analysis_dir:
-                ...
 
         # Method called by Karton library
-        def process(self) -> None:
+        def process(self, task: Task) -> None:
             # Getting resources we need without downloading them locally
-            analysis_resource = self.current_task.get_resource('analysis')
-            config_resource = self.current_task.get_resource('config')
+            analysis_resource = task.get_resource('analysis')
+            config_resource = task.get_resource('config')
 
             # Log with self.log
             self.log.info("Got resources, lets analyze them!")
@@ -195,16 +185,18 @@ This can be easily done by overriding `Config` class and using that for `Karton`
 
 .. code-block:: python
 
+    import mwdblib
+
     class MWDBConfig(Config):
         def __init__(self, path) -> None:
             super(MWDBConfig, self).__init__(path)
             self.mwdb_config = dict(self.config.items("mwdb"))
 
-        def mwdb(self) -> Malwarecage:
-            api = mwdblib.api.MalwarecageAPI(
+        def mwdb(self) -> mwdblib.MWDB:
+            api = mwdblib.api.APIClient(
                 api_key=self.mwdb_config.get("api_key"),
                 api_url=self.mwdb_config.get("api_url", mwdblib.api.API_URL))
-            mwdb = Malwarecage(api)
+            mwdb = mwdblib.MWDB(api)
             if not api.api_key:
                 mwdb.login(
                     self.mwdb_config["username"],
@@ -217,33 +209,27 @@ This can be easily done by overriding `Config` class and using that for `Karton`
 Log consumer
 ------------
 
+By default, all logs created in karton systems are pushed onto a single queue called ``karton.logs`` in the Redis database.
+
+These logs have to be collected in order to prevent our Redis server from blowing up.
+
+This is a very simple example of a system that does that and prints the messages to stderr.
+
+
 .. code-block:: python
 
-    class RandomLoggerService(KartonBase):
-        identity = "karton.random-logger"
-        persistent = True
+    import sys
+    from karton.core.karton import LogConsumer
 
-        def graceful_shutdown(self) -> None:
-            self.log.info("Gracefully shutting down!")
-            self.shutdown = True
 
-        def loop(self) -> None:
-            self.log.info(f"Service {self.identity} started")
+    class StdoutLogger(LogConsumer):
+        identity = "karton.stdout-logger"
 
-            while not self.shutdown:
-                data = self.rs.blpop("karton.logs")
-                if data:
-                    _, body = data
-                    try:
-                        if not isinstance(body, str):
-                            body = body.decode("utf-8")
-                        body = json.loads(body)
-                        if "task" in body and isinstance(body["task"], str):
-                            body["task"] = json.loads(body["task"])
-                        submit_log(event=json.dumps(body))
-                    except Exception as e:
-                        """
-                        This is log handler exception, so DO NOT USE self.log HERE!
-                        """
-                        import traceback
-                        traceback.print_exc()
+        def process_log(self, event: dict) -> None:
+            # there are "log" and "operation" events
+            if event.get("type") == "log":
+                print(f"{event['name']}: {event['message']}", file=sys.stderr)
+
+
+    if __name__ == "__main__":
+        StdoutLogger().loop()
