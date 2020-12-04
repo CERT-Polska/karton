@@ -96,7 +96,7 @@ Next step is to define `process` method, this is handler for incoming tasks that
 
 .. code-block:: python
 
-    def process(self, task):
+    def process(self, task: Task) -> None:
        if task.headers["type"] == "sample":
            return self.process_sample()
        else:

@@ -107,7 +107,7 @@ class Task(object):
                     "kind": "raw"
                 }
 
-                def process(self, task):
+                def process(self, task: Task) -> None:
                     sample = task.get_resource("sample")
                     if sample.content.startswith(b"MZ"):
                         self.log.info("MZ detected!")

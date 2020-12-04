@@ -215,7 +215,7 @@ Directory resources are deserialized to the usual :class:`RemoteResource` object
 
     class Kartonik(Karton):
         ...
-        def process(self, task):
+        def process(self, task: Task) -> None:
             dumps = task.get_resource("dumps")
             with dumps.extract_temporary() as dumps_path:
                 ...
@@ -256,7 +256,7 @@ Incoming persistent payload (task received by Kartonik) is merged by Karton libr
 
     class Kartonik(Karton):
         ...
-        def process(self, task):
+        def process(self, task: Task) -> None:
             uploader = task.get_payload("uploader")
 
             assert task.is_payload_persistent("uploader")

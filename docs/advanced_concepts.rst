@@ -136,7 +136,7 @@ For example, if we need to communicate with Malwarecage, we can make Malwarecage
     class GenericUnpacker(Karton):
         ...
 
-        def process(self, task):
+        def process(self, task: Task) -> None:
             file_hash = task.get_payload("file_hash")
             sample = self.config.mwdb.query_file(file_hash)
 
