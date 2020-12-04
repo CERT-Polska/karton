@@ -269,10 +269,10 @@ class Task(object):
         task = Task(data["headers"])
         task.uid = data["uid"]
         task.root_uid = data["root_uid"]
-        task.error = data.get("error")
         task.parent_uid = data["parent_uid"]
         task.status = data["status"]
         # Backwards compatibility, remove these .get's after upgrade
+        task.error = data.get("error")
         task.priority = data.get("priority", TaskPriority.NORMAL)
         task.last_update = data.get("last_update", None)
         task.payload = data["payload"]
