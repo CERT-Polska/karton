@@ -49,7 +49,7 @@ In order to better understand how those identifiers are inherited and passed bet
 
 Handling logging
 ----------------
-By default, all systems inheriting from :py:meth:`karton.core.KartonBase` will have a custom :py:meth:`logging.Logger` instance exposed as :py:meth:`log`. It deliver all logged messages to a queue on the central Redis database.
+By default, all systems inheriting from :py:meth:`karton.core.KartonBase` will have a custom :py:meth:`logging.Logger` instance exposed as :py:meth:`log`. It delivers all logged messages to a queue on the central Redis database.
 
 In order to store the logs into a more persistent storage like Splunk or Rsyslog you have to implement a service that will consume the log entries and send them to the final database, for an example of such service see :ref:`example-consuming-logs`.
 
