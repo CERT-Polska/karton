@@ -58,7 +58,7 @@ Headers can be used to process our input differently, depending on the kind of s
     class GenericUnpacker(Karton):
         ...
 
-        def process(self, task):
+        def process(self, task: Task) -> None:
             # Get incoming task headers
             headers = task.headers
             if headers["kind"] == "runnable":
