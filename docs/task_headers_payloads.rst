@@ -209,7 +209,7 @@ Karton library includes a helper method for that kind of archives, called :func:
 
 Files contained in `directory_path` are stored under relative paths to the provided directory path. Default compression level is `zipfile.ZIP_DEFLATED` instead of `zipfile.ZIP_STORED`.
 
-Directory resources are deserialized to the usual :class:`RemoteResource` objects but in contrary to the usual resources they for example be extracted to directories using :func:`RemoteResource.extract_temporary`
+Directory resources are deserialized to the usual :class:`RemoteResource` objects but in contrary to the usual resources they can for example be extracted to directories using :func:`RemoteResource.extract_temporary`
 
 .. code-block:: python
 
