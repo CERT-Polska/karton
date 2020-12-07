@@ -32,7 +32,7 @@ class ResourceBase(object):
         self.bucket = bucket
         self.metadata = metadata or {}
         # the sha256 identifier can be passed as an argument or inside the metadata
-        sha256 = sha256 or metadata.get("sha256")
+        sha256 = sha256 or self.metadata.get("sha256")
 
         calculate_hash = sha256 is None
 
