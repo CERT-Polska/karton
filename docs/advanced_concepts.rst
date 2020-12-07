@@ -9,9 +9,10 @@ During its lifetime, the task will transfer between various states and its refer
 .. image:: task-lifetime.svg
 
 Each new task is registered in the system by a call to :py:meth:`karton.Producer.send_task` and starts its life in the **unrouted task queue** with a ``TaskState.Declared`` state.
-``Karton.tasks`` is **the** queue where all task data will be stored, other queues will be always only holding a reference to a record from this place.
 
-The main broker - ``Karton.System`` constantly looks over this queue and keeps the tasks running as well as clears up leftover unneeded data.
+All actual task data is stored in the ``Karton.task`` namespace and all other (routed and unrouted) queues will be always only holding a reference to a record from this place.
+
+The main broker - ``karton.System`` constantly looks over the unrouted (``karton.tasks``) queue and keeps the tasks running as well as clears up leftover unneeded data.
 
 Because task headers can be accepted by more than one consumer the task has to be forked before it goes to the appropriate **consumer (routed) queues**. Based on **unrouted task**, ``Karton.System`` generates as many **routed tasks** as there are matching queues. These tasks are separate, independent instances, so they have different **uid** than original unrouted task.
 
@@ -31,7 +32,7 @@ As a part of its housekeeping, ``Karton.System`` removes all ``TaskState.Finishe
 Task tree (analysis) and task life cycle
 ----------------------------------------
 
-Every analysis starts from `initial task` spawned by :class:`karton.Producer`. `Initial task` is consumed by consumers, which then produce next tasks for further processing. These various tasks originating from initial task can be grouped together into **task tree**, representing the analysis.
+Every analysis starts from `initial task` spawned by :class:`karton.Producer`. `Initial task` is consumed by consumers, which then produce next tasks for further processing. These various tasks originating from initial task can be grouped together into a **task tree**, representing the analysis.
 
 .. image:: forking-task.svg
 
@@ -55,23 +56,6 @@ In order to store the logs into a more persistent storage like Splunk or Rsyslog
 
 The logging level can be configured using the standard karton config and setting ``level`` in the ``logging`` section to appropriate level like :code:`"DEBUG"`, :code:`"INFO"` or :code:`"ERROR"`.
 
-
-Task life cycle
----------------
-When :py:meth:`karton.Producer.send_task` is called: **unrouted task** starts its journey in `Declared` state. Task is registered in Redis with references to the Resource objects. After task declaration, :class:`karton.LocalResource` objects are uploaded to MinIO. Finally, task identifier is placed in **unrouted tasks queue** and is waiting for **Karton-System** to route it to appropriate consumers.
-
-<image>
-
-Task is fetched by **Karton-System** broker, which checks all the consumer queue filters if any of them match task headers. If there is a match, task is **forked** to the appropriate queue.
-
-<image>
-
-**Routed tasks** go to the `Spawned` state and their identifiers are placed in appropriate consumer queues (one copy of task per queue). Original unrouted task go to the `Finished` state.
-
-Then, routed task is fetched by consumer and goes to the `Started` state. In this state, Karton subsystem performs the job and new tasks can be spawned as a result of processing. When job is finished: task goes to the `Finished` state and all information about task and unreferenced resources are removed by **Karton-System** garbage collector.
-
-.. note::
-    Finished tasks are removed by GC as soon as possible, so don't check whether task is finished only by checking its state. Non-existing tasks should be also treated as possibly finished (and collected).
 
 Consumer queue persistence
 --------------------------
@@ -125,7 +109,7 @@ All tasks within the same task tree have the same priority, which is derived fro
 Extending configuration
 -----------------------
 
-During processing we may need to fetch data from external service or use libraries that need to be pre-configured. Most simple approach is to use separate configuration file, but this is a bit messy.
+During processing we may need to fetch data from external service or use libraries that need to be pre-configured. The siumplest approach is to use separate configuration file, but this is a bit messy.
 
 Karton configuration is represented by special object :class:`karton.Config`, which can be explicitly provided as an argument to the Karton constructor. `Config` is based on :class:`configparser.ConfigParser`, so we can extend it with additional sections for custom configuration.
 
@@ -135,19 +119,18 @@ For example, if we need to communicate with Malwarecage, we can make Malwarecage
 
     class MWDBConfig(Config):
         def __init__(self, path=None) -> None:
-            super().__init__(path)
+            super(MWDBConfig, self).__init__(path)
             self.mwdb_config = dict(self.config.items("mwdb"))
 
-        def mwdb(self) -> Malwarecage:
-            mwdb = Malwarecage(
+        def mwdb(self) -> mwdblib.MWDB:
+            api = mwdblib.api.APIClient(
                 api_key=self.mwdb_config.get("api_key"),
-                api_url=self.mwdb_config.get("api_url", mwdblib.api.API_URL)
-            )
+                api_url=self.mwdb_config.get("api_url", mwdblib.api.API_URL))
+            mwdb = mwdblib.MWDB(api)
             if not api.api_key:
                 mwdb.login(
                     self.mwdb_config["username"],
-                    self.mwdb_config["password"]
-                )
+                    self.mwdb_config["password"])
             return mwdb
 
     class GenericUnpacker(Karton):
@@ -155,7 +138,7 @@ For example, if we need to communicate with Malwarecage, we can make Malwarecage
 
         def process(self, task: Task) -> None:
             file_hash = task.get_payload("file_hash")
-            sample = self.config.mwdb.query_file(file_hash)
+            sample = self.config.mwdb().query_file(file_hash)
 
     if __name__ == "__main__":
         GenericUnpacker(MWDBConfig()).loop()

@@ -1,6 +1,6 @@
 Examples
 ==================================
-Here are few examples of usage.
+Here are few examples of common karton system patterns.
 
 Producer
 -------------------

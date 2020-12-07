@@ -48,7 +48,8 @@ Consumers are listening for specific set of headers, which is defined by `filter
             headers = task.headers
             self.log.info("Got %s sample from %s", headers["kind"], headers["origin"])
 
-If Karton find that task matches any of subsets defined by consumer queue filters: task will be routed to that queue.
+If Karton-System finds that a task matches any of subsets defined by consumer queue filters then the task will be routed to that queue.
+
 Following the convention proposed in examples above, it means that `GenericUnpacker` will get all tasks that apply to samples directly runnable in sandbox (regardless of target platform) or Windows 32-bit only scripts.
 
 Headers can be used to process our input differently, depending on the kind of sample:

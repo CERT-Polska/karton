@@ -11,6 +11,7 @@ You can get the karton framework from pip:
     python -m pip install karton-core
 
 Or, if you're feeling adventurous, download the sources using git and install them manually.
+
 In addition to karton, you'll also need to setup `MinIO <https://docs.min.io/docs/minio-quickstart-guide.html>`_ and `Redis-server <https://redis.io/topics/quickstart>`_.
 
 
@@ -36,14 +37,16 @@ By default, the config class will look for the config file in several places, bu
     host=localhost
     port=6379
 
-If everything was configured correctly, you should now be able to run the `karton-system` broker and get `Manager karton.system started` signaling that it's able to connect to Redis and MinIO correctly.
+If everything was configured correctly, you should now be able to run the ``karton-system`` broker and get ``Manager karton.system started`` signaling that it's able to connect to Redis and MinIO correctly.
 
 
 Docker-compose development setup
 --------------------------------
 
-If you're just trying Karton out or you want a quick & easy environment setup checkout the ``dev`` folder in the root directory.
+If you're just trying Karton out or you want a quick & easy develeopment environment setup check out the ``dev`` folder in the karton root directory.
+
 It contains a small docker-compose setup that will setup the minimal development environment for you.
+
 All you have to do is run
 
 .. code-block:: console
@@ -94,7 +97,7 @@ That was pretty short! Now for a bit longer consumer:
     if __name__ == "__main__":
         FooBarConsumer().loop()
 
-If we now run the consumer and spawn a few "foobar" tasks we should get a few foobars in return:
+If we now run the consumer and spawn a few "foobar" tasks we should get a few foobars logs in return:
 
 .. code-block:: none
 
