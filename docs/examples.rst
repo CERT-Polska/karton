@@ -1,6 +1,6 @@
 Examples
 ==================================
-Here are few examples of common karton system patterns.
+Here are few examples of common Karton system patterns.
 
 Producer
 -------------------

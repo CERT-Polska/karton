@@ -43,7 +43,7 @@ If everything was configured correctly, you should now be able to run the ``kart
 Docker-compose development setup
 --------------------------------
 
-If you're just trying Karton out or you want a quick & easy develeopment environment setup check out the ``dev`` folder in the karton root directory.
+If you're just trying Karton out or you want a quick & easy development environment setup check out the ``dev`` folder in the karton root directory.
 
 It contains a small docker-compose setup that will setup the minimal development environment for you.
 

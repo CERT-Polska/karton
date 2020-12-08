@@ -32,7 +32,7 @@ As a part of its housekeeping, ``Karton.System`` removes all ``TaskState.Finishe
 Task tree (analysis) and task life cycle
 ----------------------------------------
 
-Every analysis starts from `initial task` spawned by :class:`karton.Producer`. `Initial task` is consumed by consumers, which then produce next tasks for further processing. These various tasks originating from initial task can be grouped together into a **task tree**, representing the analysis.
+Every analysis starts from **initial task** spawned by :class:`karton.Producer`. **Initial task** is consumed by consumers, which then produce next tasks for further processing. These various tasks originating from initial task can be grouped together into a **task tree**, representing the analysis.
 
 .. image:: forking-task.svg
 
@@ -109,7 +109,7 @@ All tasks within the same task tree have the same priority, which is derived fro
 Extending configuration
 -----------------------
 
-During processing we may need to fetch data from external service or use libraries that need to be pre-configured. The siumplest approach is to use separate configuration file, but this is a bit messy.
+During processing we may need to fetch data from external service or use libraries that need to be pre-configured. The simplest approach is to use separate configuration file, but this is a bit messy.
 
 Karton configuration is represented by special object :class:`karton.Config`, which can be explicitly provided as an argument to the Karton constructor. `Config` is based on :class:`configparser.ConfigParser`, so we can extend it with additional sections for custom configuration.
 
