@@ -1,7 +1,7 @@
 import os
 import unittest
 from unittest.mock import patch, mock_open
-from karton.core import Config
+from karton.core import Config, Task
 
 MOCK_CONFIG = """
 [minio]
@@ -70,6 +70,16 @@ class TestConfig(unittest.TestCase):
         cfg = Config()
         self.assertEqual(cfg["minio"], cfg.minio_config)
         self.assertEqual(cfg["redis"], cfg.redis_config)
+
+
+class TestTask(unittest.TestCase):
+    task = Task(headers={"A": "a", "B": "b"})
+    assert task.matches_filters([{"A": "a"}])
+    assert task.matches_filters([{"A": "a"}, {"A": "b", "Z": "z"}])
+    assert task.matches_filters([{"A": "a", "B": "b"}])
+    assert not task.matches_filters([{"Z": "a"}])
+    assert not task.matches_filters([{"A": "a", "Z": "a"}])
+
 
 if __name__ == "__main__":
     unittest.main()
