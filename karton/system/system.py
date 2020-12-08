@@ -85,8 +85,6 @@ class SystemService(KartonServiceBase):
                     task.last_update is not None and
                     current_time > task.last_update + self.TASK_STARTED_TIMEOUT
             ):
-                # todo: Asynchronic tasks are just dispatched to another (system) queue
-                # todo: Maybe these asynchronic things are just bad idea?
                 will_delete = True
                 self.log.warning("Task %s is in Started state more than %d seconds. Killed. (receiver: %s)",
                                  task.uid, self.TASK_STARTED_TIMEOUT, task.headers.get("receiver", "<unknown>"))
