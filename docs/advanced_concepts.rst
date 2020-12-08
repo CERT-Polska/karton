@@ -208,7 +208,7 @@ Karton can be used to delegate tasks to separate queues e.g. external sandbox. E
 - wait until service ends processing
 - fetch results and spawn result tasks keeping the `root_uid` and `parent_uid`
 
-We tried to solve this using asynchronic tasks but it turned out to be very hard to be implemented correctly and didn't really fit in to with the Karton model.
+We tried to solve this using asynchronous tasks but it turned out to be very hard to be implemented correctly and didn't really fit in to with the Karton model.
 
 Busy waiting
 ````````````
