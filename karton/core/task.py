@@ -145,10 +145,13 @@ class Task(object):
 
         :meta private:
         """
-        return all(
-            self.headers.get(bind_key) == bind_value
-            for task_filter in filters
-            for bind_key, bind_value in task_filter.items()
+        return any(
+            # If any of consumer filters matches the header
+            all(
+                # Match: all consumer filter fields match the task header
+                self.headers.get(bind_key) == bind_value
+                for bind_key, bind_value in task_filter.items()
+            ) for task_filter in filters
         )
 
     def set_task_parent(self, parent):
