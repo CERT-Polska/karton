@@ -252,13 +252,6 @@ class KartonMock(object):
 
         self._result_tasks.append(task)
 
-    @contextlib.contextmanager
-    def continue_asynchronic(self, task, finish=True):
-        old_current_task = self.current_task
-        self.current_task = task
-        yield
-        self.current_task = old_current_task
-
     def process(self):
         """
         Expected to be overwritten
