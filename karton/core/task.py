@@ -74,8 +74,6 @@ class Task(object):
         self.payload = dict(payload)
         self.payload_persistent = dict(payload_persistent)
 
-        self.asynchronic = False
-
     def fork_task(self):
         """
         Fork task to transfer single task to many queues (but use different UID).
@@ -280,33 +278,6 @@ class Task(object):
 
     def __repr__(self):
         return self.serialize()
-
-    def is_asynchronic(self):
-        """
-        Checks whether task is asynchronic
-
-        .. note::
-
-            This is experimental feature.
-            Read about asynchronic tasks in Advanced concepts.
-
-
-        :rtype: bool
-        :return: if current task is asynchronic
-        """
-        return self.asynchronic
-
-    def make_asynchronic(self):
-        """
-        Task declares that work will be done by some remote
-        handler, so task shouldn't be considered finished when process() returns
-
-        .. note::
-
-            This is experimental feature.
-            Read about asynchronic tasks in Advanced concepts.
-        """
-        self.asynchronic = True
 
     def add_payload(self, name, content, persistent=False):
         """

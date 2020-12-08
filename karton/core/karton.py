@@ -97,40 +97,6 @@ class Producer(KartonBase):
         self.rs.hincrby(METRICS_PRODUCED, self.identity, 1)
         return True
 
-    @contextlib.contextmanager
-    def continue_asynchronic(self, task, finish=True):
-        """
-        Continue asynchronic task. This is wrapper code used for resuming asynchronic task, takes care of setting
-        context and logging when the task is finished. That is when the context manager finishes.
-
-        .. note::
-
-            This is experimental feature.
-            Read about asynchronic tasks in Advanced concepts.
-
-        :param task: task to be resumed
-        :type task: :py:class:`karton.Task`
-        :param finish: if we should log that the task finished
-        :type finish: bool
-        """
-
-        old_current_task = self.current_task
-
-        self.current_task = task
-        self.log_handler.set_task(self.current_task)
-
-        # Handle task
-        yield
-
-        # Finish task
-        if finish:
-            self.declare_task_state(
-                self.current_task, status=TaskState.FINISHED, identity=self.identity,
-            )
-
-        self.current_task = old_current_task
-        self.log_handler.set_task(self.current_task)
-
 
 class Consumer(KartonServiceBase):
     """
@@ -204,10 +170,9 @@ class Consumer(KartonServiceBase):
             )
         finally:
             self.rs.hincrby(METRICS_CONSUMED, self.identity, 1)
-            if not self.current_task.is_asynchronic():
-                self.declare_task_state(
-                    self.current_task, TaskState.FINISHED, identity=self.identity,
-                )
+            self.declare_task_state(
+                self.current_task, TaskState.FINISHED, identity=self.identity,
+            )
 
     @property
     def _bind(self):

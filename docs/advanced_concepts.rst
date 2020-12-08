@@ -208,11 +208,11 @@ Karton can be used to delegate tasks to separate queues e.g. external sandbox. E
 - wait until service ends processing
 - fetch results and spawn result tasks keeping the `root_uid` and `parent_uid`
 
-There multiple approaches to do that.
+We tried to solve this using asynchronous tasks but it turned out to be very hard to be implemented correctly and didn't really fit in to with the Karton model.
 
 Busy waiting
 ````````````
-The most simple way to do that is to perform all of these actions synchronously, inside the :meth:`process` method.
+The simplest way to do that is to perform all of these actions synchronously, inside the :meth:`process` method.
 
 .. code-block:: python
     
@@ -232,70 +232,3 @@ The most simple way to do that is to perform all of these actions synchronously,
         analysis = sandbox.get_results(analysis_id)
         self.process_results(analysis)
 
-
-This approach has few disadvantages:
-
-- if our sandbox supports concurrency, we need to spawn as much consumers as we need to. It's memory-consuming and these consumers are just waiting for most of the time;
-- when consumer has been terminated during tracking task status, it can't recover from that. Task will be orphaned and results will stay unreported;
-
-Asynchronic tasks
-`````````````````
-
-Another, experimental approach are **asynchronic tasks**, allowing us to get out of :meth:`process` method without setting task status to finished. To handle that, we need to split our subsystem to two parts: dispatcher and status tracker.
-
-Dispatcher part can look similar to this:
-
-.. code-block:: python
-
-    class SandboxDispatcher(Karton):
-        identity = "karton.sandbox-analyzer"
-        
-        filters = ...
-
-        def process(self, task: Task) -> None:
-            sample = task.get_resource("sample")
-        
-            # Dispatch task, getting the analysis_id
-            with sample.download_temporary_file() as f:
-                analysis_id = sandbox.push_file(f)
-                # Mark task as asynchronic, so it won't be finished
-                # after we go out of self.process() method
-                task.make_asynchronic()
-                # Store tracking information
-                self.rs.hsetnx("sandbox-tasks", analysis_id, task.uid)
-                
-Status tracker part:
-
-.. code-block:: python
-
-    class SandboxResultProcessor(Karton):
-        identity = "karton.sandbox-analyzer"
-
-        filters = ...
-
-        # We need to provide the same identity and filters!
-    
-        def process(self, task: Task) -> None:
-            analysis = sandbox.get_results(self.analysis_id)
-            self.process_results(analysis)
-            # Asynchronic state is not stored anywhere, so task will 
-            # just finish in tracker context
-
-    sandbox_processor = SandboxResultProcessor()
-
-    while True:
-        for analysis_id in redis_queue.hkeys("sandbox-tasks"):
-            task_uid = self.rs.hget("sandbox-tasks", analysis_id)
-            # This will fetch the task_uid from Redis and restart processing
-            # inside our SandboxResultProcessor
-            sandbox_processor.analysis_id = analysis_id
-            sandbox_processor.internal_process(task_uid)
-        time.sleep(5)
-            
-
-But this approach is still (very, very) far from ideal:
-
-- hacking your own library is never a good idea
-- all incoming tasks in SandboxDispatcher are immediately started, even if they are waiting in sandbox queue. This means that we can't reasonably track processing time and there is a risk that task will be prematurely terminated. We need to limit number of fetched tasks by SandboxDispatcher to the concurrency limit provided by sandbox (e.g. using counting Redis-based semaphore)
-
-So... this approach is not completely bad, but it needs to be more supported by Karton library. TODO.
