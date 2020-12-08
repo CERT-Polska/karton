@@ -107,11 +107,11 @@ class Task(object):
                     "kind": "raw"
                 }
 
-                def process(self):
-                    sample = self.current_task.get_resource("sample")
+                def process(self, task: Task) -> None:
+                    sample = task.get_resource("sample")
                     if sample.content.startswith(b"MZ"):
                         self.log.info("MZ detected!")
-                        task = self.current_task.derive_task({
+                        task = task.derive_task({
                             "type": "sample",
                             "kind": "exe"
                         })

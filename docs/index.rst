@@ -36,9 +36,9 @@ Task routing and data exchange is achieved with the help of **Karton-System** - 
            }
        ]
 
-       def process(self) -> None:
+       def process(self, task: Task) -> None:
            # Get sample object
-           packed_sample = self.current_task.get_resource('sample')
+           packed_sample = task.get_resource('sample')
            # Log with self.log
            self.log.info(f"Hi {packed_sample.name}, let me analyze you!")
            ...
