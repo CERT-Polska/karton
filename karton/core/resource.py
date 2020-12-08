@@ -157,6 +157,8 @@ class LocalResource(ResourceBase):
     :type metadata: dict, optional
     :param uid: Alternative MinIO resource id
     :type uid: str, optional
+    :param uid: Resource sha256 hash
+    :type uid: str, optional
     """
     def __init__(self, name, content=None, path=None, bucket=None, metadata=None, uid=None, sha256=None,
                  _fd=None, _flags=None):
@@ -294,7 +296,7 @@ class RemoteResource(ResourceBase):
             uid=dict["uid"],
             size=dict.get("size"),  # Backwards compatibility (2.x.x)
             minio=minio,
-            _flags=dict.get("flags") # Backwards compatibility (3.x.x)
+            _flags=dict.get("flags")  # Backwards compatibility (3.x.x)
         )
 
     @property
