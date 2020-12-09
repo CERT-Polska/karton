@@ -104,12 +104,13 @@ class TestConfig(unittest.TestCase):
 
 
 class TestTask(unittest.TestCase):
-    task = Task(headers={"A": "a", "B": "b"})
-    assert task.matches_filters([{"A": "a"}])
-    assert task.matches_filters([{"A": "a"}, {"A": "b", "Z": "z"}])
-    assert task.matches_filters([{"A": "a", "B": "b"}])
-    assert not task.matches_filters([{"Z": "a"}])
-    assert not task.matches_filters([{"A": "a", "Z": "a"}])
+    def test_matching_filters(self):
+        task = Task(headers={"A": "a", "B": "b"})
+        self.assertTrue(task.matches_filters([{"A": "a"}]))
+        self.assertTrue(task.matches_filters([{"A": "a"}, {"A": "b", "Z": "z"}]))
+        self.assertTrue(task.matches_filters([{"A": "a", "B": "b"}]))
+        self.assertFalse(task.matches_filters([{"Z": "a"}]))
+        self.assertFalse(task.matches_filters([{"A": "a", "Z": "a"}]))
 
 
 if __name__ == "__main__":
