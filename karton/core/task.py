@@ -78,8 +78,6 @@ class Task(object):
         self.payload = dict(payload)
         self.payload_persistent = dict(payload_persistent)
 
-        self.asynchronic = False
-
     def fork_task(self):
         """
         Fork task to transfer single task to many queues (but use different UID).
@@ -111,11 +109,11 @@ class Task(object):
                     "kind": "raw"
                 }
 
-                def process(self):
-                    sample = self.current_task.get_resource("sample")
+                def process(self, task: Task) -> None:
+                    sample = task.get_resource("sample")
                     if sample.content.startswith(b"MZ"):
                         self.log.info("MZ detected!")
-                        task = self.current_task.derive_task({
+                        task = task.derive_task({
                             "type": "sample",
                             "kind": "exe"
                         })
@@ -140,18 +138,22 @@ class Task(object):
         )
         return new_task
 
-    def matches_bind(self, bind):
+    def matches_filters(self, filters):
         """
-        Checks whether provided task headers are matching filter bind
+        Checks whether provided task headers are matching filters
 
-        :param bind: Filter bind
-        :return: True if task matches specific bind
+        :param filters: Task header filters
+        :return: True if task headers match specific filters
 
         :meta private:
         """
-        return all(
-            self.headers.get(bind_key) == bind_value
-            for bind_key, bind_value in bind.items()
+        return any(
+            # If any of consumer filters matches the header
+            all(
+                # Match: all consumer filter fields match the task header
+                self.headers.get(bind_key) == bind_value
+                for bind_key, bind_value in task_filter.items()
+            ) for task_filter in filters
         )
 
     def set_task_parent(self, parent):
@@ -282,33 +284,6 @@ class Task(object):
 
     def __repr__(self):
         return self.serialize()
-
-    def is_asynchronic(self):
-        """
-        Checks whether task is asynchronic
-
-        .. note::
-
-            This is experimental feature.
-            Read about asynchronic tasks in Advanced concepts.
-
-
-        :rtype: bool
-        :return: if current task is asynchronic
-        """
-        return self.asynchronic
-
-    def make_asynchronic(self):
-        """
-        Task declares that work will be done by some remote
-        handler, so task shouldn't be considered finished when process() returns
-
-        .. note::
-
-            This is experimental feature.
-            Read about asynchronic tasks in Advanced concepts.
-        """
-        self.asynchronic = True
 
     def add_payload(self, name, content, persistent=False):
         """

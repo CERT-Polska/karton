@@ -86,8 +86,6 @@ class SystemService(KartonServiceBase):
                     task.last_update is not None and
                     current_time > task.last_update + self.TASK_STARTED_TIMEOUT
             ):
-                # todo: Asynchronic tasks are just dispatched to another (system) queue
-                # todo: Maybe these asynchronic things are just bad idea?
                 will_delete = True
                 self.log.warning("Task %s is in Started state more than %d seconds. Killed. (receiver: %s)",
                                  task.uid, self.TASK_STARTED_TIMEOUT, task.headers.get("receiver", "<unknown>"))
@@ -133,21 +131,12 @@ class SystemService(KartonServiceBase):
 
         self.log.info("[%s] Processing task %s", task.root_uid, task.uid)
 
-        for identity, raw_binds in self.rs.hgetall("karton.binds").items():
-            # For each identity
-            binds = json.loads(raw_binds)
-            if isinstance(binds, list):
-                # v2.2.0 compatibility
-                filters = binds
-                persistent = not identity.endswith(".test")
-            else:
-                filters = binds["filters"]
-                persistent = binds["persistent"]
-
-            if identity not in bound_identities and not persistent:
+        for bind in self.backend.get_binds():
+            identity = bind.identity
+            if identity not in bound_identities and not bind.persistent:
                 # If unbound and not persistent
                 for queue in [
-                    identity,  # Backwards compatibility, remove after upgrade
+                    bind.identity,  # Backwards compatibility, remove after upgrade
                     "karton.queue.{}:{}".format(TaskPriority.HIGH, identity),
                     "karton.queue.{}:{}".format(TaskPriority.NORMAL, identity),
                     "karton.queue.{}:{}".format(TaskPriority.LOW, identity)
@@ -167,22 +156,19 @@ class SystemService(KartonServiceBase):
                         self.declare_task_state(unwound_task, TaskState.FINISHED, identity=identity)
                 self.log.info("Non-persistent: removing bind %s", identity)
                 self.rs.hdel("karton.binds", identity)
-                # Continue with next identity
+                # Since this bind was deleted we can skip the task bind matching
                 continue
 
-            for bind in filters:
-                if task.matches_bind(bind):
-                    routed_task = task.fork_task()
-                    routed_task.status = TaskState.SPAWNED
-                    routed_task.last_update = time.time()
-                    routed_task.headers.update({"receiver": identity})
-                    routed_task_body = routed_task.serialize()
-                    self.rs.set("karton.task:" + routed_task.uid, routed_task_body)
-                    self.rs.rpush("karton.queue.{}:{}".format(task.priority, identity), routed_task.uid)
-                    self.rs.hincrby(METRICS_ASSIGNED, identity, 1)
-                    self.declare_task_state(routed_task, TaskState.SPAWNED, identity=identity)
-                    # Matched at least one bind: go to next identity
-                    break
+            if task.matches_filters(bind.filters):
+                routed_task = task.fork_task()
+                routed_task.status = TaskState.SPAWNED
+                routed_task.last_update = time.time()
+                routed_task.headers.update({"receiver": identity})
+                routed_task_body = routed_task.serialize()
+                self.rs.set("karton.task:" + routed_task.uid, routed_task_body)
+                self.rs.rpush("karton.queue.{}:{}".format(task.priority, identity), routed_task.uid)
+                self.rs.hincrby(METRICS_ASSIGNED, identity, 1)
+                self.declare_task_state(routed_task, TaskState.SPAWNED, identity=identity)
 
     def loop(self):
         self.log.info("Manager {} started".format(self.identity))

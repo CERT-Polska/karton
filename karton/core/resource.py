@@ -32,7 +32,7 @@ class ResourceBase(object):
         self.bucket = bucket
         self.metadata = metadata or {}
         # the sha256 identifier can be passed as an argument or inside the metadata
-        sha256 = sha256 or metadata.get("sha256")
+        sha256 = sha256 or self.metadata.get("sha256")
 
         calculate_hash = sha256 is None
 
@@ -156,6 +156,8 @@ class LocalResource(ResourceBase):
     :param metadata: Resource metadata
     :type metadata: dict, optional
     :param uid: Alternative MinIO resource id
+    :type uid: str, optional
+    :param uid: Resource sha256 hash
     :type uid: str, optional
     """
     def __init__(self, name, content=None, path=None, bucket=None, metadata=None, uid=None, sha256=None,
@@ -294,7 +296,7 @@ class RemoteResource(ResourceBase):
             uid=dict["uid"],
             size=dict.get("size"),  # Backwards compatibility (2.x.x)
             minio=minio,
-            _flags=dict.get("flags") # Backwards compatibility (3.x.x)
+            _flags=dict.get("flags")  # Backwards compatibility (3.x.x)
         )
 
     @property

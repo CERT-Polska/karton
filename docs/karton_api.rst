@@ -17,8 +17,8 @@ karton.core.Producer, karton.core.Consumer
 .. autoclass:: karton.core.Karton
    :members:
 
-karton.core.Resource, karton.core.DirectoryResource
----------------------------------------------------
+karton.core.Resource
+--------------------
 
 .. automodule:: karton.core.resource
 

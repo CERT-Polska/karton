@@ -63,7 +63,7 @@ def delete_bind(config, karton_name):
         persistent = False
         filters = []
 
-        def process(self):
+        def process(self, task):
             pass
 
     karton = KartonDummy(config=config, identity=karton_name)
