@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import patch, MagicMock, call
 from karton.core import Config, Task
 
+
 @patch('configparser.ConfigParser', autospec=True)
 class TestConfig(unittest.TestCase):
     MOCK_ENV = {
@@ -111,7 +112,3 @@ class TestTask(unittest.TestCase):
         self.assertTrue(task.matches_filters([{"A": "a", "B": "b"}]))
         self.assertFalse(task.matches_filters([{"Z": "a"}]))
         self.assertFalse(task.matches_filters([{"A": "a", "Z": "a"}]))
-
-
-if __name__ == "__main__":
-    unittest.main()
