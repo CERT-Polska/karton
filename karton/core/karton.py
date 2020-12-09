@@ -5,18 +5,18 @@ import abc
 import argparse
 import contextlib
 import json
+import sys
 import textwrap
 import time
+import traceback
 
+from .__version__ import __version__
 from .base import KartonBase, KartonServiceBase
 from .backend import KartonBind
 from .config import Config
 from .resource import LocalResource
-from .task import Task, TaskState, TaskPriority
+from .task import Task, TaskPriority, TaskState
 from .utils import GracefulKiller, get_function_arg_num
-
-from .__version__ import __version__
-
 
 TASKS_QUEUE = "karton.tasks"
 TASK_PREFIX = "karton.task:"
@@ -141,6 +141,8 @@ class Consumer(KartonServiceBase):
             )
             return
 
+        exception_str = None
+
         try:
             self.log.info("Received new task - %s", self.current_task.uid)
             self.declare_task_state(
@@ -149,13 +151,13 @@ class Consumer(KartonServiceBase):
 
             self._run_pre_hooks()
 
-            # check if the process function expects the current task or not
+            saved_exception = None
             try:
+                # check if the process function expects the current task or not
                 if get_function_arg_num(self.process) == 0:
                     self.process()
                 else:
                     self.process(self.current_task)
-                saved_exception = None
             except Exception as exc:
                 saved_exception = exc
                 raise
@@ -164,14 +166,25 @@ class Consumer(KartonServiceBase):
 
             self.log.info("Task done - %s", self.current_task.uid)
         except Exception:
+            exc_info = sys.exc_info()
+            exception_str = traceback.format_exception(*exc_info)
+
             self.rs.hincrby(METRICS_ERRORED, self.identity, 1)
             self.log.exception(
                 "Failed to process task - %s", self.current_task.uid
             )
         finally:
             self.rs.hincrby(METRICS_CONSUMED, self.identity, 1)
+
+            task_state = TaskState.FINISHED
+
+            # report the task status as crashed if an exception was caught while processing
+            if exception_str is not None:
+                task_state = TaskState.CRASHED
+                self.current_task.error = exception_str
+
             self.declare_task_state(
-                self.current_task, TaskState.FINISHED, identity=self.identity,
+                self.current_task, task_state, identity=self.identity,
             )
 
     @property
