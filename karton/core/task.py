@@ -4,6 +4,7 @@ import warnings
 
 from .resource import ResourceBase, RemoteResource
 
+
 class TaskState(object):
     """Enum for task state"""
 
@@ -11,6 +12,7 @@ class TaskState(object):
     SPAWNED = "Spawned"  # Task spawned into subsystem queue
     STARTED = "Started"  # Task is running in subsystem
     FINISHED = "Finished"  # Task finished (ready to forget)
+    CRASHED = "Crashed"  # Task crashed
 
 
 class TaskPriority(object):
@@ -45,6 +47,7 @@ class Task(object):
         parent_uid=None,
         root_uid=None,
         uid=None,
+        error=None,
     ):
         payload = payload or {}
         payload_persistent = payload_persistent or {}
@@ -65,6 +68,7 @@ class Task(object):
 
         self.parent_uid = parent_uid
 
+        self.error = error
         self.headers = headers
         self.status = TaskState.DECLARED
 
@@ -204,6 +208,7 @@ class Task(object):
                 "payload": self.payload,
                 "payload_persistent": self.payload_persistent,
                 "headers": self.headers,
+                "error": self.error,
             },
             cls=KartonResourceEncoder,
             indent=indent,
@@ -269,6 +274,7 @@ class Task(object):
         task.parent_uid = data["parent_uid"]
         task.status = data["status"]
         # Backwards compatibility, remove these .get's after upgrade
+        task.error = data.get("error")
         task.priority = data.get("priority", TaskPriority.NORMAL)
         task.last_update = data.get("last_update", None)
         task.payload = data["payload"]
