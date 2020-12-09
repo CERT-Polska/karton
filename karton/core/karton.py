@@ -160,14 +160,15 @@ class Consumer(KartonServiceBase):
                     self.process(self.current_task)
             except Exception as exc:
                 saved_exception = exc
-                exc_info = sys.exc_info()
-                exception_str = traceback.format_exception(*exc_info)
                 raise
             finally:
                 self._run_post_hooks(saved_exception)
 
             self.log.info("Task done - %s", self.current_task.uid)
         except Exception:
+            exc_info = sys.exc_info()
+            exception_str = traceback.format_exception(*exc_info)
+
             self.rs.hincrby(METRICS_ERRORED, self.identity, 1)
             self.log.exception(
                 "Failed to process task - %s", self.current_task.uid
