@@ -1,14 +1,14 @@
 Breaking changes
 ================
 
-This chapter will describe several changes in the next major versions of Karton. Versions before 4.0.0 were not oficially released, so they have value only for internal purposes. Don't worry about it if you are a new user.
+This chapter will describe significant changes introduced in major version releases of Karton. Versions before 4.0.0 were not officially released, so they have value only for internal purposes. Don't worry about it if you are a new user.
 
 What changed in Karton 4.0.0
 ----------------------------
 
 Karton-System and core servicies are still compatible with both 3.x and 2.x versions.
 
-* ``SHA256`` is evaluated always when :class:`Resource` is created. If you already know it and don't want to be recalculated, pass the hash to the constructor via ``sha256=`` argument.
+* ``SHA256`` is evaluated always when :class:`Resource` is created. If you already know it and don't want it to be recalculated, pass the hash to the constructor via ``sha256=`` argument.
   
   .. code-block:: python
 
@@ -123,4 +123,3 @@ The bad news (for porting):
   * Instead of :meth:`get_resources`, :meth:`get_directory_resources` and :meth:`get_file_resources` - use :meth:`iterate_resources` and do type checking yourself.
 
 * Removed 'kpm' (some kind of helper scripts will be provided in future versions, that one was outdated anyway)
-
