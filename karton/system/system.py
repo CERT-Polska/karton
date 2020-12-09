@@ -157,7 +157,7 @@ class SystemService(KartonServiceBase):
                 self.rs.hincrby(METRICS_ASSIGNED, identity, 1)
                 self.declare_task_state(routed_task, TaskState.SPAWNED, identity=identity)
                 # Matched at least one bind: go to next identity
-                break
+                continue
 
     def loop(self):
         self.log.info("Manager {} started".format(self.identity))
