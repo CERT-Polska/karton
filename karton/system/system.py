@@ -143,7 +143,7 @@ class SystemService(KartonServiceBase):
                         self.declare_task_state(unwound_task, TaskState.FINISHED, identity=identity)
                 self.log.info("Non-persistent: removing bind %s", identity)
                 self.rs.hdel("karton.binds", identity)
-                # Continue with next identity
+                # Since this bind was deleted we can skip the task bind matching
                 continue
 
             if task.matches_filters(bind.filters):
@@ -156,8 +156,6 @@ class SystemService(KartonServiceBase):
                 self.rs.rpush("karton.queue.{}:{}".format(task.priority, identity), routed_task.uid)
                 self.rs.hincrby(METRICS_ASSIGNED, identity, 1)
                 self.declare_task_state(routed_task, TaskState.SPAWNED, identity=identity)
-                # Matched at least one bind: go to next identity
-                break
 
     def loop(self):
         self.log.info("Manager {} started".format(self.identity))
