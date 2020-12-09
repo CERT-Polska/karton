@@ -151,13 +151,13 @@ class Consumer(KartonServiceBase):
 
             self._run_pre_hooks()
 
-            # check if the process function expects the current task or not
+            saved_exception = None
             try:
+                # check if the process function expects the current task or not
                 if get_function_arg_num(self.process) == 0:
                     self.process()
                 else:
                     self.process(self.current_task)
-                saved_exception = None
             except Exception as exc:
                 saved_exception = exc
                 exc_info = sys.exc_info()
