@@ -140,7 +140,7 @@ class KartonBackend:
         else:
             return None
 
-    def remove_bind(self, identity):
+    def unregister_bind(self, identity):
         """
         Removes bind for identity
         """
@@ -226,9 +226,9 @@ class KartonBackend:
             for uid in self.redis.lrange(queue, 0, -1)
         ]
 
-    def get_task_id_queue(self, queue):
+    def get_task_ids_from_queue(self, queue):
         """
-        Gets all task UIDs in queue
+        Return all task UIDs in queue
 
         :param queue: Queue name
         :return: Iterator with task identifiers contained in queue

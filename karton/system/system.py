@@ -43,12 +43,9 @@ class SystemService(KartonServiceBase):
             for object in self.minio.list_objects(bucket_name=bucket_name)
         ]
 
-    def gc_list_all_tasks(self):
-        return self.backend.get_all_tasks()
-
     def gc_collect_resources(self):
         resources = set(self.gc_list_all_resources())
-        tasks = self.gc_list_all_tasks()
+        tasks = self.backend.get_all_tasks()
         for task in tasks:
             for _, resource in task.iterate_resources():
                 # If resource is referenced by task: remove it from set
@@ -65,7 +62,7 @@ class SystemService(KartonServiceBase):
         root_tasks = set()
         running_root_tasks = set()
         tasks = self.gc_list_all_tasks()
-        enqueued_task_uids = self.backend.get_task_id_queue(KARTON_TASKS_QUEUE)
+        enqueued_task_uids = self.backend.get_task_ids_from_queue(KARTON_TASKS_QUEUE)
         current_time = time.time()
         for task in tasks:
             root_tasks.add(task.root_uid)
@@ -138,7 +135,7 @@ class SystemService(KartonServiceBase):
                         # Let the karton.system loop finish this task
                         self.backend.set_task_status(removed_task, TaskState.FINISHED, consumer=identity)
                 self.log.info("Non-persistent: removing bind %s", identity)
-                self.backend.remove_bind(identity)
+                self.backend.unregister_bind(identity)
                 # Since this bind was deleted we can skip the task bind matching
                 continue
 
