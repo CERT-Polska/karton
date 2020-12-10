@@ -13,10 +13,8 @@ import zipfile
 from io import BytesIO
 
 from .karton import Consumer
-from .resource import (
-    RemoteResource,
-    ResourceBase,
-)
+from .utils import get_function_arg_num
+from .resource import ResourceBase
 
 try:
     from unittest import mock
@@ -27,7 +25,7 @@ except ImportError:
 __all__ = ["KartonTestCase", "mock"]
 
 
-class TestResource(RemoteResource):
+class TestResource(ResourceBase):
     """
     LocalResource imitating RemoteResource for test purposes.
 
@@ -42,10 +40,6 @@ class TestResource(RemoteResource):
     :param metadata: Resource metadata
     :type metadata: dict, optional
     """
-
-    def __init__(self, name, content, metadata=None):
-        super(TestResource, self).__init__(name, metadata=metadata)
-        self._content = content
 
     def download(self):
         return self._content
@@ -270,5 +264,8 @@ class KartonMock(object):
         self.current_task = task
         if not self.current_task.matches_filters(self.filters):
             raise RuntimeError("Provided task doesn't match any of filters")
-        self.process()
+        if get_function_arg_num(self.process) == 0:
+            self.process()
+        else:
+            self.process(self.current_task)
         return self._result_tasks
