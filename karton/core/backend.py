@@ -165,7 +165,7 @@ class KartonBackend:
 
     def get_task(self, task_uid):
         """
-        Gets task object with given identifier
+        Get task object with given identifier
 
         :param task_uid: Task identifier
         :return: Task object
@@ -174,6 +174,36 @@ class KartonBackend:
         if not task_data:
             return None
         return Task.unserialize(task_data, minio=self.minio)
+
+    def get_tasks(self, task_uid_list):
+        """
+        Get multiple tasks for given identifier list
+
+        :param task_uid_list: List of task identifiers
+        :return: List of task objects
+        """
+        task_list = self.redis.mget([
+            f"{KARTON_TASK_NAMESPACE}:{task_uid}"
+            for task_uid in task_uid_list
+        ])
+        return [
+            Task.unserialize(task_data, minio=self.minio)
+            for task_data in task_list
+            if task_data is not None
+        ]
+
+    def get_all_tasks(self):
+        """
+        Get all tasks registered in Redis
+
+        :return: List with Task objects
+        """
+        tasks = self.redis.keys(f"{KARTON_TASK_NAMESPACE}:*")
+        return [
+            Task.unserialize(task_data)
+            for task_data in self.redis.mget(tasks)
+            if task_data is not None
+        ]
 
     def register_task(self, task):
         """
@@ -235,22 +265,6 @@ class KartonBackend:
         """
         return self.redis.lrange(queue, 0, -1)
 
-    def get_all_tasks(self):
-        """
-        Get all tasks registered in Redis
-
-        :return: List with Task objects
-        """
-        task_list = [
-            self.redis.get(task_key)
-            for task_key in self.redis.keys(f"{KARTON_TASK_NAMESPACE}:*")
-        ]
-        return [
-            Task.unserialize(task_data)
-            for task_data in task_list
-            if task_data is not None
-        ]
-
     def remove_task_queue(self, queue):
         """
         Remove task queue with all contained tasks
@@ -261,10 +275,7 @@ class KartonBackend:
         pipe = self.redis.pipeline()
         pipe.lrange(queue, 0, -1)
         pipe.delete(queue)
-        return [
-            self.get_task(uid)
-            for uid in pipe.execute()[0]
-        ]
+        return self.get_tasks(pipe.execute()[0])
 
     def produce_unrouted_task(self, task):
         """
