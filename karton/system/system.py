@@ -61,7 +61,7 @@ class SystemService(KartonServiceBase):
     def gc_collect_tasks(self):
         root_tasks = set()
         running_root_tasks = set()
-        tasks = self.gc_list_all_tasks()
+        tasks = self.backend.get_all_tasks()
         enqueued_task_uids = self.backend.get_task_ids_from_queue(KARTON_TASKS_QUEUE)
         current_time = time.time()
         for task in tasks:
