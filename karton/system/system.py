@@ -4,6 +4,7 @@ import time
 
 from karton.core.__version__ import __version__
 from karton.core.base import KartonServiceBase
+from karton.core.backend import KARTON_TASKS_QUEUE
 from karton.core.config import Config
 from karton.core.task import Task, TaskPriority, TaskState
 from karton.core.utils import GracefulKiller
@@ -42,15 +43,9 @@ class SystemService(KartonServiceBase):
             for object in self.minio.list_objects(bucket_name=bucket_name)
         ]
 
-    def gc_list_all_tasks(self):
-        return list(filter(None, [
-            Task.unserialize(self.rs.get(task_key))
-            for task_key in self.rs.keys("karton.task:*")
-        ]))
-
     def gc_collect_resources(self):
         resources = set(self.gc_list_all_resources())
-        tasks = self.gc_list_all_tasks()
+        tasks = self.backend.get_all_tasks()
         for task in tasks:
             for _, resource in task.iterate_resources():
                 # If resource is referenced by task: remove it from set
@@ -66,15 +61,15 @@ class SystemService(KartonServiceBase):
     def gc_collect_tasks(self):
         root_tasks = set()
         running_root_tasks = set()
-        tasks = self.gc_list_all_tasks()
-        enqueued_tasks = self.rs.lrange("karton.tasks", 0, -1)
+        tasks = self.backend.get_all_tasks()
+        enqueued_task_uids = self.backend.get_task_ids_from_queue(KARTON_TASKS_QUEUE)
         current_time = time.time()
         for task in tasks:
             root_tasks.add(task.root_uid)
             will_delete = False
             if (
                     task.status == TaskState.DECLARED and
-                    task.uid not in enqueued_tasks and
+                    task.uid not in enqueued_task_uids and
                     task.last_update is not None and
                     current_time > task.last_update + self.TASK_DISPATCHED_TIMEOUT
             ):
@@ -105,7 +100,7 @@ class SystemService(KartonServiceBase):
                     task.headers.get("receiver", "<unknown>"),
                 )
             if will_delete:
-                self.rs.delete("karton.task:" + task.uid)
+                self.backend.delete_task(task)
                 receiver = task.headers.get("receiver", "unknown")
                 self.rs.hincrby(METRICS_GARBAGE_COLLECTED, receiver, 1)
             else:
@@ -124,38 +119,23 @@ class SystemService(KartonServiceBase):
             self.last_gc_trigger = time.time()
 
     def process_task(self, task):
-        bound_identities = set()
-
-        for client in self.rs.client_list():
-            bound_identities.add(client["name"])
+        online_consumers = self.backend.get_online_consumers()
 
         self.log.info("[%s] Processing task %s", task.root_uid, task.uid)
 
         for bind in self.backend.get_binds():
             identity = bind.identity
-            if identity not in bound_identities and not bind.persistent:
+            if identity not in online_consumers and not bind.persistent:
                 # If unbound and not persistent
-                for queue in [
-                    bind.identity,  # Backwards compatibility, remove after upgrade
-                    "karton.queue.{}:{}".format(TaskPriority.HIGH, identity),
-                    "karton.queue.{}:{}".format(TaskPriority.NORMAL, identity),
-                    "karton.queue.{}:{}".format(TaskPriority.LOW, identity)
-                ]:
+                for queue in self.backend.get_queue_names(identity):
                     self.log.info("Non-persistent: unwinding tasks from queue %s", queue)
-                    pipe = self.rs.pipeline()
-                    pipe.lrange(queue, 0, -1)
-                    pipe.delete(queue)
-                    results = pipe.execute()
-                    for unwound_task_uid in results[0]:
-                        unwound_task_body = self.rs.get("karton.task:"+unwound_task_uid)
-                        unwound_task = Task.unserialize(unwound_task_body)
-                        unwound_task.last_update = time.time()
-                        unwound_task.status = TaskState.FINISHED
-                        self.log.info("Unwinding task %s", str(unwound_task.uid))
-                        self.rs.set("karton.task:" + unwound_task.uid, unwound_task.serialize())
-                        self.declare_task_state(unwound_task, TaskState.FINISHED, identity=identity)
+                    removed_tasks = self.backend.remove_task_queue(queue)
+                    for removed_task in removed_tasks:
+                        self.log.info("Unwinding task %s", str(removed_task.uid))
+                        # Let the karton.system loop finish this task
+                        self.backend.set_task_status(removed_task, TaskState.FINISHED, consumer=identity)
                 self.log.info("Non-persistent: removing bind %s", identity)
-                self.rs.hdel("karton.binds", identity)
+                self.backend.unregister_bind(identity)
                 # Since this bind was deleted we can skip the task bind matching
                 continue
 
@@ -164,11 +144,10 @@ class SystemService(KartonServiceBase):
                 routed_task.status = TaskState.SPAWNED
                 routed_task.last_update = time.time()
                 routed_task.headers.update({"receiver": identity})
-                routed_task_body = routed_task.serialize()
-                self.rs.set("karton.task:" + routed_task.uid, routed_task_body)
-                self.rs.rpush("karton.queue.{}:{}".format(task.priority, identity), routed_task.uid)
+                self.backend.register_task(routed_task)
+                self.backend.produce_routed_task(identity, routed_task)
+                self.backend.set_task_status(routed_task, TaskState.SPAWNED, consumer=identity)
                 self.rs.hincrby(METRICS_ASSIGNED, identity, 1)
-                self.declare_task_state(routed_task, TaskState.SPAWNED, identity=identity)
 
     def loop(self):
         self.log.info("Manager {} started".format(self.identity))
@@ -176,21 +155,22 @@ class SystemService(KartonServiceBase):
         while not self.shutdown:
             # order does matter! task dispatching must be before karton.operations to avoid races
             # Timeout must be shorter than GC_INTERVAL, but not too long allowing graceful shutdown
-            data = self.rs.blpop(
+            data = self.backend.consume_queues(
                 ["karton.tasks", "karton.operations"],
-                timeout=5,
+                timeout=5
             )
-
             if data:
                 queue, body = data
                 if not isinstance(body, str):
                     body = body.decode("utf-8")
                 if queue == "karton.tasks":
-                    task = Task.unserialize(self.rs.get("karton.task:" + body))
+                    task_uid = body
+                    task = self.backend.get_task(task_uid)
                     self.process_task(task)
                     task.last_update = time.time()
                     task.status = TaskState.FINISHED
-                    self.rs.set("karton.task:" + task.uid, task.serialize())
+                    # Directly update the task status to be finished
+                    self.backend.register_task(task)
                 elif queue == "karton.operations":
                     operation_body = json.loads(body)
                     task = Task.unserialize(operation_body["task"])
@@ -202,7 +182,8 @@ class SystemService(KartonServiceBase):
                                       operation_body["identity"],
                                       operation_body["status"],
                                       str(task.uid))
-                        self.rs.set("karton.task:" + task.uid, task.serialize())
+                        # Update task status
+                        self.backend.register_task(task)
                     # Pass new operation status to log
                     self.rs.lpush("karton.logs", body)
             self.gc_collect()

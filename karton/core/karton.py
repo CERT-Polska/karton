@@ -2,24 +2,19 @@
 Base library for karton subsystems.
 """
 import abc
-import argparse
-import contextlib
 import json
 import sys
-import textwrap
 import time
 import traceback
 
 from .__version__ import __version__
 from .base import KartonBase, KartonServiceBase
 from .backend import KartonBind
-from .config import Config
 from .resource import LocalResource
-from .task import Task, TaskPriority, TaskState
+from .task import Task, TaskState
 from .utils import GracefulKiller, get_function_arg_num
 
-TASKS_QUEUE = "karton.tasks"
-TASK_PREFIX = "karton.task:"
+
 METRICS_PRODUCED = "karton.metrics.produced"
 METRICS_CONSUMED = "karton.metrics.consumed"
 METRICS_ERRORED = "karton.metrics.errored"
@@ -82,18 +77,16 @@ class Producer(KartonBase):
             if isinstance(resource, LocalResource) and not resource.bucket:
                 resource.bucket = self.config.minio_config["bucket"]
 
-        task_json = task.serialize()
-
-        # Declare task
-        self.rs.set(TASK_PREFIX + task.uid, task_json)
+        # Register new task
+        self.backend.register_task(task)
 
         # Upload local resources
         for _, resource in task.iterate_resources():
             if isinstance(resource, LocalResource):
-                resource.upload(self.minio)
+                resource.upload(self.backend.minio)
 
-        # Add task to TASKS_QUEUE
-        self.rs.rpush(TASKS_QUEUE, task.uid)
+        # Add task to karton.tasks
+        self.backend.produce_unrouted_task(task)
         self.rs.hincrby(METRICS_PRODUCED, self.identity, 1)
         return True
 
@@ -130,23 +123,28 @@ class Consumer(KartonServiceBase):
         """
         raise NotImplementedError()
 
-    def internal_process(self, data):
-        self.current_task = Task.unserialize(self.rs.get("karton.task:" + data), minio=self.minio)
+    def internal_process(self, task: Task):
+        self.current_task = task
         self.log_handler.set_task(self.current_task)
 
         if not self.current_task.matches_filters(self.filters):
             self.log.info("Task rejected because binds are no longer valid.")
-            self.declare_task_state(
-                self.current_task, TaskState.FINISHED, identity=self.identity,
+            self.backend.set_task_status(
+                self.current_task,
+                TaskState.FINISHED,
+                consumer=self.identity
             )
+            # Task rejected: end of processing
             return
 
         exception_str = None
 
         try:
             self.log.info("Received new task - %s", self.current_task.uid)
-            self.declare_task_state(
-                self.current_task, TaskState.STARTED, identity=self.identity
+            self.backend.set_task_status(
+                self.current_task,
+                TaskState.STARTED,
+                consumer=self.identity
             )
 
             self._run_pre_hooks()
@@ -183,8 +181,10 @@ class Consumer(KartonServiceBase):
                 task_state = TaskState.CRASHED
                 self.current_task.error = exception_str
 
-            self.declare_task_state(
-                self.current_task, task_state, identity=self.identity,
+            self.backend.set_task_status(
+                self.current_task,
+                task_state,
+                consumer=self.identity
             )
 
     @property
@@ -262,7 +262,7 @@ class Consumer(KartonServiceBase):
         for task_filter in self.filters:
             self.log.info("Binding on: %s", task_filter)
 
-        self.rs.client_setname(self.identity)
+        self.backend.set_consumer_identity(self.identity)
 
         try:
             while not self.shutdown:
@@ -270,19 +270,9 @@ class Consumer(KartonServiceBase):
                     self.log.info("Binds changed, shutting down.")
                     break
 
-                item = self.rs.blpop(
-                    [
-                        self.identity,  # Backwards compatibility, remove after upgrade
-                        "karton.queue.{}:{}".format(TaskPriority.HIGH, self.identity),
-                        "karton.queue.{}:{}".format(TaskPriority.NORMAL, self.identity),
-                        "karton.queue.{}:{}".format(TaskPriority.LOW, self.identity),
-                    ],
-                    timeout=5,
-                )
-
-                if item:
-                    queue, data = item
-                    self.internal_process(data)
+                task = self.backend.consume_routed_task(self.identity)
+                if task:
+                    self.internal_process(task)
         except KeyboardInterrupt as e:
             self.log.info("Hard shutting down!")
             raise e

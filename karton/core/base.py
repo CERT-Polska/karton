@@ -83,20 +83,6 @@ class KartonBase(ABC):
         """
         return logging.getLogger(self.identity)
 
-    def declare_task_state(self, task, status, identity=None):
-        # Declares task state. Used internally
-        self.rs.rpush(
-            OPERATIONS_QUEUE,
-            json.dumps(
-                {
-                    "status": status,
-                    "identity": identity,
-                    "task": task.serialize(),
-                    "type": "operation",
-                }
-            ),
-        )
-
 
 class KartonServiceBase(KartonBase):
     def __init__(self, config=None, identity=None):
