@@ -1,6 +1,5 @@
 import abc
 import argparse
-import json
 import logging
 import textwrap
 
@@ -10,6 +9,7 @@ from redis import StrictRedis
 from .backend import KartonBackend
 from .config import Config
 from .logger import KartonLogHandler
+from .utils import GracefulKiller
 
 OPERATIONS_QUEUE = "karton.operations"
 
@@ -85,9 +85,20 @@ class KartonBase(ABC):
 
 
 class KartonServiceBase(KartonBase):
+    """
+    Karton base class for looping services
+    """
+    version = None
+
     def __init__(self, config=None, identity=None):
         super().__init__(config=config, identity=identity)
         self.setup_logger()
+        self.shutdown = False
+        self.killer = GracefulKiller(self.graceful_shutdown)
+
+    def graceful_shutdown(self):
+        self.log.info("Gracefully shutting down!")
+        self.shutdown = True
 
     # Base class for Karton services
     @abc.abstractmethod

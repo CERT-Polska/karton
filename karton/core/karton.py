@@ -12,7 +12,7 @@ from .base import KartonBase, KartonServiceBase
 from .backend import KartonBind
 from .resource import LocalResource
 from .task import Task, TaskState
-from .utils import GracefulKiller, get_function_arg_num
+from .utils import get_function_arg_num
 
 
 METRICS_PRODUCED = "karton.metrics.produced"
@@ -104,15 +104,8 @@ class Consumer(KartonServiceBase):
         super(Consumer, self).__init__(config=config, identity=identity)
 
         self.current_task = None
-        self.shutdown = False
-        self.killer = GracefulKiller(self.graceful_shutdown)
-
         self._pre_hooks = []
         self._post_hooks = []
-
-    def graceful_shutdown(self):
-        self.log.info("Gracefully shutting down!")
-        self.shutdown = True
 
     @abc.abstractmethod
     def process(self, *args):
@@ -284,12 +277,6 @@ class LogConsumer(KartonServiceBase):
     """
     def __init__(self, config=None, identity=None):
         super(LogConsumer, self).__init__(config=config, identity=identity)
-        self.shutdown = False
-        self.killer = GracefulKiller(self.graceful_shutdown)
-
-    def graceful_shutdown(self):
-        self.log.info("Gracefully shutting down!")
-        self.shutdown = True
 
     @abc.abstractmethod
     def process_log(self, event):
