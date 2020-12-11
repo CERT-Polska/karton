@@ -1,8 +1,12 @@
 from collections import defaultdict, namedtuple
+import enum
+from io import BytesIO, RawIOBase
 import json
+from urllib3.response import HTTPResponse
+from typing import List, Union
 
-from redis import StrictRedis
 from minio import Minio
+from redis import StrictRedis
 
 from .task import Task, TaskPriority
 
@@ -19,8 +23,17 @@ KartonBind = namedtuple(
 )
 
 
+class KartomMetrics(enum.Enum):
+    TASK_PRODUCED = "karton.metrics.produced"
+    TASK_CONSUMED = "karton.metrics.consumed"
+    TASK_ERRORED = "karton.metrics.errored"
+    TASK_ASSIGNED = "karton.metrics.assigned"
+    TASK_GARBAGE_COLLECTED = "karton.metrics.garbage-collected"
+
+
 class KartonBackend:
     def __init__(self, config):
+        self.config = config
         self.redis = StrictRedis(host=config["redis"]["host"],
                                  port=int(config["redis"].get("port", 6379)),
                                  decode_responses=True)
@@ -30,6 +43,10 @@ class KartonBackend:
             secret_key=config["minio"]["secret_key"],
             secure=bool(int(config["minio"].get("secure", True))),
         )
+
+    @property
+    def default_bucket_name(self):
+        return self.config.minio_config["bucket"]
 
     @staticmethod
     def get_queue_name(identity, priority):
@@ -171,7 +188,7 @@ class KartonBackend:
         task_data = self.redis.get(f"{KARTON_TASK_NAMESPACE}:{task_uid}")
         if not task_data:
             return None
-        return Task.unserialize(task_data, minio=self.minio)
+        return Task.unserialize(task_data, backend=self)
 
     def get_tasks(self, task_uid_list):
         """
@@ -185,7 +202,7 @@ class KartonBackend:
             for task_uid in task_uid_list
         ])
         return [
-            Task.unserialize(task_data, minio=self.minio)
+            Task.unserialize(task_data, backend=self)
             for task_data in task_list
             if task_data is not None
         ]
@@ -328,3 +345,134 @@ class KartonBackend:
             return None
         queue, data = item
         return self.get_task(data)
+
+    def produce_log(self, log_record):
+        """
+        Push new log record to the logs queue
+
+        :param log_record: dict with log record
+        """
+        self.redis.lpush(KARTON_LOGS_QUEUE, json.dumps(log_record))
+
+    def consume_log(self):
+        """
+        Pop new log record from the logs queue
+
+        :return: dict with log record
+        """
+        item = self.consume_queues(KARTON_LOGS_QUEUE)
+        if not item:
+            return None
+        queue, data = item
+        body = json.loads(data)
+        if "task" in body and isinstance(body["task"], str):
+            body["task"] = json.loads(body["task"])
+        return body
+
+    def increment_metrics(self, metric_type: KartomMetrics, identity: str):
+        """
+        Increments metrics for given operation type and identity
+
+        :param metric_type: Operation metric type
+        :param identity: Related Karton service identity
+        """
+        self.redis.hincrby(metric_type, identity, 1)
+
+    def upload_object(
+        self, bucket: str, object_uid: str, content: Union[bytes, RawIOBase], length: int = None
+    ):
+        """
+        Upload resource object to underlying object storage (Minio)
+
+        :param bucket: Bucket name
+        :param object_uid: Object identifier
+        :param content: Object content as bytes or file-like stream
+        :param length: Object content length (if file-like object provided)
+        """
+        if isinstance(content, bytes):
+            length = len(content)
+            content = BytesIO(content)
+        self.minio.put_object(bucket, object_uid, content, length)
+
+    def upload_object_from_file(self, bucket: str, object_uid: str, path: str):
+        """
+        Upload resource object file to underlying object storage
+
+        :param bucket: Bucket name
+        :param object_uid: Object identifier
+        :param path: Path to the object content
+        """
+        self.minio.fput_object(bucket, object_uid, path)
+
+    def get_object(self, bucket: str, object_uid: str) -> HTTPResponse:
+        """
+        Get resource object stream with the content.
+
+        Returned response should be closed after use to release network resources.
+        To reuse the connection, it's required to call `response.release_conn()` explicitly.
+
+        :param bucket: Bucket name
+        :param object_uid: Object identifier
+        :return: Response object with content
+        """
+        return self.minio.get_object(bucket, object_uid)
+
+    def download_object(self, bucket: str, object_uid: str) -> bytes:
+        """
+        Download resource object from object storage.
+
+        :param bucket: Bucket name
+        :param object_uid: Object identifier
+        :return: Content bytes
+        """
+        reader = self.minio.get_object(bucket, object_uid)
+        try:
+            return reader.read()
+        finally:
+            reader.release_conn()
+            reader.close()
+
+    def download_object_to_file(self, bucket: str, object_uid: str, path: str):
+        """
+        Download resource object from object storage to file
+
+        :param bucket: Bucket name
+        :param object_uid: Object identifier
+        :param path: Target file path
+        """
+        self.minio.fget_object(bucket, object_uid, path)
+
+    def list_objects(self, bucket: str) -> List[str]:
+        """
+        List identifiers of stored resource objects
+
+        :param bucket: Bucket name
+        :return: List of object identifiers
+        """
+        return [
+            object.object_name
+            for object in self.minio.list_objects(bucket)
+        ]
+
+    def remove_object(self, bucket: str, object_uid: str):
+        """
+        Remove resource object from object storage
+
+        :param bucket: Bucket name
+        :param object_uid: Object identifier
+        """
+        self.minio.remove_object(bucket, object_uid)
+
+    def ensure_bucket_exists(self, bucket: str, create: bool = False) -> bool:
+        """
+        Checks if bucket exists and optionally creates if it doesn't.
+
+        :param bucket: Bucket name
+        :param create: Create bucket if doesn't exist
+        :return: True if bucket exists yet
+        """
+        if self.minio.bucket_exists(bucket):
+            return True
+        if create:
+            self.minio.make_bucket(bucket)
+        return False
