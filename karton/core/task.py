@@ -2,7 +2,7 @@ import json
 import uuid
 import warnings
 
-from .resource import ResourceBase, RemoteResource
+from .resource import RemoteResource, ResourceBase
 
 
 class TaskState(object):

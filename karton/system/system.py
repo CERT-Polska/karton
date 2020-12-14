@@ -2,8 +2,8 @@ import json
 import time
 
 from karton.core.__version__ import __version__
+from karton.core.backend import KARTON_TASKS_QUEUE, KartomMetrics
 from karton.core.base import KartonServiceBase
-from karton.core.backend import KartomMetrics, KARTON_TASKS_QUEUE
 from karton.core.config import Config
 from karton.core.task import Task, TaskState
 from karton.core.utils import GracefulKiller

@@ -1,5 +1,5 @@
-import signal
 import inspect
+import signal
 import sys
 
 
