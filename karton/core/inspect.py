@@ -29,8 +29,8 @@ class KartonQueue:
 
 
 class KartonAnalysis:
-    def __init__(self, rootid: str, tasks: List[Task], state: "KartonState") -> None:
-        self.rootid = rootid
+    def __init__(self, root_uid: str, tasks: List[Task], state: "KartonState") -> None:
+        self.root_uid = root_uid
         self.tasks = tasks
         self.state = state
 
@@ -102,8 +102,8 @@ class KartonState:
             tasks_per_analysis[task.root_uid].append(task)
 
         self.analyses = {
-            rootid: KartonAnalysis(rootid=rootid, tasks=tasks, state=self)
-            for rootid, tasks in tasks_per_analysis.items()
+            root_uid: KartonAnalysis(root_uid=root_uid, tasks=tasks, state=self)
+            for root_uid, tasks in tasks_per_analysis.items()
         }
         queues = get_queues_for_tasks(self.pending_tasks, self)
         # Present registered queues without tasks
