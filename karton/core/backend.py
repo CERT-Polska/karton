@@ -370,7 +370,7 @@ class KartonBackend:
             body["task"] = json.loads(body["task"])
         return body
 
-    def get_log_queue_length(self):
+    def get_log_queue_length(self) -> int:
         """Return log queue length"""
         return self.redis.llen(KARTON_LOGS_QUEUE)
 
