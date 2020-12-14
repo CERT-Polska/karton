@@ -2,6 +2,7 @@ import abc
 import argparse
 import logging
 import textwrap
+from typing import Optional
 
 from .backend import KartonBackend
 from .config import Config
@@ -28,7 +29,8 @@ class KartonBase(abc.ABC):
         Called by :py:meth:`Consumer.loop`. If you want to use logger for Producer,
         you need to call it yourself, but remember to set the identity.
 
-        :param level: Logging level. Default is logging.INFO (unless different value is set in Karton config)
+        :param level: Logging level. Default is logging.INFO \
+                      (unless different value is set in Karton config)
         """
         if level is None:
             log_level = logging.INFO
@@ -72,7 +74,7 @@ class KartonServiceBase(KartonBase):
     Karton base class for looping services
     """
 
-    version = None
+    version: Optional[str] = None
 
     def __init__(self, config=None, identity=None):
         super().__init__(config=config, identity=identity)

@@ -1,12 +1,6 @@
+import configparser
 import os
 import re
-
-try:
-    import configparser
-except ImportError:
-    import ConfigParser
-
-    configparser = ConfigParser
 
 
 class Config(object):

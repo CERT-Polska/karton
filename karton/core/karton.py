@@ -106,7 +106,8 @@ class Consumer(KartonServiceBase):
         """
         Task processing method.
 
-        self.current_task contains task that triggered invocation of :py:meth:`karton.Consumer.process`
+        self.current_task contains task that triggered invocation of
+        :py:meth:`karton.Consumer.process`
         """
         raise NotImplementedError()
 
@@ -157,7 +158,8 @@ class Consumer(KartonServiceBase):
 
             task_state = TaskState.FINISHED
 
-            # report the task status as crashed if an exception was caught while processing
+            # report the task status as crashed
+            # if an exception was caught while processing
             if exception_str is not None:
                 task_state = TaskState.CRASHED
                 self.current_task.error = exception_str
@@ -226,7 +228,8 @@ class Consumer(KartonServiceBase):
 
     def loop(self):
         """
-        Blocking loop that consumes tasks and runs :py:meth:`karton.Consumer.process` as a handler
+        Blocking loop that consumes tasks and runs
+        :py:meth:`karton.Consumer.process` as a handler
         """
         self.log.info("Service %s started", self.identity)
 

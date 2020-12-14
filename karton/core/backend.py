@@ -1,12 +1,12 @@
 import enum
 import json
 from collections import defaultdict, namedtuple
-from io import BytesIO, RawIOBase
-from typing import List, Union
+from io import BytesIO
+from typing import BinaryIO, List, Union
 
-from minio import Minio
+from minio import Minio  # type: ignore
 from redis import StrictRedis
-from urllib3.response import HTTPResponse
+from urllib3.response import HTTPResponse  # type: ignore
 
 from .task import Task, TaskPriority
 
@@ -384,7 +384,7 @@ class KartonBackend:
         self,
         bucket: str,
         object_uid: str,
-        content: Union[bytes, RawIOBase],
+        content: Union[bytes, BinaryIO],
         length: int = None,
     ):
         """
@@ -415,7 +415,8 @@ class KartonBackend:
         Get resource object stream with the content.
 
         Returned response should be closed after use to release network resources.
-        To reuse the connection, it's required to call `response.release_conn()` explicitly.
+        To reuse the connection, it's required to call `response.release_conn()`
+        explicitly.
 
         :param bucket: Bucket name
         :param object_uid: Object identifier

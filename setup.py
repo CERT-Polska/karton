@@ -18,11 +18,6 @@ setup(
     namespace_packages=["karton"],
     packages=["karton.core", "karton.system"],
     install_requires=open("requirements.txt").read().splitlines(),
-    extras_require={
-        ':python_version < "3"': [
-            'mock==3.0.5'
-        ]
-    },
     entry_points={
         'console_scripts': [
             'karton-system=karton.system:SystemService.main',
