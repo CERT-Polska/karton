@@ -38,4 +38,6 @@ jobs:
       - uses: actions/checkout@v2
       - uses: ammaraskar/sphinx-action@master
         with:
+          # Install karton package
+          pre-build-command: pip install .
           docs-folder: "docs/"
