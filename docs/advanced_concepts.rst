@@ -41,7 +41,7 @@ Each task is identified by a tuple of three identifiers:
 - **uid** - unique task identifier
 - **parent_uid** - identifier of task that spawned current task as a result of processing
 - **root_uid** - task tree identifier (analysis identifier, derived from uid of initial **unrouted** task)
-- **orig_uid** - identifier of the original task after fork (unrouted task or retried crashed task)
+- **orig_uid** - identifier of the original task that was forked to create this task (unrouted task or retried crashed task)
 
 In order to better understand how those identifiers are inherited and passed between tasks take a look at the following example:
 
@@ -232,4 +232,3 @@ The simplest way to do that is to perform all of these actions synchronously, in
         # If analysis has been finished: get the results and process them
         analysis = sandbox.get_results(analysis_id)
         self.process_results(analysis)
-
