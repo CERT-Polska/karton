@@ -357,7 +357,7 @@ class KartonBackend:
     def consume_log(self, timeout=0):
         """
         Pop new log record from the logs queue.
-        If there are no items, wait until one appear.
+        If there are no items, wait until one appears.
 
         :param timeout: Waiting for task timeout (default: 0, wait endlessly)
         :return: dict with log record
@@ -378,7 +378,7 @@ class KartonBackend:
         :param metric: Operation metric type
         :param identity: Related Karton service identity
         """
-        self.redis.hincrby(metric, identity, 1)
+        self.redis.hincrby(metric.value, identity, 1)
 
     def upload_object(
         self, bucket: str, object_uid: str, content: Union[bytes, RawIOBase], length: int = None
