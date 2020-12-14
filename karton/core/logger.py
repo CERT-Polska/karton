@@ -6,9 +6,9 @@ LOGS_QUEUE = "karton.logs"
 
 
 class KartonLogHandler(logging.Handler):
-    def __init__(self, rs):
+    def __init__(self, backend):
         logging.Handler.__init__(self)
-        self.rs = rs
+        self.backend = backend
         self.task = None
 
     def set_task(self, task):
@@ -42,4 +42,4 @@ class KartonLogHandler(logging.Handler):
         if self.task is not None:
             log_line["task"] = self.task.serialize()
 
-        self.rs.lpush(LOGS_QUEUE, json.dumps(log_line))
+        self.backend.produce_log(log_line)

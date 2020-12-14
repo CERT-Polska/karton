@@ -1,23 +1,14 @@
 import abc
 import argparse
-import json
 import logging
 import textwrap
-
-from minio import Minio
-from redis import StrictRedis
 
 from .backend import KartonBackend
 from .config import Config
 from .logger import KartonLogHandler
 
-OPERATIONS_QUEUE = "karton.operations"
 
-# Py2/3 compatible ABC (https://stackoverflow.com/a/38668373)
-ABC = abc.ABCMeta('ABC', (object,), {'__slots__': ()})
-
-
-class KartonBase(ABC):
+class KartonBase(abc.ABC):
     identity = ""
 
     def __init__(self, config=None, identity=None):
@@ -25,18 +16,9 @@ class KartonBase(ABC):
         # If not passed via constructor - get it from class
         if identity is not None:
             self.identity = identity
-        self.rs = StrictRedis(decode_responses=True,
-                              **self.config.redis_config)
-
-        self.current_task = None
-        self.log_handler = KartonLogHandler(rs=self.rs)
-        self.minio = Minio(
-            self.config.minio_config["address"],
-            self.config.minio_config["access_key"],
-            self.config.minio_config["secret_key"],
-            secure=bool(int(self.config.minio_config.get("secure", True))),
-        )
         self.backend = KartonBackend(self.config)
+        self.log_handler = KartonLogHandler(backend=self.backend)
+        self.current_task = None
 
     def setup_logger(self, level=None):
         """

@@ -2,22 +2,16 @@
 Base library for karton subsystems.
 """
 import abc
-import json
 import sys
 import time
 import traceback
 
 from .__version__ import __version__
 from .base import KartonBase, KartonServiceBase
-from .backend import KartonBind
+from .backend import KartonBind, KartomMetrics
 from .resource import LocalResource
 from .task import Task, TaskState
 from .utils import GracefulKiller, get_function_arg_num
-
-
-METRICS_PRODUCED = "karton.metrics.produced"
-METRICS_CONSUMED = "karton.metrics.consumed"
-METRICS_ERRORED = "karton.metrics.errored"
 
 
 class Producer(KartonBase):
@@ -75,7 +69,7 @@ class Producer(KartonBase):
         # Ensure all local resources have good buckets
         for _, resource in task.iterate_resources():
             if isinstance(resource, LocalResource) and not resource.bucket:
-                resource.bucket = self.config.minio_config["bucket"]
+                resource.bucket = self.backend.default_bucket_name
 
         # Register new task
         self.backend.register_task(task)
@@ -83,11 +77,14 @@ class Producer(KartonBase):
         # Upload local resources
         for _, resource in task.iterate_resources():
             if isinstance(resource, LocalResource):
-                resource.upload(self.backend.minio)
+                resource.upload(self.backend)
 
         # Add task to karton.tasks
         self.backend.produce_unrouted_task(task)
-        self.rs.hincrby(METRICS_PRODUCED, self.identity, 1)
+        self.backend.increment_metrics(
+            KartomMetrics.TASK_PRODUCED,
+            self.identity
+        )
         return True
 
 
@@ -167,12 +164,18 @@ class Consumer(KartonServiceBase):
             exc_info = sys.exc_info()
             exception_str = traceback.format_exception(*exc_info)
 
-            self.rs.hincrby(METRICS_ERRORED, self.identity, 1)
+            self.backend.increment_metrics(
+                KartomMetrics.TASK_CRASHED,
+                self.identity
+            )
             self.log.exception(
                 "Failed to process task - %s", self.current_task.uid
             )
         finally:
-            self.rs.hincrby(METRICS_CONSUMED, self.identity, 1)
+            self.backend.increment_metrics(
+                KartomMetrics.TASK_CONSUMED,
+                self.identity
+            )
 
             task_state = TaskState.FINISHED
 
@@ -302,20 +305,17 @@ class LogConsumer(KartonServiceBase):
         self.log.info("Logger %s started", self.identity)
 
         while not self.shutdown:
-            data = self.rs.blpop("karton.logs")
-            if data:
-                queue, body = data
-                try:
-                    body = json.loads(body)
-                    if "task" in body and isinstance(body["task"], str):
-                        body["task"] = json.loads(body["task"])
-                    self.process_log(body)
-                except Exception:
-                    """
-                    This is log handler exception, so DO NOT USE self.log HERE!
-                    """
-                    import traceback
-                    traceback.print_exc()
+            log = self.backend.consume_log()
+            if not log:
+                continue
+            try:
+                self.process_log(log)
+            except Exception:
+                """
+                This is log handler exception, so DO NOT USE self.log HERE!
+                """
+                import traceback
+                traceback.print_exc()
 
 
 class Karton(Consumer, Producer):

@@ -1,17 +1,12 @@
-import argparse
 import json
 import time
 
 from karton.core.__version__ import __version__
 from karton.core.base import KartonServiceBase
-from karton.core.backend import KARTON_TASKS_QUEUE
+from karton.core.backend import KartomMetrics, KARTON_TASKS_QUEUE
 from karton.core.config import Config
-from karton.core.task import Task, TaskPriority, TaskState
+from karton.core.task import Task, TaskState
 from karton.core.utils import GracefulKiller
-
-
-METRICS_ASSIGNED = "karton.metrics.assigned"
-METRICS_GARBAGE_COLLECTED = "karton.metrics.garbage-collected"
 
 
 class SystemService(KartonServiceBase):
@@ -36,27 +31,24 @@ class SystemService(KartonServiceBase):
         self.log.info("Gracefully shutting down!")
         self.shutdown = True
 
-    def gc_list_all_resources(self):
-        bucket_name = self.config.minio_config["bucket"]
-        return [
-            (bucket_name, object.object_name)
-            for object in self.minio.list_objects(bucket_name=bucket_name)
-        ]
-
     def gc_collect_resources(self):
-        resources = set(self.gc_list_all_resources())
+        karton_bucket = self.backend.default_bucket_name
+        resources_to_remove = set(self.backend.list_objects(karton_bucket))
         tasks = self.backend.get_all_tasks()
         for task in tasks:
             for _, resource in task.iterate_resources():
                 # If resource is referenced by task: remove it from set
-                if (resource.bucket, resource.uid) in resources:
-                    resources.remove((resource.bucket, resource.uid))
-        for bucket_name, object_name in list(resources):
+                if (
+                    resource.bucket == karton_bucket and
+                    resource.uid in resources_to_remove
+                ):
+                    resources_to_remove.remove(resource.uid)
+        for object_name in list(resources_to_remove):
             try:
-                self.minio.remove_object(bucket_name, object_name)
-                self.log.debug("GC: Removed unreferenced resource %s:%s", bucket_name, object_name)
+                self.backend.remove_object(karton_bucket, object_name)
+                self.log.debug("GC: Removed unreferenced resource %s:%s", karton_bucket, object_name)
             except Exception:
-                self.log.exception("GC: Error during resource removing %s:%s", bucket_name, object_name)
+                self.log.exception("GC: Error during resource removing %s:%s", karton_bucket, object_name)
 
     def gc_collect_tasks(self):
         root_tasks = set()
@@ -101,8 +93,10 @@ class SystemService(KartonServiceBase):
                 )
             if will_delete:
                 self.backend.delete_task(task)
-                receiver = task.headers.get("receiver", "unknown")
-                self.rs.hincrby(METRICS_GARBAGE_COLLECTED, receiver, 1)
+                self.backend.increment_metrics(
+                    KartomMetrics.TASK_GARBAGE_COLLECTED,
+                    task.headers.get("receiver", "unknown")
+                )
             else:
                 running_root_tasks.add(task.root_uid)
         for finished_root_task in root_tasks.difference(running_root_tasks):
@@ -147,7 +141,10 @@ class SystemService(KartonServiceBase):
                 self.backend.register_task(routed_task)
                 self.backend.produce_routed_task(identity, routed_task)
                 self.backend.set_task_status(routed_task, TaskState.SPAWNED, consumer=identity)
-                self.rs.hincrby(METRICS_ASSIGNED, identity, 1)
+                self.backend.increment_metrics(
+                    KartomMetrics.TASK_ASSIGNED,
+                    identity
+                )
 
     def loop(self):
         self.log.info("Manager {} started".format(self.identity))
@@ -185,7 +182,7 @@ class SystemService(KartonServiceBase):
                         # Update task status
                         self.backend.register_task(task)
                     # Pass new operation status to log
-                    self.rs.lpush("karton.logs", body)
+                    self.backend.produce_log(operation_body)
             self.gc_collect()
 
     @classmethod
@@ -193,6 +190,27 @@ class SystemService(KartonServiceBase):
         parser = super().args_parser()
         parser.add_argument("--setup-bucket", action="store_true", help="Create missing bucket in MinIO")
         return parser
+
+    def ensure_bucket_exsits(self, create):
+        bucket_name = self.backend.default_bucket_name
+        bucket_exists = self.backend.check_bucket_exists(
+            bucket_name,
+            create=create
+        )
+        if not bucket_exists:
+            if create:
+                self.log.info(
+                    "Bucket %s was missing. Created a new one.",
+                    bucket_name
+                )
+            else:
+                self.log.error(
+                    "Bucket %s is missing! If you're sure that name is correct and "
+                    "you don't want to create it manually, use --setup-bucket option",
+                    bucket_name
+                )
+                return False
+        return True
 
     @classmethod
     def main(cls):
@@ -202,21 +220,8 @@ class SystemService(KartonServiceBase):
         config = Config(args.config_file)
         service = SystemService(config)
 
-        bucket_name = config.minio_config["bucket"]
-
-        if not service.minio.bucket_exists(bucket_name):
-            if args.setup_bucket:
-                service.log.info(
-                    "Bucket %s is missing. Creating new one...",
-                    bucket_name
-                )
-                service.minio.make_bucket(bucket_name)
-            else:
-                service.log.error(
-                    "Bucket %s is missing! If you're sure that name is correct and "
-                    "you don't want to create it manually, use --setup-bucket option",
-                    bucket_name
-                )
-                return
+        if not service.ensure_bucket_exsits(args.setup_bucket):
+            # If bucket doesn't exist without --setup-bucket: quit
+            return
 
         service.loop()

@@ -237,7 +237,7 @@ class Task(object):
             if isinstance(value, ResourceBase):
                 yield key, value
 
-    def unserialize_resources(self, minio):
+    def unserialize_resources(self, backend):
         """
         Transforms __karton_resource__ serialized entries into RemoteResource object instances
 
@@ -246,18 +246,18 @@ class Task(object):
         for payload_bag, key, value in self.walk_payload_bags():
             if isinstance(value, dict) and "__karton_resource__" in value:
                 payload_bag[key] = RemoteResource.from_dict(
-                    value["__karton_resource__"], minio
+                    value["__karton_resource__"], backend
                 )
 
     @staticmethod
-    def unserialize(data, minio=None):
+    def unserialize(data, backend=None):
         """
         Unserialize Task instance from JSON string
 
         :param data: JSON-serialized task
         :type data: str or bytes
-        :param minio: Minio instance (to be bound to RemoteResource objects)
-        :type minio: minio.Minio, optional if you don't want to operate on them (e.g. karton-system)
+        :param backend: Backend instance (to be bound to RemoteResource objects)
+        :type backend: KartonBackend, optional if you don't want to operate on them (e.g. karton-system)
 
         :meta private:
         """
@@ -277,7 +277,7 @@ class Task(object):
         task.last_update = data.get("last_update", None)
         task.payload = data["payload"]
         task.payload_persistent = data["payload_persistent"]
-        task.unserialize_resources(minio)
+        task.unserialize_resources(backend)
         return task
 
     def __repr__(self):
