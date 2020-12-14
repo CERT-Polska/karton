@@ -12,9 +12,9 @@ jobs:
       - run: pip install -r requirements.txt
       - run: isort --check karton/
       - run: black --check karton/
-      - run: flake8 --max-line-length 88 karton/
+      - run: flake8 karton/
       - run: mypy karton/
-  test:
+  unittest:
     runs-on: ubuntu-latest
     strategy:
       matrix:
