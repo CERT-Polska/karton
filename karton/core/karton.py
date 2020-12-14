@@ -165,7 +165,7 @@ class Consumer(KartonServiceBase):
             exception_str = traceback.format_exception(*exc_info)
 
             self.backend.increment_metrics(
-                KartomMetrics.TASK_ERRORED,
+                KartomMetrics.TASK_CRASHED,
                 self.identity
             )
             self.log.exception(

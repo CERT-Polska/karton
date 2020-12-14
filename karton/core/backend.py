@@ -26,7 +26,7 @@ KartonBind = namedtuple(
 class KartomMetrics(enum.Enum):
     TASK_PRODUCED = "karton.metrics.produced"
     TASK_CONSUMED = "karton.metrics.consumed"
-    TASK_ERRORED = "karton.metrics.errored"
+    TASK_CRASHED = "karton.metrics.crashed"
     TASK_ASSIGNED = "karton.metrics.assigned"
     TASK_GARBAGE_COLLECTED = "karton.metrics.garbage-collected"
 
