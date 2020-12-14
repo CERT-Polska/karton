@@ -33,9 +33,11 @@ class KartomMetrics(enum.Enum):
 class KartonBackend:
     def __init__(self, config):
         self.config = config
-        self.redis = StrictRedis(host=config["redis"]["host"],
-                                 port=int(config["redis"].get("port", 6379)),
-                                 decode_responses=True)
+        self.redis = StrictRedis(
+            host=config["redis"]["host"],
+            port=int(config["redis"].get("port", 6379)),
+            decode_responses=True,
+        )
         self.minio = Minio(
             config["minio"]["address"],
             access_key=config["minio"]["access_key"],
@@ -69,7 +71,7 @@ class KartonBackend:
             identity,  # Backwards compatibility (2.x.x)
             KartonBackend.get_queue_name(identity, TaskPriority.HIGH),
             KartonBackend.get_queue_name(identity, TaskPriority.NORMAL),
-            KartonBackend.get_queue_name(identity, TaskPriority.LOW)
+            KartonBackend.get_queue_name(identity, TaskPriority.LOW),
         ]
 
     @staticmethod
@@ -85,9 +87,9 @@ class KartonBackend:
                 "info": bind.info,
                 "version": bind.version,
                 "filters": bind.filters,
-                "persistent": bind.persistent
+                "persistent": bind.persistent,
             },
-            sort_keys=True
+            sort_keys=True,
         )
 
     @staticmethod
@@ -108,14 +110,14 @@ class KartonBackend:
                 info=None,
                 version="2.x.x",
                 persistent=not identity.endswith(".test"),
-                filters=bind
+                filters=bind,
             )
         return KartonBind(
             identity=identity,
             info=bind["info"],
             version=bind["version"],
             persistent=bind["persistent"],
-            filters=bind["filters"]
+            filters=bind["filters"],
         )
 
     def get_bind(self, identity):
@@ -125,7 +127,9 @@ class KartonBackend:
         :param identity: Karton service identity
         :return: KartonBind object
         """
-        return self.unserialize_bind(identity, self.redis.hget(KARTON_BINDS_HSET, identity))
+        return self.unserialize_bind(
+            identity, self.redis.hget(KARTON_BINDS_HSET, identity)
+        )
 
     def get_binds(self):
         """
@@ -196,10 +200,9 @@ class KartonBackend:
         :param task_uid_list: List of task identifiers
         :return: List of task objects
         """
-        task_list = self.redis.mget([
-            f"{KARTON_TASK_NAMESPACE}:{task_uid}"
-            for task_uid in task_uid_list
-        ])
+        task_list = self.redis.mget(
+            [f"{KARTON_TASK_NAMESPACE}:{task_uid}" for task_uid in task_uid_list]
+        )
         return [
             Task.unserialize(task_data, backend=self)
             for task_data in task_list
@@ -265,10 +268,7 @@ class KartonBackend:
         :param queue: Queue name
         :return: List with Task objects contained in queue
         """
-        return [
-            self.get_task(uid)
-            for uid in self.redis.lrange(queue, 0, -1)
-        ]
+        return [self.get_task(uid) for uid in self.redis.lrange(queue, 0, -1)]
 
     def get_task_ids_from_queue(self, queue):
         """
@@ -310,10 +310,7 @@ class KartonBackend:
         :param identity: Karton service identity
         :param task: Task object
         """
-        self.redis.rpush(
-            self.get_queue_name(identity, task.priority),
-            task.uid
-        )
+        self.redis.rpush(self.get_queue_name(identity, task.priority), task.uid)
 
     def consume_queues(self, queues, timeout=0):
         """
@@ -384,7 +381,11 @@ class KartonBackend:
         self.redis.hincrby(metric.value, identity, 1)
 
     def upload_object(
-        self, bucket: str, object_uid: str, content: Union[bytes, RawIOBase], length: int = None
+        self,
+        bucket: str,
+        object_uid: str,
+        content: Union[bytes, RawIOBase],
+        length: int = None,
     ):
         """
         Upload resource object to underlying object storage (Minio)
@@ -454,10 +455,7 @@ class KartonBackend:
         :param bucket: Bucket name
         :return: List of object identifiers
         """
-        return [
-            object.object_name
-            for object in self.minio.list_objects(bucket)
-        ]
+        return [object.object_name for object in self.minio.list_objects(bucket)]
 
     def remove_object(self, bucket: str, object_uid: str):
         """

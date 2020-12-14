@@ -13,6 +13,7 @@ class ResourceBase(object):
     """
     Abstract base class for Resource objects.
     """
+
     DIRECTORY_FLAG = "Directory"
 
     def __init__(
@@ -25,7 +26,7 @@ class ResourceBase(object):
         sha256=None,
         _uid=None,
         _size=None,
-        _flags=None
+        _flags=None,
     ):
         self.name = name
         self.bucket = bucket
@@ -39,8 +40,9 @@ class ResourceBase(object):
             raise ValueError("Can't set both path and content for resource")
         if path:
             if not os.path.isfile(path):
-                raise IOError("Path {path} doesn't exist or is not a file"
-                              .format(path=path))
+                raise IOError(
+                    "Path {path} doesn't exist or is not a file".format(path=path)
+                )
             if calculate_hash:
                 sha256_hash = hashlib.sha256()
                 with open(path, "rb") as f:
@@ -59,7 +61,9 @@ class ResourceBase(object):
 
         # All normal Resources have to have a sha256 value that identifies them
         if sha256 is None:
-            raise ValueError("Trying to create a new resource without known sha256 identifier")
+            raise ValueError(
+                "Trying to create a new resource without known sha256 identifier"
+            )
 
         self.metadata["sha256"] = sha256
 
@@ -124,7 +128,7 @@ class ResourceBase(object):
             "size": self.size,
             "metadata": self.metadata,
             "flags": self._flags,
-            "sha256": self.sha256
+            "sha256": self.sha256,
         }
 
 
@@ -159,10 +163,28 @@ class LocalResource(ResourceBase):
     :param uid: Resource sha256 hash
     :type uid: str, optional
     """
-    def __init__(self, name, content=None, path=None, bucket=None, metadata=None, uid=None, sha256=None,
-                 _fd=None, _flags=None):
+
+    def __init__(
+        self,
+        name,
+        content=None,
+        path=None,
+        bucket=None,
+        metadata=None,
+        uid=None,
+        sha256=None,
+        _fd=None,
+        _flags=None,
+    ):
         super(LocalResource, self).__init__(
-            name, content=content, path=path, bucket=bucket, metadata=metadata, sha256=sha256, _uid=uid, _flags=_flags
+            name,
+            content=content,
+            path=path,
+            bucket=bucket,
+            metadata=metadata,
+            sha256=sha256,
+            _uid=uid,
+            _flags=_flags,
         )
         self._fd = _fd
 
@@ -175,7 +197,7 @@ class LocalResource(ResourceBase):
         in_memory=False,
         bucket=None,
         metadata=None,
-        uid=None
+        uid=None,
     ):
         """
         Resource extension, allowing to pass whole directory as a zipped resource.
@@ -211,19 +233,30 @@ class LocalResource(ResourceBase):
             for root, dirs, files in os.walk(directory_path):
                 for name in files:
                     abs_path = os.path.join(root, name)
-                    zipf.write(
-                        abs_path, os.path.relpath(abs_path, directory_path)
-                    )
+                    zipf.write(abs_path, os.path.relpath(abs_path, directory_path))
 
         # Flag is required by Karton 3.x.x services to recognize that resource as DirectoryResource
         flags = [ResourceBase.DIRECTORY_FLAG]
 
         if in_memory:
-            return cls(name, content=out_stream.getvalue(), bucket=bucket, metadata=metadata,
-                       uid=uid, _flags=flags)
+            return cls(
+                name,
+                content=out_stream.getvalue(),
+                bucket=bucket,
+                metadata=metadata,
+                uid=uid,
+                _flags=flags,
+            )
         else:
-            return cls(name, path=out_stream.name, bucket=bucket, metadata=metadata, uid=uid,
-                       _fd=out_stream, _flags=flags)
+            return cls(
+                name,
+                path=out_stream.name,
+                bucket=bucket,
+                metadata=metadata,
+                uid=uid,
+                _fd=out_stream,
+                _flags=flags,
+            )
 
     def _upload(self, backend):
         # Note: never transform resource into Remote (multiple task dispatching with same local,
@@ -256,10 +289,24 @@ class RemoteResource(ResourceBase):
     """
 
     def __init__(
-        self, name, bucket=None, metadata=None, uid=None, size=None, backend=None, sha256=None, _flags=None
+        self,
+        name,
+        bucket=None,
+        metadata=None,
+        uid=None,
+        size=None,
+        backend=None,
+        sha256=None,
+        _flags=None,
     ):
         super(RemoteResource, self).__init__(
-            name, bucket=bucket, metadata=metadata, sha256=sha256, _uid=uid, _size=size, _flags=_flags
+            name,
+            bucket=bucket,
+            metadata=metadata,
+            sha256=sha256,
+            _uid=uid,
+            _size=size,
+            _flags=_flags,
         )
         self.backend = backend
 
@@ -295,7 +342,7 @@ class RemoteResource(ResourceBase):
             uid=dict["uid"],
             size=dict.get("size"),  # Backwards compatibility (2.x.x)
             backend=backend,
-            _flags=dict.get("flags")  # Backwards compatibility (3.x.x)
+            _flags=dict.get("flags"),  # Backwards compatibility (3.x.x)
         )
 
     @property

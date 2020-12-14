@@ -71,6 +71,7 @@ class KartonServiceBase(KartonBase):
     """
     Karton base class for looping services
     """
+
     version = None
 
     def __init__(self, config=None, identity=None):
