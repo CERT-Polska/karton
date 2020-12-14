@@ -6,9 +6,10 @@ from .task import Task, TaskState
 
 
 class KartonQueue:
-    def __init__(self, bind: KartonBind, tasks: List[Task]) -> None:
+    def __init__(self, bind: KartonBind, tasks: List[Task], state: "KartonState") -> None:
         self.bind = bind
         self.tasks = tasks
+        self.state = state
 
     @property
     def last_update(self):
@@ -16,7 +17,7 @@ class KartonQueue:
 
     @property
     def online_consumers_count(self):
-        return
+        return len(self.state.replicas[self.bind.identity])
 
     @property
     def pending_tasks(self):
@@ -28,9 +29,10 @@ class KartonQueue:
 
 
 class KartonAnalysis:
-    def __init__(self, rootid: str, tasks: List[Task]) -> None:
+    def __init__(self, rootid: str, tasks: List[Task], state: "KartonState") -> None:
         self.rootid = rootid
         self.tasks = tasks
+        self.state = state
 
     @property
     def last_update(self):
@@ -46,11 +48,29 @@ class KartonAnalysis:
 
     @property
     def pending_queues(self):
-        return
+        return get_queues_for_tasks(self.tasks, self.state)
 
     @property
     def crashed_tasks(self):
         return [task for task in self.tasks if task.status == TaskState.CRASHED]
+
+
+def get_queues_for_tasks(tasks: List[Task], state: "KartonState"):
+    tasks_per_queue = defaultdict(list)
+
+    for task in tasks:
+        if "receiver" not in task.headers:
+            # Tasks without receiver are Declared and waiting for routing
+            continue
+        queue_name = task.headers["receiver"]
+        if queue_name not in state.binds:
+            # No known bind, dangling task for non-existent queue
+            continue
+        tasks_per_queue[queue_name].append(task)
+    return {
+        queue_name: KartonQueue(bind=state.binds[queue_name], tasks=tasks, state=state)
+        for queue_name, tasks in tasks_per_queue.items()
+    }
 
 
 class KartonState:
@@ -77,27 +97,12 @@ class KartonState:
 
         # Tasks grouped by root_uid
         tasks_per_analysis = defaultdict(list)
-        # Tasks grouped by target queue name
-        tasks_per_queue = defaultdict(list)
-        # Queues with available binds
 
         for task in self.pending_tasks:
             tasks_per_analysis[task.root_uid].append(task)
-            if "receiver" not in task.headers:
-                continue
-
-            queue_name = task.headers["receiver"]
-            if queue_name not in self.binds:
-                # Tasks without receiver are Declared and waiting for routing
-                continue
-
-            tasks_per_queue[queue_name].append(task)
 
         self.analyses = {
-            rootid: KartonAnalysis(rootid=rootid, tasks=tasks)
+            rootid: KartonAnalysis(rootid=rootid, tasks=tasks, state=self)
             for rootid, tasks in tasks_per_analysis.items()
         }
-        self.queues = {
-            queue_name: KartonQueue(bind=self.binds[queue_name], tasks=tasks)
-            for queue_name, tasks in tasks_per_queue.items()
-        }
+        self.queues = get_queues_for_tasks(self.pending_tasks, self)
