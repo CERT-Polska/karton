@@ -72,7 +72,7 @@ if __name__ == "__main__":
 Since some karton systems are pretty universal and will be useful to anyone running their own malware karton backend, we've decided to open-source some of our repositories to the community.
 
 #### [karton-core](https://github.com/CERT-Polska/karton-core)
-This repository, contains `karton.system` service that acts as the main framework hypervisor and `karton.core` module that is used as the python library.
+This repository, contains `karton.system` service that acts as the main service responsible for dispatching tasks within the system and `karton.core` module that is used as the python library.
 
 #### [karton-dashboard](https://github.com/CERT-Polska/karton-dashboard)
 A small flask application that allows for task and queue introspection.
