@@ -354,13 +354,15 @@ class KartonBackend:
         """
         self.redis.lpush(KARTON_LOGS_QUEUE, json.dumps(log_record))
 
-    def consume_log(self):
+    def consume_log(self, timeout=0):
         """
-        Pop new log record from the logs queue
+        Pop new log record from the logs queue.
+        If there are no items, wait until one appear.
 
+        :param timeout: Waiting for task timeout (default: 0, wait endlessly)
         :return: dict with log record
         """
-        item = self.consume_queues(KARTON_LOGS_QUEUE)
+        item = self.consume_queues(KARTON_LOGS_QUEUE, timeout=timeout)
         if not item:
             return None
         queue, data = item
@@ -369,14 +371,14 @@ class KartonBackend:
             body["task"] = json.loads(body["task"])
         return body
 
-    def increment_metrics(self, metric_type: KartomMetrics, identity: str):
+    def increment_metrics(self, metric: KartomMetrics, identity: str):
         """
         Increments metrics for given operation type and identity
 
-        :param metric_type: Operation metric type
+        :param metric: Operation metric type
         :param identity: Related Karton service identity
         """
-        self.redis.hincrby(metric_type, identity, 1)
+        self.redis.hincrby(metric, identity, 1)
 
     def upload_object(
         self, bucket: str, object_uid: str, content: Union[bytes, RawIOBase], length: int = None
@@ -463,9 +465,9 @@ class KartonBackend:
         """
         self.minio.remove_object(bucket, object_uid)
 
-    def ensure_bucket_exists(self, bucket: str, create: bool = False) -> bool:
+    def check_bucket_exists(self, bucket: str, create: bool = False) -> bool:
         """
-        Checks if bucket exists and optionally creates if it doesn't.
+        Check if bucket exists and optionally create it if it doesn't.
 
         :param bucket: Bucket name
         :param create: Create bucket if doesn't exist

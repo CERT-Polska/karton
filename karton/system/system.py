@@ -193,7 +193,7 @@ class SystemService(KartonServiceBase):
 
     def ensure_bucket_exsits(self, create):
         bucket_name = self.backend.default_bucket_name
-        bucket_exists = self.backend.ensure_bucket_exists(
+        bucket_exists = self.backend.check_bucket_exists(
             bucket_name,
             create=create
         )
