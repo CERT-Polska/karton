@@ -24,12 +24,6 @@ class SystemService(KartonServiceBase):
     def __init__(self, config):
         super(SystemService, self).__init__(config=config)
         self.last_gc_trigger = 0
-        self.shutdown = False
-        self.killer = GracefulKiller(self.graceful_shutdown)
-
-    def graceful_shutdown(self):
-        self.log.info("Gracefully shutting down!")
-        self.shutdown = True
 
     def gc_collect_resources(self):
         karton_bucket = self.backend.default_bucket_name
