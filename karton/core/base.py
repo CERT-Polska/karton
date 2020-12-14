@@ -2,6 +2,7 @@ import abc
 import argparse
 import logging
 import textwrap
+from typing import Optional
 
 from .backend import KartonBackend
 from .config import Config
@@ -73,7 +74,7 @@ class KartonServiceBase(KartonBase):
     Karton base class for looping services
     """
 
-    version = None
+    version: Optional[str] = None
 
     def __init__(self, config=None, identity=None):
         super().__init__(config=config, identity=identity)

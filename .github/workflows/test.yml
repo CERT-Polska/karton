@@ -13,7 +13,7 @@ jobs:
       - run: isort --check karton/
       - run: black --check karton/
       - run: flake8 karton/
-      - run: mypy karton/
+      - run: mypy --namespace-packages karton/
   unittest:
     runs-on: ubuntu-latest
     strategy:

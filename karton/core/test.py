@@ -10,16 +10,12 @@ import time
 import unittest
 import zipfile
 from io import BytesIO
+from typing import List
+from unittest import mock
 
 from .karton import Consumer
 from .resource import ResourceBase
 from .utils import get_function_arg_num
-
-try:
-    from unittest import mock
-except ImportError:
-    # Py2 compatibility: needs "mock" to be installed
-    import mock
 
 __all__ = ["KartonTestCase", "mock"]
 
@@ -197,13 +193,14 @@ class KartonTestCase(unittest.TestCase):
 
 class KartonMock(object):
     identity = ""
-    filters = []
+    filters: List[dict] = []
 
     @classmethod
     def from_karton(cls, karton_class):
         """
         Turns Consumer into its mocked version, so we can test subsystem
         without interaction with infrastructure
+
         :param karton_class: Consumer-based Karton class
         :type karton_class: Type[Consumer]
         :return: Type[KartonMock]
