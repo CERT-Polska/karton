@@ -69,13 +69,13 @@ if __name__ == "__main__":
 
 ## Karton Systems
 
-Since some karton systems are pretty universal and will be useful to anyone running their own malware karton backend, we've decided to open-source some of our repositories to the community.
+Since some karton systems are universal and will be useful to anyone running their own karton deployments, we've decided to open-source some of our repositories to the community.
 
 #### [karton-core](https://github.com/CERT-Polska/karton-core)
 This repository, contains `karton.system` service that acts as the main service responsible for dispatching tasks within the system and `karton.core` module that is used as the python library.
 
 #### [karton-dashboard](https://github.com/CERT-Polska/karton-dashboard)
-A small flask application that allows for task and queue introspection.
+A small Flask application that allows for task and queue introspection.
 
 #### [karton-classifier](https://github.com/CERT-Polska/karton-classifier)
 Our main karton "router", it classifies unknown samples/files and produces various task types depending on the matched format. 
@@ -87,16 +87,16 @@ Generic archive unpacker that uses [sflock](https://github.com/hatching/sflock) 
 Malware configuration extractor that tries to extract various embedded information from malware samples and analyses.
 
 #### [karton-mwdb-reporter](https://github.com/CERT-Polska/karton-mwdb-reporter)
-Analaysis artifact reporter that submits all samples, tags, comments and relations between them to [MWDB](https://github.com/CERT-Polska/mwdb-core).
+Analysis artifact reporter that submits all samples, tags, comments and relations between them to [MWDB](https://github.com/CERT-Polska/mwdb-core).
 
 #### [karton-drakvuf](https://github.com/CERT-Polska/karton-drakvuf)
 Malware sample processor that uploads incoming samples to [drakvuf-sandbox](https://github.com/CERT-Polska/drakvuf-sandbox) for analysis.
 
 #### [karton-yaramatcher](https://github.com/CERT-Polska/karton-yaramatcher)
-Yara classifier that spawns new tasks containing information about matched yara rules (rules not included ;)
+YARA classifier that spawns new tasks containing information about matched yara rules (rules not included ;)
 
 #### [karton-asciimagic](https://github.com/CERT-Polska/karton-asciimagic)
-Novelty karton system that tries to extract executables (and other files) from various encodings like `hex`, `base64`, etc.
+Karton system that tries to extract executables (and other files) from various encodings like `hex`, `base64`, etc.
 
 #### [karton-autoit-ripper](https://github.com/CERT-Polska/karton-autoit-ripper)
 A small wrapper around [AutoIt-Ripper](https://github.com/nazywam/AutoIt-Ripper) that tries to extract embedded AutoIt scripts and resources from incoming executables.
