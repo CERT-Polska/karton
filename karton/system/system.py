@@ -2,7 +2,7 @@ import json
 import time
 
 from karton.core.__version__ import __version__
-from karton.core.backend import KARTON_TASKS_QUEUE, KartomMetrics
+from karton.core.backend import KARTON_TASKS_QUEUE, KartonMetrics
 from karton.core.base import KartonServiceBase
 from karton.core.config import Config
 from karton.core.task import Task, TaskState
@@ -107,7 +107,7 @@ class SystemService(KartonServiceBase):
             if will_delete:
                 self.backend.delete_task(task)
                 self.backend.increment_metrics(
-                    KartomMetrics.TASK_GARBAGE_COLLECTED,
+                    KartonMetrics.TASK_GARBAGE_COLLECTED,
                     task.headers.get("receiver", "unknown"),
                 )
             else:
@@ -160,7 +160,7 @@ class SystemService(KartonServiceBase):
                 self.backend.set_task_status(
                     routed_task, TaskState.SPAWNED, consumer=identity
                 )
-                self.backend.increment_metrics(KartomMetrics.TASK_ASSIGNED, identity)
+                self.backend.increment_metrics(KartonMetrics.TASK_ASSIGNED, identity)
 
     def loop(self):
         self.log.info("Manager {} started".format(self.identity))
