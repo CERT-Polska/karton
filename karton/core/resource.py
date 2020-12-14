@@ -226,24 +226,24 @@ class LocalResource(ResourceBase):
             return cls(name, path=out_stream.name, bucket=bucket, metadata=metadata, uid=uid,
                        _fd=out_stream, _flags=flags)
 
-    def _upload(self, minio):
+    def _upload(self, backend):
         # Note: never transform resource into Remote (multiple task dispatching with same local,
         # in that case resource can be deleted between tasks)
         if self._content:
             # Upload contents
-            minio.put_object(self.bucket, self.uid, BytesIO(self._content), len(self._content))
+            backend.upload_object(self.bucket, self.uid, self._content)
         else:
             # Upload file provided by path
-            minio.fput_object(self.bucket, self.uid, self._path)
+            backend.upload_object_from_file(self.bucket, self.uid, self._path)
         # If file descriptor is managed by Resource, close it after upload
         if self._fd:
             self._fd.close()
 
-    def upload(self, minio):
+    def upload(self, backend):
         # Internal local resource upload method
         if not self._content and not self._path:
             raise RuntimeError("Can't upload resource without content")
-        return self._upload(minio)
+        return self._upload(backend)
 
 
 Resource = LocalResource
@@ -251,18 +251,18 @@ Resource = LocalResource
 
 class RemoteResource(ResourceBase):
     """
-    Keeps reference to remote resource object shared between subsystems via object hub (MinIO)
+    Keeps reference to remote resource object shared between subsystems via object storage (MinIO)
 
     Should never be instantiated directly by subsystem, but can be directly passed to outgoing payload.
     """
 
     def __init__(
-        self, name, bucket=None, metadata=None, uid=None, size=None, minio=None, sha256=None, _flags=None
+        self, name, bucket=None, metadata=None, uid=None, size=None, backend=None, sha256=None, _flags=None
     ):
         super(RemoteResource, self).__init__(
             name, bucket=bucket, metadata=metadata, sha256=sha256, _uid=uid, _size=size, _flags=_flags
         )
-        self._minio = minio
+        self.backend = backend
 
     def loaded(self):
         """
@@ -273,14 +273,14 @@ class RemoteResource(ResourceBase):
         return self._content is not None
 
     @classmethod
-    def from_dict(cls, dict, minio):
+    def from_dict(cls, dict, backend):
         """
         Internal deserialization method for remote resources
 
         :param dict: Serialized information about resource
         :type dict: Dict[str, Any]
-        :param minio: Minio binding object
-        :type minio: :class:`minio.Minio`
+        :param backend: KartonBackend object
+        :type backend: :class:`karton.core.backend.KartonBackend`
 
         :meta private:
         """
@@ -295,7 +295,7 @@ class RemoteResource(ResourceBase):
             bucket=dict["bucket"],
             uid=dict["uid"],
             size=dict.get("size"),  # Backwards compatibility (2.x.x)
-            minio=minio,
+            backend=backend,
             _flags=dict.get("flags")  # Backwards compatibility (3.x.x)
         )
 
@@ -323,7 +323,7 @@ class RemoteResource(ResourceBase):
 
         :meta private:
         """
-        self._minio.remove_object(self.bucket, self.uid)
+        self.backend.remove_object(self.bucket, self.uid)
 
     def download(self):
         """
@@ -341,9 +341,7 @@ class RemoteResource(ResourceBase):
 
         :rtype: bytes
         """
-        reader = self._minio.get_object(self.bucket, self.uid)
-        sio = BytesIO(reader.data)
-        self._content = sio.getvalue()
+        self._content = self.backend.download_object(self.bucket, self.uid)
         return self._content
 
     def download_to_file(self, path):
@@ -359,7 +357,7 @@ class RemoteResource(ResourceBase):
             with open("sample/sample.exe", "rb") as f:
                 contents = f.read()
         """
-        self._minio.fget_object(self.bucket, self.uid, path)
+        self.backend.download_object_to_file(self.bucket, self.uid, path)
 
     @contextlib.contextmanager
     def download_temporary_file(self):

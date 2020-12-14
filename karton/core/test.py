@@ -221,14 +221,6 @@ class KartonMock(object):
         self._result_tasks = []
 
     @property
-    def minio(self):
-        raise RuntimeError("Karton shouldn't interact directly with MinIO")
-
-    @property
-    def rs(self):
-        raise RuntimeError("Karton shouldn't interact directly with Redis")
-
-    @property
     def log(self):
         return logging.getLogger(self.identity)
 
