@@ -105,4 +105,9 @@ class KartonState:
             rootid: KartonAnalysis(rootid=rootid, tasks=tasks, state=self)
             for rootid, tasks in tasks_per_analysis.items()
         }
-        self.queues = get_queues_for_tasks(self.pending_tasks, self)
+        queues = get_queues_for_tasks(self.pending_tasks, self)
+        # Present registered queues without tasks
+        for bind_name, bind in self.binds.items():
+            if bind_name not in queues:
+                queues[bind_name] = KartonQueue(bind=self.binds[bind_name], tasks=[], state=self)
+        self.queues = queues
