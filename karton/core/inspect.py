@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import List
+from typing import Dict, List
 
 from .backend import KartonBackend, KartonBind
 from .task import Task, TaskState
@@ -12,19 +12,19 @@ class KartonQueue:
         self.state = state
 
     @property
-    def last_update(self):
+    def last_update(self) -> int:
         return max([task.last_update for task in self.tasks])
 
     @property
-    def online_consumers_count(self):
+    def online_consumers_count(self) -> int:
         return len(self.state.replicas[self.bind.identity])
 
     @property
-    def pending_tasks(self):
+    def pending_tasks(self) -> List[Task]:
         return [task for task in self.tasks if task.status != TaskState.CRASHED]
 
     @property
-    def crashed_tasks(self):
+    def crashed_tasks(self) -> List[Task]:
         return [task for task in self.tasks if task.status == TaskState.CRASHED]
 
 
@@ -35,27 +35,27 @@ class KartonAnalysis:
         self.state = state
 
     @property
-    def last_update(self):
+    def last_update(self) -> int:
         return max([task.last_update for task in self.tasks])
 
     @property
-    def is_done(self):
+    def is_done(self) -> bool:
         return len(self.pending_tasks) == 0
 
     @property
-    def pending_tasks(self):
+    def pending_tasks(self) -> List[Task]:
         return [task for task in self.tasks if task.status != TaskState.CRASHED]
 
     @property
-    def pending_queues(self):
+    def pending_queues(self) -> Dict[str, KartonQueue]:
         return get_queues_for_tasks(self.tasks, self.state)
 
     @property
-    def crashed_tasks(self):
+    def crashed_tasks(self) -> List[Task]:
         return [task for task in self.tasks if task.status == TaskState.CRASHED]
 
 
-def get_queues_for_tasks(tasks: List[Task], state: "KartonState"):
+def get_queues_for_tasks(tasks: List[Task], state: "KartonState") -> Dict[str, KartonQueue]:
     tasks_per_queue = defaultdict(list)
 
     for task in tasks:
@@ -81,7 +81,7 @@ class KartonState:
     .. versionadded: 4.0.0
 
     """
-    def __init__(self, backend: KartonBackend):
+    def __init__(self, backend: KartonBackend) -> None:
         self.backend = backend
         self.binds = {
             bind.identity: bind
