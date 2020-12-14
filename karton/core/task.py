@@ -46,6 +46,7 @@ class Task(object):
         priority=None,
         parent_uid=None,
         root_uid=None,
+        orig_uid=None,
         uid=None,
         error=None,
     ):
@@ -66,6 +67,7 @@ class Task(object):
         else:
             self.root_uid = root_uid
 
+        self.orig_uid = orig_uid
         self.parent_uid = parent_uid
 
         self.error = error
@@ -93,6 +95,7 @@ class Task(object):
             priority=self.priority,
             parent_uid=self.parent_uid,
             root_uid=self.root_uid,
+            orig_uid=self.uid
         )
         return new_task
 
@@ -202,6 +205,7 @@ class Task(object):
                 "uid": self.uid,
                 "root_uid": self.root_uid,
                 "parent_uid": self.parent_uid,
+                "orig_uid": self.orig_uid,
                 "status": self.status,
                 "priority": self.priority,
                 "last_update": self.last_update,
@@ -272,9 +276,12 @@ class Task(object):
         task.uid = data["uid"]
         task.root_uid = data["root_uid"]
         task.parent_uid = data["parent_uid"]
+        # Compatibility with <= 3.x.x (get)
+        task.orig_uid = data.get("orig_uid", None)
         task.status = data["status"]
-        # Backwards compatibility, remove these .get's after upgrade
+        # Compatibility with <= 3.x.x (get)
         task.error = data.get("error")
+        # Compatibility with <= 2.x.x (get)
         task.priority = data.get("priority", TaskPriority.NORMAL)
         task.last_update = data.get("last_update", None)
         task.payload = data["payload"]

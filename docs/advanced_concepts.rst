@@ -20,7 +20,7 @@ Because task headers can be accepted by more than one consumer the task has to b
     
     While **uid** of routed and unrouted tasks are different, **parent_uid** stays the same. **parent_uid** always identifies the routed task.
 
-    Currently we don't keep the relationship between routed and unrouted task identifier, so there could be additional difficulty in task flow tracking when Kartonik spawns more than one task (**parent_uid** will be the same for all of them)
+    Reference to the unrouted task is called **orig_uid**.
 
 Each registered consumer monitors its (routed) queue and performs analysis on all tasks that appear there. As soon as the consumer starts working on a given task, it sends a signal to the broker to mark the tasks state as ``TaskState.Started``.
 
@@ -41,6 +41,7 @@ Each task is identified by a tuple of three identifiers:
 - **uid** - unique task identifier
 - **parent_uid** - identifier of task that spawned current task as a result of processing
 - **root_uid** - task tree identifier (analysis identifier, derived from uid of initial **unrouted** task)
+- **orig_uid** - identifier of the original task that was forked to create this task (unrouted task or retried crashed task)
 
 In order to better understand how those identifiers are inherited and passed between tasks take a look at the following example:
 
@@ -231,4 +232,3 @@ The simplest way to do that is to perform all of these actions synchronously, in
         # If analysis has been finished: get the results and process them
         analysis = sandbox.get_results(analysis_id)
         self.process_results(analysis)
-
