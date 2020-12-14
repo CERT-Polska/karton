@@ -370,6 +370,10 @@ class KartonBackend:
             body["task"] = json.loads(body["task"])
         return body
 
+    def get_log_queue_length(self) -> int:
+        """Return log queue length"""
+        return self.redis.llen(KARTON_LOGS_QUEUE)
+
     def increment_metrics(self, metric: KartomMetrics, identity: str):
         """
         Increments metrics for given operation type and identity
