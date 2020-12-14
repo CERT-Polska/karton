@@ -6,7 +6,9 @@ from .task import Task, TaskState
 
 
 class KartonQueue:
-    def __init__(self, bind: KartonBind, tasks: List[Task], state: "KartonState") -> None:
+    def __init__(
+        self, bind: KartonBind, tasks: List[Task], state: "KartonState"
+    ) -> None:
         self.bind = bind
         self.tasks = tasks
         self.state = state
@@ -55,7 +57,9 @@ class KartonAnalysis:
         return [task for task in self.tasks if task.status == TaskState.CRASHED]
 
 
-def get_queues_for_tasks(tasks: List[Task], state: "KartonState") -> Dict[str, KartonQueue]:
+def get_queues_for_tasks(
+    tasks: List[Task], state: "KartonState"
+) -> Dict[str, KartonQueue]:
     tasks_per_queue = defaultdict(list)
 
     for task in tasks:
@@ -81,17 +85,14 @@ class KartonState:
     .. versionadded: 4.0.0
 
     """
+
     def __init__(self, backend: KartonBackend) -> None:
         self.backend = backend
-        self.binds = {
-            bind.identity: bind
-            for bind in backend.get_binds()
-        }
+        self.binds = {bind.identity: bind for bind in backend.get_binds()}
         self.replicas = backend.get_online_consumers()
         self.tasks = backend.get_all_tasks()
         self.pending_tasks = [
-            task for task in self.tasks
-            if task.status != TaskState.FINISHED
+            task for task in self.tasks if task.status != TaskState.FINISHED
         ]
         self.log_queue_length = backend.get_log_queue_length()
 
@@ -109,5 +110,7 @@ class KartonState:
         # Present registered queues without tasks
         for bind_name, bind in self.binds.items():
             if bind_name not in queues:
-                queues[bind_name] = KartonQueue(bind=self.binds[bind_name], tasks=[], state=self)
+                queues[bind_name] = KartonQueue(
+                    bind=self.binds[bind_name], tasks=[], state=self
+                )
         self.queues = queues

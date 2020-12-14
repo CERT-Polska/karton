@@ -81,10 +81,7 @@ class Producer(KartonBase):
 
         # Add task to karton.tasks
         self.backend.produce_unrouted_task(task)
-        self.backend.increment_metrics(
-            KartomMetrics.TASK_PRODUCED,
-            self.identity
-        )
+        self.backend.increment_metrics(KartomMetrics.TASK_PRODUCED, self.identity)
         return True
 
 
@@ -120,9 +117,7 @@ class Consumer(KartonServiceBase):
         if not self.current_task.matches_filters(self.filters):
             self.log.info("Task rejected because binds are no longer valid.")
             self.backend.set_task_status(
-                self.current_task,
-                TaskState.FINISHED,
-                consumer=self.identity
+                self.current_task, TaskState.FINISHED, consumer=self.identity
             )
             # Task rejected: end of processing
             return
@@ -132,9 +127,7 @@ class Consumer(KartonServiceBase):
         try:
             self.log.info("Received new task - %s", self.current_task.uid)
             self.backend.set_task_status(
-                self.current_task,
-                TaskState.STARTED,
-                consumer=self.identity
+                self.current_task, TaskState.STARTED, consumer=self.identity
             )
 
             self._run_pre_hooks()
@@ -157,18 +150,10 @@ class Consumer(KartonServiceBase):
             exc_info = sys.exc_info()
             exception_str = traceback.format_exception(*exc_info)
 
-            self.backend.increment_metrics(
-                KartomMetrics.TASK_CRASHED,
-                self.identity
-            )
-            self.log.exception(
-                "Failed to process task - %s", self.current_task.uid
-            )
+            self.backend.increment_metrics(KartomMetrics.TASK_CRASHED, self.identity)
+            self.log.exception("Failed to process task - %s", self.current_task.uid)
         finally:
-            self.backend.increment_metrics(
-                KartomMetrics.TASK_CONSUMED,
-                self.identity
-            )
+            self.backend.increment_metrics(KartomMetrics.TASK_CONSUMED, self.identity)
 
             task_state = TaskState.FINISHED
 
@@ -178,9 +163,7 @@ class Consumer(KartonServiceBase):
                 self.current_task.error = exception_str
 
             self.backend.set_task_status(
-                self.current_task,
-                task_state,
-                consumer=self.identity
+                self.current_task, task_state, consumer=self.identity
             )
 
     @property
@@ -190,7 +173,7 @@ class Consumer(KartonServiceBase):
             info=self.__class__.__doc__,
             version=__version__,
             filters=self.filters,
-            persistent=self.persistent
+            persistent=self.persistent,
         )
 
     def add_pre_hook(self, callback, name=None):
@@ -278,6 +261,7 @@ class LogConsumer(KartonServiceBase):
     """
     Base class for log consumer subsystems
     """
+
     def __init__(self, config=None, identity=None):
         super(LogConsumer, self).__init__(config=config, identity=identity)
 
@@ -302,6 +286,7 @@ class LogConsumer(KartonServiceBase):
                 This is log handler exception, so DO NOT USE self.log HERE!
                 """
                 import traceback
+
                 traceback.print_exc()
 
 

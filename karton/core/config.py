@@ -27,6 +27,7 @@ class Config(object):
 
     :param path: path to additional configuration file
     """
+
     SEARCH_PATHS = [
         "/etc/karton/karton.ini",
         os.path.expanduser("~/.config/karton/karton.ini"),
@@ -52,7 +53,7 @@ class Config(object):
         for name, value in os.environ.items():
             # Load env variables named KARTON_[section]_[key]
             # to match ConfigParser structure
-            result = re.fullmatch(r'KARTON_([A-Z0-9]+)_([A-Z0-9_]+)', name)
+            result = re.fullmatch(r"KARTON_([A-Z0-9]+)_([A-Z0-9_]+)", name)
 
             if not result:
                 continue

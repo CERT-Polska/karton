@@ -95,7 +95,7 @@ class Task(object):
             priority=self.priority,
             parent_uid=self.parent_uid,
             root_uid=self.root_uid,
-            orig_uid=self.uid
+            orig_uid=self.uid,
         )
         return new_task
 
@@ -156,7 +156,8 @@ class Task(object):
                 # Match: all consumer filter fields match the task header
                 self.headers.get(bind_key) == bind_value
                 for bind_key, bind_value in task_filter.items()
-            ) for task_filter in filters
+            )
+            for task_filter in filters
         )
 
     def set_task_parent(self, parent):
@@ -216,7 +217,7 @@ class Task(object):
             },
             cls=KartonResourceEncoder,
             indent=indent,
-            sort_keys=True
+            sort_keys=True,
         )
 
     def walk_payload_bags(self):
@@ -330,8 +331,11 @@ class Task(object):
         :type persistent: bool
         :param persistent: flag if the param should be persistent
         """
-        warnings.warn("add_resource is deprecated, use add_payload instead",
-                      DeprecationWarning, stacklevel=2)
+        warnings.warn(
+            "add_resource is deprecated, use add_payload instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.add_payload(name, resource, persistent)
 
     def get_payload(self, name, default=None):
