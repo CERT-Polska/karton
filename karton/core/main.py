@@ -55,7 +55,8 @@ def delete_bind(config, karton_name):
 
     if binds[karton_name].replicas:
         print(
-            "This bind has active replicas that need to be downscaled before it can be deleted"
+            "This bind has active replicas that need to be downscaled "
+            "before it can be deleted"
         )
         return
 
@@ -86,9 +87,8 @@ def main():
     if args.delete:
         karton_name = args.delete
         print(
-            "Are you sure you want to remove binds for karton {karton_name}?\nType in the karton name to confirm".format(
-                karton_name=karton_name
-            )
+            "Are you sure you want to remove binds for karton {karton_name}?\n"
+            "Type in the karton name to confirm".format(karton_name=karton_name)
         )
         if get_user_input().strip() == karton_name:
             delete_bind(config, karton_name)

@@ -202,7 +202,8 @@ class LocalResource(ResourceBase):
         """
         Resource extension, allowing to pass whole directory as a zipped resource.
 
-        Reads all files contained in directory_path recursively and packs them into zip file.
+        Reads all files contained in directory_path recursively and packs them
+        into zip file.
 
         .. code-block:: python
 
@@ -215,7 +216,8 @@ class LocalResource(ResourceBase):
         :type directory_path: str
         :param compression: Compression level (default is zipfile.ZIP_DEFLATED)
         :type compression: int, optional
-        :param in_memory: Don't create temporary file and make in-memory zip file (default: False)
+        :param in_memory: Don't create temporary file and make in-memory zip file \
+                          (default: False)
         :type in_memory: bool, optional
         :param bucket: Alternative MinIO bucket for resource
         :type bucket: str, optional
@@ -235,7 +237,8 @@ class LocalResource(ResourceBase):
                     abs_path = os.path.join(root, name)
                     zipf.write(abs_path, os.path.relpath(abs_path, directory_path))
 
-        # Flag is required by Karton 3.x.x services to recognize that resource as DirectoryResource
+        # Flag is required by Karton 3.x.x services to recognize that resource
+        # as DirectoryResource
         flags = [ResourceBase.DIRECTORY_FLAG]
 
         if in_memory:
@@ -259,8 +262,9 @@ class LocalResource(ResourceBase):
             )
 
     def _upload(self, backend):
-        # Note: never transform resource into Remote (multiple task dispatching with same local,
-        # in that case resource can be deleted between tasks)
+        # Note: never transform resource into Remote
+        # Multiple task dispatching with same local, in that case resource
+        # can be deleted between tasks.
         if self._content:
             # Upload contents
             backend.upload_object(self.bucket, self.uid, self._content)
@@ -283,9 +287,11 @@ Resource = LocalResource
 
 class RemoteResource(ResourceBase):
     """
-    Keeps reference to remote resource object shared between subsystems via object storage (MinIO)
+    Keeps reference to remote resource object shared between subsystems
+    via object storage (MinIO)
 
-    Should never be instantiated directly by subsystem, but can be directly passed to outgoing payload.
+    Should never be instantiated directly by subsystem, but can be directly passed to
+    outgoing payload.
     """
 
     def __init__(
@@ -422,8 +428,9 @@ class RemoteResource(ResourceBase):
 
         :rtype: ContextManager[BinaryIO]
         """
-        # That tempfile-fu is necessary because minio.fget_object removes file under provided path and
-        # and renames its own part-file with downloaded content under previously deleted path
+        # That tempfile-fu is necessary because minio.fget_object removes file
+        # under provided path and renames its own part-file with downloaded content
+        # under previously deleted path
         # Weird move, but ok...
         tmp = tempfile.NamedTemporaryFile(delete=False)
         tmp.close()
@@ -451,8 +458,8 @@ class RemoteResource(ResourceBase):
         leaving the context. If you want to load zip into memory,
         call :py:meth:`RemoteResource.download` first.
 
-        If you want to pre-download Zip under specified path and open it using zipfile module,
-        you need to do this manually:
+        If you want to pre-download Zip under specified path and open it using
+        zipfile module, you need to do this manually:
 
         .. code-block:: python
 
@@ -474,11 +481,12 @@ class RemoteResource(ResourceBase):
 
     def extract_to_directory(self, path):
         """
-        If resource contains a Zip file, extracts files contained in Zip into provided path.
+        If resource contains a Zip file, extracts files contained in Zip into
+        provided path.
 
-        By default: method downloads zip into temporary file, which is deleted after
-        extraction. If you want to load zip into memory, call :py:meth:`RemoteResource.download`
-        first.
+        By default: method downloads zip into temporary file, which is deleted
+        after extraction. If you want to load zip into memory, call
+        :py:meth:`RemoteResource.download` first.
         """
         with self.zip_file() as zf:
             zf.extractall(path)
@@ -486,10 +494,11 @@ class RemoteResource(ResourceBase):
     @contextlib.contextmanager
     def extract_temporary(self):
         """
-        If resource contains a Zip file, extracts files contained in Zip to the temporary directory.
+        If resource contains a Zip file, extracts files contained in Zip
+        to the temporary directory.
 
-        Returns path of directory with extracted files. Directory is recursively deleted after
-        leaving the context.
+        Returns path of directory with extracted files. Directory is recursively
+        deleted after leaving the context.
 
         .. code-block:: python
 
@@ -498,9 +507,9 @@ class RemoteResource(ResourceBase):
             with dumps.extract_temporary() as dumps_path:
                 print("Fetched dumps:", os.listdir(dumps_path))
 
-        By default: method downloads zip into temporary file, which is deleted after
-        extraction. If you want to load zip into memory, call :py:meth:`RemoteResource.download`
-        first.
+        By default: method downloads zip into temporary file, which is deleted
+        after extraction. If you want to load zip into memory, call
+        :py:meth:`RemoteResource.download` first.
 
         :rtype: ContextManager[str]
         """
