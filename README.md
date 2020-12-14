@@ -74,29 +74,29 @@ Since some karton systems are pretty universal and will be useful to anyone runn
 #### [karton-core](https://github.com/CERT-Polska/karton-core)
 This repository, contains `karton.system` service that acts as the main framework hypervisor and `karton.core` module that is used as the python library.
 
+#### [karton-dashboard](https://github.com/CERT-Polska/karton-dashboard)
+A small flask application that allows for task and queue introspection.
+
 #### [karton-classifier](https://github.com/CERT-Polska/karton-classifier)
 Our main karton "router", it classifies unknown samples/files and produces various task types depending on the matched format. 
 
-#### [karton-dashboard](https://github.com/CERT-Polska/karton-dashboard)
-A small flask application that allows for queue introspection.
+#### [karton-archive-extractor](https://github.com/CERT-Polska/karton-archive-extractor)
+Generic archive unpacker that uses [sflock](https://github.com/hatching/sflock) internally.
+
+#### [karton-config-extractor](https://github.com/CERT-Polska/karton-config-extractor)
+Malware configuration extractor that tries to extract various embedded information from malware samples and analyses.
+
+#### [karton-mwdb-reporter](https://github.com/CERT-Polska/karton-mwdb-reporter)
+Analaysis artifact reporter that submits all samples, tags, comments and relations between them to [MWDB](https://github.com/CERT-Polska/mwdb-core).
+
+#### [karton-drakvuf](https://github.com/CERT-Polska/karton-drakvuf)
+Malware sample processor that uploads incoming samples to [drakvuf-sandbox](https://github.com/CERT-Polska/drakvuf-sandbox) for analysis.
 
 #### [karton-yaramatcher](https://github.com/CERT-Polska/karton-yaramatcher)
 Yara classifier that spawns new tasks containing information about matched yara rules (rules not included ;)
 
 #### [karton-asciimagic](https://github.com/CERT-Polska/karton-asciimagic)
 Novelty karton system that tries to extract executables (and other files) from various encodings like `hex`, `base64`, etc.
-
-#### [karton-config-extractor](https://github.com/CERT-Polska/karton-config-extractor)
-Malware configuration extractor that tries to extract various embedded information from malware samples and analyses.
-
-#### [karton-drakvuf](https://github.com/CERT-Polska/karton-drakvuf)
-Malware sample processor that uploads incoming samples to [drakvuf-sandbox](https://github.com/CERT-Polska/drakvuf-sandbox) for analysis.
-
-#### [karton-archive-extractor](https://github.com/CERT-Polska/karton-archive-extractor)
-Generic archive unpacker that uses [sflock](https://github.com/hatching/sflock) internally.
-
-#### [karton-mwdb-reporter](https://github.com/CERT-Polska/karton-mwdb-reporter)
-Analaysis artifact reporter that submits all samples, tags, comments and relations between them to [MWDB](https://github.com/CERT-Polska/mwdb-core).
 
 #### [karton-autoit-ripper](https://github.com/CERT-Polska/karton-autoit-ripper)
 A small wrapper around [AutoIt-Tipper](https://github.com/nazywam/AutoIt-Ripper) that tries to extract embedded AutoIt scripts and resources from incoming executables.
@@ -106,4 +106,4 @@ A reporter that converts the artifacts to a MISP format and submits them as even
 
 
 Here is a smal preview how these systems could be linked together to create a basic malware analysis backend.
-![](img/karton-systems.svg)
+[![](img/karton-systems.svg)](img/karton-system.svg?raw=true)
