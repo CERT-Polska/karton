@@ -1,13 +1,13 @@
 import argparse
 import json
-from collections import namedtuple, Counter
+from collections import Counter, namedtuple
 
 from redis import StrictRedis
 
 from .__version__ import __version__
-from .utils import get_user_input
 from .config import Config
 from .karton import Consumer
+from .utils import get_user_input
 
 KartonBind = namedtuple(
     "KartonBind", ["identity", "replicas", "persistent", "version", "filters"]

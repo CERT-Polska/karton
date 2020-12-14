@@ -1,15 +1,14 @@
-from collections import defaultdict, namedtuple
 import enum
-from io import BytesIO, RawIOBase
 import json
-from urllib3.response import HTTPResponse
+from collections import defaultdict, namedtuple
+from io import BytesIO, RawIOBase
 from typing import List, Union
 
 from minio import Minio
 from redis import StrictRedis
+from urllib3.response import HTTPResponse
 
 from .task import Task, TaskPriority
-
 
 KARTON_TASKS_QUEUE = "karton.tasks"
 KARTON_OPERATIONS_QUEUE = "karton.operations"

@@ -1,12 +1,11 @@
 import contextlib
+import hashlib
 import os
 import shutil
 import sys
 import tempfile
 import uuid
 import zipfile
-import hashlib
-
 from io import BytesIO
 
 
