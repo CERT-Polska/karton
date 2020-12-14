@@ -88,9 +88,7 @@ def main():
         karton_name = args.delete
         print(
             "Are you sure you want to remove binds for karton {karton_name}?\n"
-            "Type in the karton name to confirm".format(
-                karton_name=karton_name
-            )
+            "Type in the karton name to confirm".format(karton_name=karton_name)
         )
         if get_user_input().strip() == karton_name:
             delete_bind(config, karton_name)
