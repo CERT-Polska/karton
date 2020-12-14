@@ -22,7 +22,7 @@ KartonBind = namedtuple(
 )
 
 
-class KartomMetrics(enum.Enum):
+class KartonMetrics(enum.Enum):
     TASK_PRODUCED = "karton.metrics.produced"
     TASK_CONSUMED = "karton.metrics.consumed"
     TASK_CRASHED = "karton.metrics.crashed"
@@ -371,7 +371,7 @@ class KartonBackend:
         """Return log queue length"""
         return self.redis.llen(KARTON_LOGS_QUEUE)
 
-    def increment_metrics(self, metric: KartomMetrics, identity: str):
+    def increment_metrics(self, metric: KartonMetrics, identity: str):
         """
         Increments metrics for given operation type and identity
 

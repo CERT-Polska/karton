@@ -7,7 +7,7 @@ import time
 import traceback
 
 from .__version__ import __version__
-from .backend import KartomMetrics, KartonBind
+from .backend import KartonBind, KartonMetrics
 from .base import KartonBase, KartonServiceBase
 from .resource import LocalResource
 from .task import Task, TaskState
@@ -81,7 +81,7 @@ class Producer(KartonBase):
 
         # Add task to karton.tasks
         self.backend.produce_unrouted_task(task)
-        self.backend.increment_metrics(KartomMetrics.TASK_PRODUCED, self.identity)
+        self.backend.increment_metrics(KartonMetrics.TASK_PRODUCED, self.identity)
         return True
 
 
@@ -151,10 +151,10 @@ class Consumer(KartonServiceBase):
             exc_info = sys.exc_info()
             exception_str = traceback.format_exception(*exc_info)
 
-            self.backend.increment_metrics(KartomMetrics.TASK_CRASHED, self.identity)
+            self.backend.increment_metrics(KartonMetrics.TASK_CRASHED, self.identity)
             self.log.exception("Failed to process task - %s", self.current_task.uid)
         finally:
-            self.backend.increment_metrics(KartomMetrics.TASK_CONSUMED, self.identity)
+            self.backend.increment_metrics(KartonMetrics.TASK_CONSUMED, self.identity)
 
             task_state = TaskState.FINISHED
 
