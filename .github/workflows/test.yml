@@ -1,0 +1,28 @@
+name: Test the code
+on: [push, pull_request]
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v1
+        with:
+          python-version: 3.6
+      - run: pip install isort black flake8 mypy
+      - run: pip install -r requirements.txt
+      - run: isort --check karton/
+      - run: black --check karton/
+      - run: flake8 --max-line-length 88 karton/
+      - run: mypy karton/
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        minor: [6, 7, 8]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v1
+        with:
+          python-version: 3.${{ matrix.minor }}
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover
