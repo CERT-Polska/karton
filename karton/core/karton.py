@@ -7,8 +7,8 @@ import time
 import traceback
 
 from .__version__ import __version__
+from .backend import KartomMetrics, KartonBind
 from .base import KartonBase, KartonServiceBase
-from .backend import KartonBind, KartomMetrics
 from .resource import LocalResource
 from .task import Task, TaskState
 from .utils import get_function_arg_num

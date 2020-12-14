@@ -2,19 +2,18 @@
 Test stubs for karton subsystem unit tests
 """
 import contextlib
-import logging
 import hashlib
+import logging
 import shutil
-import unittest
 import tempfile
 import time
+import unittest
 import zipfile
-
 from io import BytesIO
 
 from .karton import Consumer
-from .utils import get_function_arg_num
 from .resource import ResourceBase
+from .utils import get_function_arg_num
 
 try:
     from unittest import mock
