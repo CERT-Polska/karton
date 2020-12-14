@@ -4,7 +4,7 @@ Distributed malware processing framework based on Python, Redis and MinIO.
 
 ## The idea
 
-Karton is a framework/library designed for quickly creating analysis backends.
+Karton is a framework designed for quickly creating analysis backends.
 It allows you to build flexible malware* analysis pipelines and attach new systems with very little effort.
 
 When dealing with the increasing number of threats we observe, we very often end up with a lot of scripts stuck together with duct tape and WD-40. These scripts are not production ready, but they do provide real value that should be stored and shared across systems for better threat processing.
@@ -99,11 +99,11 @@ Yara classifier that spawns new tasks containing information about matched yara 
 Novelty karton system that tries to extract executables (and other files) from various encodings like `hex`, `base64`, etc.
 
 #### [karton-autoit-ripper](https://github.com/CERT-Polska/karton-autoit-ripper)
-A small wrapper around [AutoIt-Tipper](https://github.com/nazywam/AutoIt-Ripper) that tries to extract embedded AutoIt scripts and resources from incoming executables.
+A small wrapper around [AutoIt-Ripper](https://github.com/nazywam/AutoIt-Ripper) that tries to extract embedded AutoIt scripts and resources from incoming executables.
 
 #### [karton-misp-pusher](https://github.com/CERT-Polska/karton-misp-pusher)
 A reporter that converts the artifacts to a MISP format and submits them as events.
 
 
-Here is a smal preview how these systems could be linked together to create a basic malware analysis backend.
+Here is an example of how these systems could be linked together to create a basic malware analysis pipeline.
 [![](img/karton-systems.svg)](img/karton-systems.svg?raw=true)
