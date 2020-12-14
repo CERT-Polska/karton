@@ -6,7 +6,6 @@ from karton.core.backend import KARTON_TASKS_QUEUE, KartomMetrics
 from karton.core.base import KartonServiceBase
 from karton.core.config import Config
 from karton.core.task import Task, TaskState
-from karton.core.utils import GracefulKiller
 
 
 class SystemService(KartonServiceBase):
@@ -70,7 +69,8 @@ class SystemService(KartonServiceBase):
             ):
                 will_delete = True
                 self.log.warning(
-                    "Task %s is in Dispatched state more than %d seconds. Killed. (origin: %s)",
+                    "Task %s is in Dispatched state more than %d seconds. "
+                    "Killed. (origin: %s)",
                     task.uid,
                     self.TASK_DISPATCHED_TIMEOUT,
                     task.headers.get("origin", "<unknown>"),
@@ -82,7 +82,8 @@ class SystemService(KartonServiceBase):
             ):
                 will_delete = True
                 self.log.warning(
-                    "Task %s is in Started state more than %d seconds. Killed. (receiver: %s)",
+                    "Task %s is in Started state more than %d seconds. "
+                    "Killed. (receiver: %s)",
                     task.uid,
                     self.TASK_STARTED_TIMEOUT,
                     task.headers.get("receiver", "<unknown>"),
@@ -97,7 +98,8 @@ class SystemService(KartonServiceBase):
             ):
                 will_delete = True
                 self.log.debug(
-                    "GC: Task %s is in Crashed state more than %d seconds. Killed. (receiver: %s)",
+                    "GC: Task %s is in Crashed state more than %d seconds. "
+                    "Killed. (receiver: %s)",
                     task.uid,
                     self.TASK_CRASHED_TIMEOUT,
                     task.headers.get("receiver", "<unknown>"),
@@ -164,8 +166,9 @@ class SystemService(KartonServiceBase):
         self.log.info("Manager {} started".format(self.identity))
 
         while not self.shutdown:
-            # order does matter! task dispatching must be before karton.operations to avoid races
-            # Timeout must be shorter than GC_INTERVAL, but not too long allowing graceful shutdown
+            # Order does matter! task dispatching must be before
+            # karton.operations to avoid races Timeout must be shorter than GC_INTERVAL,
+            # but not too long allowing graceful shutdown
             data = self.backend.consume_queues(
                 ["karton.tasks", "karton.operations"], timeout=5
             )

@@ -27,14 +27,18 @@ class Task(object):
     """
     Task representation with headers and resources.
 
-    :param headers: Routing information for other systems, this is what allows for evaluation of given \
-                    system usefulness for given task. Systems filter by these.
+    :param headers: Routing information for other systems, this is what allows for \
+                    evaluation of given system usefulness for given task. \
+                    Systems filter by these.
     :type headers: :py:class:`dict`
-    :param payload: any instance of :py:class:`dict` - contains resources and additional informations
+    :param payload: any instance of :py:class:`dict` - contains resources \
+                    and additional informations
     :type payload: :py:class:`dict`
-    :param payload_persistent: Persistent payload set for whole task subtree, propagated from initial task
+    :param payload_persistent: Persistent payload set for whole task subtree, \
+                               propagated from initial task
     :type payload_persistent: :py:class:`dict`
-    :param priority: Priority of whole task subtree (propagated from initial task like `payload_persistent`)
+    :param priority: Priority of whole task subtree, \
+                     propagated from initial task like `payload_persistent`
     :type priority: :class:`TaskPriority`
     """
 
@@ -101,7 +105,8 @@ class Task(object):
 
     def derive_task(self, headers):
         """
-        Creates copy of task with different headers, useful for proxying resource with added metadata.
+        Creates copy of task with different headers,
+        useful for proxying resource with added metadata.
 
         .. code-block:: python
 
@@ -127,7 +132,8 @@ class Task(object):
 
             Moved from static method to regular method:
 
-            :code:`Task.derive_task(headers, task)` must be ported to :code:`task.derive_task(headers)`
+            :code:`Task.derive_task(headers, task)` must be
+            ported to :code:`task.derive_task(headers)`
 
         :param headers: new headers for task
         :type headers: :py:class:`dict`
@@ -246,7 +252,8 @@ class Task(object):
 
     def unserialize_resources(self, backend):
         """
-        Transforms __karton_resource__ serialized entries into RemoteResource object instances
+        Transforms __karton_resource__ serialized entries into
+        RemoteResource object instances
 
         :meta private:
         """
@@ -264,7 +271,8 @@ class Task(object):
         :param data: JSON-serialized task
         :type data: str or bytes
         :param backend: Backend instance (to be bound to RemoteResource objects)
-        :type backend: KartonBackend, optional if you don't want to operate on them (e.g. karton-system)
+        :type backend: KartonBackend, optional if you don't want to \
+                       operate on them (e.g. karton-system)
 
         :meta private:
         """

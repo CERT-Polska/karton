@@ -28,7 +28,8 @@ class KartonBase(abc.ABC):
         Called by :py:meth:`Consumer.loop`. If you want to use logger for Producer,
         you need to call it yourself, but remember to set the identity.
 
-        :param level: Logging level. Default is logging.INFO (unless different value is set in Karton config)
+        :param level: Logging level. Default is logging.INFO \
+                      (unless different value is set in Karton config)
         """
         if level is None:
             log_level = logging.INFO

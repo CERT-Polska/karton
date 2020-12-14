@@ -415,7 +415,8 @@ class KartonBackend:
         Get resource object stream with the content.
 
         Returned response should be closed after use to release network resources.
-        To reuse the connection, it's required to call `response.release_conn()` explicitly.
+        To reuse the connection, it's required to call `response.release_conn()`
+        explicitly.
 
         :param bucket: Bucket name
         :param object_uid: Object identifier

@@ -202,8 +202,8 @@ class KartonMock(object):
     @classmethod
     def from_karton(cls, karton_class):
         """
-        Turns Consumer into its mocked version, so we can test subsystem without interaction
-        with infrastructure
+        Turns Consumer into its mocked version, so we can test subsystem
+        without interaction with infrastructure
         :param karton_class: Consumer-based Karton class
         :type karton_class: Type[Consumer]
         :return: Type[KartonMock]
@@ -243,7 +243,8 @@ class KartonMock(object):
         """
         Expected to be overwritten
 
-        self.current_task contains task that triggered invocation of :py:meth:`karton.Consumer.process`
+        self.current_task contains task that triggered invocation of
+        :py:meth:`karton.Consumer.process`
         """
         raise NotImplementedError()
 
