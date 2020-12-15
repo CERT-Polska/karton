@@ -10,12 +10,14 @@ import time
 import unittest
 import zipfile
 from io import BytesIO
-from typing import List
 from unittest import mock
 
 from .karton import Consumer
 from .resource import ResourceBase
 from .utils import get_function_arg_num
+from .task import Task
+
+from typing import Iterator, Optional, cast, IO, List, Any, Dict
 
 __all__ = ["KartonTestCase", "mock"]
 
@@ -36,33 +38,33 @@ class TestResource(ResourceBase):
     :type metadata: dict, optional
     """
 
-    def download(self):
+    def download(self) -> Optional[bytes]:
         return self._content
 
-    def unload(self):
+    def unload(self) -> None:
         # Just ignore that call
         pass
 
-    def download_to_file(self, path):
+    def download_to_file(self, path: str) -> None:
         with open(path, "wb") as f:
-            f.write(self._content)
+            f.write(cast(bytes, self._content))
 
     @contextlib.contextmanager
-    def download_temporary_file(self):
+    def download_temporary_file(self) -> Iterator[IO[bytes]]:
         with tempfile.NamedTemporaryFile() as f:
             self.download_to_file(f.name)
             yield f
 
     @contextlib.contextmanager
-    def zip_file(self):
-        yield zipfile.ZipFile(BytesIO(self._content))
+    def zip_file(self) -> Iterator[zipfile.ZipFile]:
+        yield zipfile.ZipFile(BytesIO(cast(bytes, self._content)))
 
-    def extract_to_directory(self, path):
+    def extract_to_directory(self, path: str) -> None:
         with self.zip_file() as zf:
             zf.extractall(path)
 
     @contextlib.contextmanager
-    def extract_temporary(self):
+    def extract_temporary(self) -> Iterator[str]:
         tmpdir = tempfile.mkdtemp()
         try:
             self.extract_to_directory(tmpdir)
@@ -107,13 +109,13 @@ class KartonTestCase(unittest.TestCase):
     longMessage = True
 
     @classmethod
-    def setUpClass(cls):
-        cls._karton_mock = KartonMock.from_karton(cls.karton_class)
+    def setUpClass(cls) -> None:
+        cls._karton_mock = KartonMock.from_karton(cls.karton_class)  # type: ignore
 
-    def setUp(self):
-        self.karton = self._karton_mock(self.config, **(self.kwargs or {}))
+    def setUp(self) -> None:
+        self.karton = self._karton_mock(self.config, **(self.kwargs or {}))  # type: ignore
 
-    def get_resource_sha256(self, resource):
+    def get_resource_sha256(self, resource: ResourceBase) -> str:
         h = hashlib.sha256()
         if resource._path is not None:
             with open(resource._path, "rb") as f:
@@ -123,10 +125,12 @@ class KartonTestCase(unittest.TestCase):
                         break
                     h.update(block)
         else:
-            h.update(resource._content)
+            h.update(cast(bytes, resource._content))
         return h.hexdigest()
 
-    def assertResourceEqual(self, resource, expected, resource_name):
+    def assertResourceEqual(
+        self, resource: ResourceBase, expected: ResourceBase, resource_name: str
+    ) -> None:
         self.assertTrue(
             isinstance(resource, ResourceBase),
             "Resource type mismatch in {}".format(resource_name),
@@ -137,7 +141,9 @@ class KartonTestCase(unittest.TestCase):
             "Resource content mismatch in {}".format(resource_name),
         )
 
-    def assertPayloadBagEqual(self, payload, expected, payload_bag_name):
+    def assertPayloadBagEqual(
+        self, payload: Dict[str, Any], expected: Dict[str, Any], payload_bag_name: str
+    ) -> None:
         self.assertSetEqual(
             set(payload.keys()),
             set(expected.keys()),
@@ -148,21 +154,19 @@ class KartonTestCase(unittest.TestCase):
             path = "{}.{}".format(payload_bag_name, key)
             if not isinstance(value, ResourceBase):
                 self.assertEqual(
-                    value,
-                    other_value,
-                    "Incorrect value of {}".format(path),
+                    value, other_value, "Incorrect value of {}".format(path),
                 )
             else:
                 self.assertResourceEqual(value, other_value, path)
 
-    def assertTaskEqual(self, task, expected):
+    def assertTaskEqual(self, task: Task, expected: Task) -> None:
         self.assertDictEqual(task.headers, expected.headers, "Headers mismatch")
         self.assertPayloadBagEqual(task.payload, expected.payload, "payload")
         self.assertPayloadBagEqual(
             task.payload_persistent, expected.payload_persistent, "payload_persistent"
         )
 
-    def assertTasksEqual(self, tasks, expected):
+    def assertTasksEqual(self, tasks: List[Task], expected: List[Task]) -> None:
         """
         Checks whether task lists are equal
         :param tasks: Result tasks list
@@ -174,7 +178,7 @@ class KartonTestCase(unittest.TestCase):
         for task, other in zip(tasks, expected):
             self.assertTaskEqual(task, other)
 
-    def run_task(self, task):
+    def run_task(self, task: Task) -> List[Task]:
         """
         Spawns task into tested Karton subsystem instance
         :param task: Task to be spawned
@@ -219,10 +223,10 @@ class KartonMock(object):
         self._result_tasks = []
 
     @property
-    def log(self):
+    def log(self) -> logging.Logger:
         return logging.getLogger(self.identity)
 
-    def send_task(self, task):
+    def send_task(self, task: Task) -> None:
         self.log.debug("Dispatched task %s", task.uid)
 
         # Complete information about task
@@ -236,7 +240,7 @@ class KartonMock(object):
 
         self._result_tasks.append(task)
 
-    def process(self):
+    def process(self) -> None:
         """
         Expected to be overwritten
 
@@ -245,7 +249,7 @@ class KartonMock(object):
         """
         raise NotImplementedError()
 
-    def run_task(self, task):
+    def run_task(self, task: Task) -> List[Task]:
         """
         Provides task for processing and compares result tasks with expected ones
 
@@ -258,5 +262,5 @@ class KartonMock(object):
         if get_function_arg_num(self.process) == 0:
             self.process()
         else:
-            self.process(self.current_task)
+            self.process(self.current_task)  # type: ignore
         return self._result_tasks

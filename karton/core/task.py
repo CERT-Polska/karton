@@ -3,6 +3,8 @@ import uuid
 import warnings
 
 from .resource import RemoteResource, ResourceBase
+from typing import Dict, Optional, Any, List, Iterator, Tuple
+from .backend import KartonBackend
 
 
 class TaskState(object):
@@ -44,16 +46,16 @@ class Task(object):
 
     def __init__(
         self,
-        headers,
-        payload=None,
-        payload_persistent=None,
-        priority=None,
-        parent_uid=None,
-        root_uid=None,
-        orig_uid=None,
-        uid=None,
-        error=None,
-    ):
+        headers: Dict[str, Any],
+        payload: Optional[Dict[str, Any]] = None,
+        payload_persistent: Optional[Dict[str, Any]] = None,
+        priority: Optional[str] = None,
+        parent_uid: Optional[str] = None,
+        root_uid: Optional[str] = None,
+        orig_uid: Optional[str] = None,
+        uid: Optional[str] = None,
+        error: Optional[List[str]] = None,
+    ) -> None:
         payload = payload or {}
         payload_persistent = payload_persistent or {}
         if not isinstance(payload, dict):
@@ -78,13 +80,13 @@ class Task(object):
         self.headers = headers
         self.status = TaskState.DECLARED
 
-        self.last_update = None
+        self.last_update: Optional[float] = None
         self.priority = priority or TaskPriority.NORMAL
 
         self.payload = dict(payload)
         self.payload_persistent = dict(payload_persistent)
 
-    def fork_task(self):
+    def fork_task(self) -> "Task":
         """
         Fork task to transfer single task to many queues (but use different UID).
 
@@ -103,7 +105,7 @@ class Task(object):
         )
         return new_task
 
-    def derive_task(self, headers):
+    def derive_task(self, headers: Dict[str, Any]) -> "Task":
         """
         Creates copy of task with different headers,
         useful for proxying resource with added metadata.
@@ -147,7 +149,7 @@ class Task(object):
         )
         return new_task
 
-    def matches_filters(self, filters):
+    def matches_filters(self, filters: List[Dict[str, Any]]) -> bool:
         """
         Checks whether provided task headers are matching filters
 
@@ -166,7 +168,7 @@ class Task(object):
             for task_filter in filters
         )
 
-    def set_task_parent(self, parent):
+    def set_task_parent(self, parent: Task) -> "Task":
         """
         Bind existing Task to parent task
 
@@ -179,7 +181,7 @@ class Task(object):
         self.root_uid = parent.root_uid
         return self
 
-    def merge_persistent_payload(self, other_task):
+    def merge_persistent_payload(self, other_task: "Task") -> None:
         """
         Merge persistent payload from another task
 
@@ -194,7 +196,7 @@ class Task(object):
                 # Delete conflicting non-persistent payload
                 del self.payload[name]
 
-    def serialize(self, indent=None):
+    def serialize(self, indent: Optional[int] = None) -> str:
         """
         Serialize task data into JSON string
 
@@ -202,7 +204,7 @@ class Task(object):
         """
 
         class KartonResourceEncoder(json.JSONEncoder):
-            def default(kself, obj):
+            def default(kself, obj: Any):
                 if isinstance(obj, ResourceBase):
                     return {"__karton_resource__": obj.to_dict()}
                 return json.JSONEncoder.default(kself, obj)
@@ -226,7 +228,7 @@ class Task(object):
             sort_keys=True,
         )
 
-    def walk_payload_bags(self):
+    def walk_payload_bags(self) -> Iterator[Tuple[Dict[str, Any], str, Any]]:
         """
         Iterate over all payload bags and payloads contained in them
 
@@ -238,7 +240,7 @@ class Task(object):
             for key, value in payload_bag.items():
                 yield payload_bag, key, value
 
-    def iterate_resources(self):
+    def iterate_resources(self) -> Iterator[Tuple[str, ResourceBase]]:
         """
         Get list of resource objects bound to Task
 
@@ -250,7 +252,7 @@ class Task(object):
             if isinstance(value, ResourceBase):
                 yield key, value
 
-    def unserialize_resources(self, backend):
+    def unserialize_resources(self, backend: Optional[KartonBackend]) -> None:
         """
         Transforms __karton_resource__ serialized entries into
         RemoteResource object instances
@@ -264,7 +266,7 @@ class Task(object):
                 )
 
     @staticmethod
-    def unserialize(data, backend=None):
+    def unserialize(data, backend: Optional[KartonBackend] = None) -> "Task":
         """
         Unserialize Task instance from JSON string
 
@@ -301,7 +303,7 @@ class Task(object):
     def __repr__(self):
         return self.serialize()
 
-    def add_payload(self, name, content, persistent=False):
+    def add_payload(self, name: str, content: Any, persistent: bool = False) -> None:
         """
         Add payload to task
 
@@ -323,7 +325,9 @@ class Task(object):
         else:
             self.payload_persistent[name] = content
 
-    def add_resource(self, name, resource, persistent=False):
+    def add_resource(
+        self, name: str, resource: ResourceBase, persistent: bool = False
+    ) -> None:
         """
         Add resource to task.
 
@@ -346,7 +350,7 @@ class Task(object):
         )
         self.add_payload(name, resource, persistent)
 
-    def get_payload(self, name, default=None):
+    def get_payload(self, name: str, default: Any = None) -> Any:
         """
         Get payload from task
 
@@ -360,7 +364,7 @@ class Task(object):
             return self.payload_persistent[name]
         return self.payload.get(name, default)
 
-    def get_resource(self, name):
+    def get_resource(self, name: str) -> ResourceBase:
         """
         Get resource from task.
 
@@ -376,7 +380,7 @@ class Task(object):
             raise TypeError("Resource was expected but not found")
         return resource
 
-    def remove_payload(self, name):
+    def remove_payload(self, name: str) -> None:
         """
         Removes payload for the task
 
@@ -387,7 +391,7 @@ class Task(object):
         """
         del self.payload[name]
 
-    def has_payload(self, name):
+    def has_payload(self, name: str) -> bool:
         """
         Checks whether payload exists
 
@@ -398,7 +402,7 @@ class Task(object):
         """
         return name in self.payload or name in self.payload_persistent
 
-    def is_payload_persistent(self, name):
+    def is_payload_persistent(self, name: str) -> bool:
         """
         Checks whether payload exists and is persistent
 

@@ -8,6 +8,10 @@ import uuid
 import zipfile
 from io import BytesIO
 
+from .backend import KartonBackend
+
+from typing import Optional, List, Any, Dict, Union, cast, BinaryIO, Iterator
+
 
 class ResourceBase(object):
     """
@@ -18,16 +22,16 @@ class ResourceBase(object):
 
     def __init__(
         self,
-        name,
-        content=None,
-        path=None,
-        bucket=None,
-        metadata=None,
-        sha256=None,
-        _uid=None,
-        _size=None,
-        _flags=None,
-    ):
+        name: str,
+        content: Optional[Union[str, bytes]] = None,
+        path: Optional[str] = None,
+        bucket: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        sha256: Optional[str] = None,
+        _uid: Optional[str] = None,
+        _size: Optional[int] = None,
+        _flags: Optional[List[str]] = None,
+    ) -> None:
         self.name = name
         self.bucket = bucket
         self.metadata = metadata or {}
@@ -51,11 +55,11 @@ class ResourceBase(object):
                 sha256 = sha256_hash.hexdigest()
         elif content:
             if type(content) is str and sys.version_info >= (3, 0):
-                content = content.encode()
+                content = cast(str, content).encode()
             elif type(content) is not bytes:
                 raise TypeError("Content can be bytes or str only")
             if calculate_hash:
-                sha256 = hashlib.sha256(content).hexdigest()
+                sha256 = hashlib.sha256(cast(bytes, content)).hexdigest()
 
         # Empty Resource is possible here (e.g. RemoteResource)
 
@@ -68,14 +72,14 @@ class ResourceBase(object):
         self.metadata["sha256"] = sha256
 
         self._uid = _uid or str(uuid.uuid4())
-        self._content = content
+        self._content: Optional[bytes] = cast(Optional[bytes], content)
         self._path = path
         self._size = _size
         # Flags needed by 3.x.x Karton services
         self._flags = _flags or []
 
     @property
-    def uid(self):
+    def uid(self) -> str:
         """
         Resource identifier (UUID)
 
@@ -84,7 +88,7 @@ class ResourceBase(object):
         return self._uid
 
     @property
-    def content(self):
+    def content(self) -> Optional[bytes]:
         """
         Resource content
 
@@ -93,7 +97,7 @@ class ResourceBase(object):
         return self._content
 
     @property
-    def size(self):
+    def size(self) -> int:
         """
         Resource size
 
@@ -104,10 +108,10 @@ class ResourceBase(object):
                 self._size = os.path.getsize(self._path)
             elif self._content:
                 self._size = len(self._content)
-        return self._size
+        return cast(int, self._size)
 
     @property
-    def sha256(self):
+    def sha256(self) -> str:
         """
         Resource sha256
 
@@ -119,7 +123,7 @@ class ResourceBase(object):
             raise ValueError("Resource is missing sha256")
         return sha256
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         # Internal serialization method
         return {
             "uid": self.uid,
@@ -166,16 +170,16 @@ class LocalResource(ResourceBase):
 
     def __init__(
         self,
-        name,
-        content=None,
-        path=None,
-        bucket=None,
-        metadata=None,
-        uid=None,
-        sha256=None,
-        _fd=None,
-        _flags=None,
-    ):
+        name: str,
+        content: Optional[bytes] = None,
+        path: Optional[str] = None,
+        bucket: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        uid: Optional[str] = None,
+        sha256: Optional[str] = None,
+        _fd: Optional[BinaryIO] = None,
+        _flags: Optional[List[str]] = None,
+    ) -> None:
         super(LocalResource, self).__init__(
             name,
             content=content,
@@ -191,14 +195,14 @@ class LocalResource(ResourceBase):
     @classmethod
     def from_directory(
         cls,
-        name,
-        directory_path,
-        compression=zipfile.ZIP_DEFLATED,
-        in_memory=False,
-        bucket=None,
-        metadata=None,
-        uid=None,
-    ):
+        name: str,
+        directory_path: str,
+        compression: int = zipfile.ZIP_DEFLATED,
+        in_memory: bool = False,
+        bucket: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        uid: Optional[str] = None,
+    ) -> "LocalResource":
         """
         Resource extension, allowing to pass whole directory as a zipped resource.
 
@@ -244,7 +248,7 @@ class LocalResource(ResourceBase):
         if in_memory:
             return cls(
                 name,
-                content=out_stream.getvalue(),
+                content=cast(BytesIO, out_stream).getvalue(),
                 bucket=bucket,
                 metadata=metadata,
                 uid=uid,
@@ -257,25 +261,27 @@ class LocalResource(ResourceBase):
                 bucket=bucket,
                 metadata=metadata,
                 uid=uid,
-                _fd=out_stream,
+                _fd=cast(BinaryIO, out_stream),
                 _flags=flags,
             )
 
-    def _upload(self, backend):
+    def _upload(self, backend: KartonBackend) -> None:
         # Note: never transform resource into Remote
         # Multiple task dispatching with same local, in that case resource
         # can be deleted between tasks.
         if self._content:
             # Upload contents
-            backend.upload_object(self.bucket, self.uid, self._content)
+            backend.upload_object(cast(str, self.bucket), self.uid, self._content)
         else:
             # Upload file provided by path
-            backend.upload_object_from_file(self.bucket, self.uid, self._path)
+            backend.upload_object_from_file(
+                cast(str, self.bucket), self.uid, cast(str, self._path)
+            )
         # If file descriptor is managed by Resource, close it after upload
         if self._fd:
             self._fd.close()
 
-    def upload(self, backend):
+    def upload(self, backend: KartonBackend) -> None:
         # Internal local resource upload method
         if not self._content and not self._path:
             raise RuntimeError("Can't upload resource without content")
@@ -296,15 +302,15 @@ class RemoteResource(ResourceBase):
 
     def __init__(
         self,
-        name,
-        bucket=None,
-        metadata=None,
-        uid=None,
-        size=None,
-        backend=None,
-        sha256=None,
-        _flags=None,
-    ):
+        name: str,
+        bucket: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        uid: Optional[str] = None,
+        size: Optional[int] = None,
+        backend: Optional[KartonBackend] = None,
+        sha256: Optional[str] = None,
+        _flags: Optional[List[str]] = None,
+    ) -> None:
         super(RemoteResource, self).__init__(
             name,
             bucket=bucket,
@@ -316,7 +322,7 @@ class RemoteResource(ResourceBase):
         )
         self.backend = backend
 
-    def loaded(self):
+    def loaded(self) -> bool:
         """
         Checks whether resource is loaded into memory
 
@@ -325,7 +331,9 @@ class RemoteResource(ResourceBase):
         return self._content is not None
 
     @classmethod
-    def from_dict(cls, dict, backend):
+    def from_dict(
+        cls, dict: Dict[str, Any], backend: Optional[KartonBackend]
+    ) -> "RemoteResource":
         """
         Internal deserialization method for remote resources
 
@@ -352,7 +360,7 @@ class RemoteResource(ResourceBase):
         )
 
     @property
-    def content(self):
+    def content(self) -> Optional[bytes]:
         """
         Resource content. Performs download when resource was not loaded before.
 
@@ -363,21 +371,21 @@ class RemoteResource(ResourceBase):
             return self.download()
         return self._content
 
-    def unload(self):
+    def unload(self) -> None:
         """
         Unloads resource object from memory
         """
         self._content = None
 
-    def remove(self):
+    def remove(self) -> None:
         """
         Internal remote resource remove method
 
         :meta private:
         """
-        self.backend.remove_object(self.bucket, self.uid)
+        cast(KartonBackend, self.backend).remove_object(cast(str, self.bucket), self.uid)
 
-    def download(self):
+    def download(self) -> bytes:
         """
         Downloads remote resource content from object hub into memory.
 
@@ -393,10 +401,10 @@ class RemoteResource(ResourceBase):
 
         :rtype: bytes
         """
-        self._content = self.backend.download_object(self.bucket, self.uid)
+        self._content = cast(KartonBackend, self.backend).download_object(cast(str, self.bucket), self.uid)
         return self._content
 
-    def download_to_file(self, path):
+    def download_to_file(self, path: str) -> None:
         """
         Downloads remote resource into file.
 
@@ -409,10 +417,10 @@ class RemoteResource(ResourceBase):
             with open("sample/sample.exe", "rb") as f:
                 contents = f.read()
         """
-        self.backend.download_object_to_file(self.bucket, self.uid, path)
+        cast(KartonBackend, self.backend).download_object_to_file(cast(str, self.bucket), self.uid, path)
 
     @contextlib.contextmanager
-    def download_temporary_file(self):
+    def download_temporary_file(self) -> Iterator[BinaryIO]:
         """
         Downloads remote resource into named temporary file.
 
@@ -442,7 +450,7 @@ class RemoteResource(ResourceBase):
             os.remove(tmp.name)
 
     @contextlib.contextmanager
-    def zip_file(self):
+    def zip_file(self) -> Iterator[zipfile.ZipFile]:
         """
         If resource contains a Zip file, downloads it to the temporary file
         and wraps it with ZipFile object.
@@ -479,7 +487,7 @@ class RemoteResource(ResourceBase):
             with self.download_temporary_file() as f:
                 yield zipfile.ZipFile(f)
 
-    def extract_to_directory(self, path):
+    def extract_to_directory(self, path: str) -> None:
         """
         If resource contains a Zip file, extracts files contained in Zip into
         provided path.
@@ -492,7 +500,7 @@ class RemoteResource(ResourceBase):
             zf.extractall(path)
 
     @contextlib.contextmanager
-    def extract_temporary(self):
+    def extract_temporary(self) -> Iterator[str]:
         """
         If resource contains a Zip file, extracts files contained in Zip
         to the temporary directory.

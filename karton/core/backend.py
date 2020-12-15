@@ -2,13 +2,13 @@ import enum
 import json
 from collections import defaultdict, namedtuple
 from io import BytesIO
-from typing import BinaryIO, List, Union
+from typing import Any, BinaryIO, Dict, List, Optional, Tuple, Union
 
-from minio import Minio  # type: ignore
+from minio import Minio
 from redis import StrictRedis
-from urllib3.response import HTTPResponse  # type: ignore
+from urllib3.response import HTTPResponse
 
-from .task import Task, TaskPriority
+from .task import Task, TaskPriority, TaskState
 
 KARTON_TASKS_QUEUE = "karton.tasks"
 KARTON_OPERATIONS_QUEUE = "karton.operations"
@@ -46,11 +46,11 @@ class KartonBackend:
         )
 
     @property
-    def default_bucket_name(self):
+    def default_bucket_name(self) -> str:
         return self.config.minio_config["bucket"]
 
     @staticmethod
-    def get_queue_name(identity, priority):
+    def get_queue_name(identity: str, priority: str) -> str:
         """
         Return Redis routed task queue name for given identity and priority
 
@@ -60,7 +60,7 @@ class KartonBackend:
         return f"karton.queue.{priority}:{identity}"
 
     @staticmethod
-    def get_queue_names(identity):
+    def get_queue_names(identity: str) -> List[str]:
         """
         Return all Redis routed task queue names for given identity,
         ordered by priority (descending). Used internally by Consumer.
@@ -75,7 +75,7 @@ class KartonBackend:
         ]
 
     @staticmethod
-    def serialize_bind(bind):
+    def serialize_bind(bind: KartonBind) -> str:
         """
         Serialize KartonBind object (Karton service registration)
 
@@ -93,7 +93,7 @@ class KartonBackend:
         )
 
     @staticmethod
-    def unserialize_bind(identity, bind_data):
+    def unserialize_bind(identity: str, bind_data: str) -> KartonBind:
         """
         Deserialize KartonBind object for given identity.
         Compatible with Karton 2.x.x and 3.x.x
@@ -120,7 +120,7 @@ class KartonBackend:
             filters=bind["filters"],
         )
 
-    def get_bind(self, identity):
+    def get_bind(self, identity: str) -> KartonBind:
         """
         Get bind object for given identity
 
@@ -131,7 +131,7 @@ class KartonBackend:
             identity, self.redis.hget(KARTON_BINDS_HSET, identity)
         )
 
-    def get_binds(self):
+    def get_binds(self) -> List[KartonBind]:
         """
         Get all binds registered in Redis
 
@@ -142,7 +142,7 @@ class KartonBackend:
             for identity, raw_bind in self.redis.hgetall(KARTON_BINDS_HSET).items()
         ]
 
-    def register_bind(self, bind):
+    def register_bind(self, bind: KartonBind) -> Optional[KartonBind]:
         """
         Register bind for Karton service and return the old one
 
@@ -158,19 +158,19 @@ class KartonBackend:
         else:
             return None
 
-    def unregister_bind(self, identity):
+    def unregister_bind(self, identity: str) -> None:
         """
         Removes bind for identity
         """
         self.redis.hdel(KARTON_BINDS_HSET, identity)
 
-    def set_consumer_identity(self, identity):
+    def set_consumer_identity(self, identity: str) -> None:
         """
         Sets identity for current Redis connection
         """
         return self.redis.client_setname(identity)
 
-    def get_online_consumers(self):
+    def get_online_consumers(self) -> Dict[str, List[str]]:
         """
         Gets all online consumer identities
 
@@ -181,7 +181,7 @@ class KartonBackend:
             bound_identities[client["name"]].append(client)
         return bound_identities
 
-    def get_task(self, task_uid):
+    def get_task(self, task_uid: str) -> Optional[Task]:
         """
         Get task object with given identifier
 
@@ -193,7 +193,7 @@ class KartonBackend:
             return None
         return Task.unserialize(task_data, backend=self)
 
-    def get_tasks(self, task_uid_list):
+    def get_tasks(self, task_uid_list: List[str]) -> List[Task]:
         """
         Get multiple tasks for given identifier list
 
@@ -209,7 +209,7 @@ class KartonBackend:
             if task_data is not None
         ]
 
-    def get_all_tasks(self):
+    def get_all_tasks(self) -> List[Task]:
         """
         Get all tasks registered in Redis
 
@@ -222,7 +222,7 @@ class KartonBackend:
             if task_data is not None
         ]
 
-    def register_task(self, task):
+    def register_task(self, task: Task) -> None:
         """
         Register task in Redis.
 
@@ -233,7 +233,9 @@ class KartonBackend:
         """
         self.redis.set(f"{KARTON_TASK_NAMESPACE}:{task.uid}", task.serialize())
 
-    def set_task_status(self, task, status, consumer=None):
+    def set_task_status(
+        self, task: Task, status: str, consumer: Optional[str] = None
+    ) -> None:
         """
         Request task status change to be applied by karton-system
 
@@ -253,7 +255,7 @@ class KartonBackend:
             ),
         )
 
-    def delete_task(self, task):
+    def delete_task(self, task: Task) -> None:
         """
         Remove task from Redis
 
@@ -261,16 +263,17 @@ class KartonBackend:
         """
         self.redis.delete(f"{KARTON_TASK_NAMESPACE}:{task.uid}")
 
-    def get_task_queue(self, queue):
+    def get_task_queue(self, queue: str) -> List[Task]:
         """
         Return all tasks in provided queue
 
         :param queue: Queue name
         :return: List with Task objects contained in queue
         """
-        return [self.get_task(uid) for uid in self.redis.lrange(queue, 0, -1)]
+        tasks = [self.get_task(uid) for uid in self.redis.lrange(queue, 0, -1)]
+        return [t for t in tasks if t]
 
-    def get_task_ids_from_queue(self, queue):
+    def get_task_ids_from_queue(self, queue: str) -> List[str]:
         """
         Return all task UIDs in queue
 
@@ -279,7 +282,7 @@ class KartonBackend:
         """
         return self.redis.lrange(queue, 0, -1)
 
-    def remove_task_queue(self, queue):
+    def remove_task_queue(self, queue: str) -> List[Task]:
         """
         Remove task queue with all contained tasks
 
@@ -291,7 +294,7 @@ class KartonBackend:
         pipe.delete(queue)
         return self.get_tasks(pipe.execute()[0])
 
-    def produce_unrouted_task(self, task):
+    def produce_unrouted_task(self, task: Task) -> None:
         """
         Add given task to unrouted task (``karton.tasks``) queue
 
@@ -301,7 +304,7 @@ class KartonBackend:
         """
         self.redis.rpush(KARTON_TASKS_QUEUE, task.uid)
 
-    def produce_routed_task(self, identity, task):
+    def produce_routed_task(self, identity: str, task: Task) -> None:
         """
         Add given task to routed task queue of given identity
 
@@ -312,7 +315,9 @@ class KartonBackend:
         """
         self.redis.rpush(self.get_queue_name(identity, task.priority), task.uid)
 
-    def consume_queues(self, queues, timeout=0):
+    def consume_queues(
+        self, queues: Union[str, List[str]], timeout: int = 0
+    ) -> Optional[Tuple[str, str]]:
         """
         Get item from queues (ordered from the most to the least prioritized)
         If there are no items, wait until one appear.
@@ -323,7 +328,7 @@ class KartonBackend:
         """
         return self.redis.blpop(queues, timeout=timeout)
 
-    def consume_routed_task(self, identity, timeout=5):
+    def consume_routed_task(self, identity: str, timeout: int = 5) -> Optional[Task]:
         """
         Get routed task for given consumer identity.
 
@@ -333,16 +338,13 @@ class KartonBackend:
         :param timeout: Waiting for task timeout (default: 5)
         :return: Task object
         """
-        item = self.consume_queues(
-            self.get_queue_names(identity),
-            timeout=timeout,
-        )
+        item = self.consume_queues(self.get_queue_names(identity), timeout=timeout,)
         if not item:
             return None
         queue, data = item
         return self.get_task(data)
 
-    def produce_log(self, log_record):
+    def produce_log(self, log_record: Dict[str, Any]) -> None:
         """
         Push new log record to the logs queue
 
@@ -350,7 +352,7 @@ class KartonBackend:
         """
         self.redis.lpush(KARTON_LOGS_QUEUE, json.dumps(log_record))
 
-    def consume_log(self, timeout=0):
+    def consume_log(self, timeout: int = 0) -> Optional[Dict[str, Any]]:
         """
         Pop new log record from the logs queue.
         If there are no items, wait until one appears.
@@ -371,7 +373,7 @@ class KartonBackend:
         """Return log queue length"""
         return self.redis.llen(KARTON_LOGS_QUEUE)
 
-    def increment_metrics(self, metric: KartonMetrics, identity: str):
+    def increment_metrics(self, metric: KartonMetrics, identity: str) -> None:
         """
         Increments metrics for given operation type and identity
 
@@ -386,7 +388,7 @@ class KartonBackend:
         object_uid: str,
         content: Union[bytes, BinaryIO],
         length: int = None,
-    ):
+    ) -> None:
         """
         Upload resource object to underlying object storage (Minio)
 
@@ -400,7 +402,7 @@ class KartonBackend:
             content = BytesIO(content)
         self.minio.put_object(bucket, object_uid, content, length)
 
-    def upload_object_from_file(self, bucket: str, object_uid: str, path: str):
+    def upload_object_from_file(self, bucket: str, object_uid: str, path: str) -> None:
         """
         Upload resource object file to underlying object storage
 
@@ -439,7 +441,7 @@ class KartonBackend:
             reader.release_conn()
             reader.close()
 
-    def download_object_to_file(self, bucket: str, object_uid: str, path: str):
+    def download_object_to_file(self, bucket: str, object_uid: str, path: str) -> None:
         """
         Download resource object from object storage to file
 
@@ -458,7 +460,7 @@ class KartonBackend:
         """
         return [object.object_name for object in self.minio.list_objects(bucket)]
 
-    def remove_object(self, bucket: str, object_uid: str):
+    def remove_object(self, bucket: str, object_uid: str) -> None:
         """
         Remove resource object from object storage
 
