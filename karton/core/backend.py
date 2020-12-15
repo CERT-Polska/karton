@@ -338,7 +338,10 @@ class KartonBackend:
         :param timeout: Waiting for task timeout (default: 5)
         :return: Task object
         """
-        item = self.consume_queues(self.get_queue_names(identity), timeout=timeout,)
+        item = self.consume_queues(
+            self.get_queue_names(identity),
+            timeout=timeout,
+        )
         if not item:
             return None
         queue, data = item
