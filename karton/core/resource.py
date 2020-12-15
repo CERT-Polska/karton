@@ -2,7 +2,6 @@ import contextlib
 import hashlib
 import os
 import shutil
-import sys
 import tempfile
 import uuid
 import zipfile
@@ -50,7 +49,7 @@ class ResourceBase(object):
                         sha256_hash.update(byte_block)
                 sha256 = sha256_hash.hexdigest()
         elif content:
-            if type(content) is str and sys.version_info >= (3, 0):
+            if type(content) is str:
                 content = content.encode()
             elif type(content) is not bytes:
                 raise TypeError("Content can be bytes or str only")
