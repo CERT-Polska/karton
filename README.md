@@ -71,7 +71,7 @@ if __name__ == "__main__":
 
 Since some karton systems are universal and will be useful to anyone running their own karton deployments, we've decided to open-source some of our repositories to the community.
 
-#### [karton-core](https://github.com/CERT-Polska/karton-core)
+#### [karton](https://github.com/CERT-Polska/karton)
 This repository, contains `karton.system` service that acts as the main service responsible for dispatching tasks within the system and `karton.core` module that is used as the python library.
 
 #### [karton-dashboard](https://github.com/CERT-Polska/karton-dashboard)
