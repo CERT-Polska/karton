@@ -19,6 +19,8 @@ services:
     build:
       context: ..
       dockerfile: dev/system.Dockerfile
+    env_file:
+      - karton-vars.env
     depends_on:
       - minio
       - redis
@@ -26,5 +28,7 @@ services:
     build:
       context: ..
       dockerfile: dev/logger.Dockerfile
+    env_file:
+      - karton-vars.env
     depends_on:
       - system
