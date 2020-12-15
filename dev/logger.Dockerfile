@@ -6,8 +6,6 @@ COPY karton/ /karton/karton/
 
 RUN pip install --no-cache-dir /karton
 
-COPY dev/karton.ini.docker /etc/karton/karton.ini
-
 COPY dev/stdout_logger.py /app/
 
 WORKDIR /app/
