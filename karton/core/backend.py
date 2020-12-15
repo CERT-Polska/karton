@@ -270,8 +270,8 @@ class KartonBackend:
         :param queue: Queue name
         :return: List with Task objects contained in queue
         """
-        tasks = [self.get_task(uid) for uid in self.redis.lrange(queue, 0, -1)]
-        return [t for t in tasks if t]
+        task_uids = self.redis.lrange(queue, 0, -1)
+        return self.get_tasks(task_uids)
 
     def get_task_ids_from_queue(self, queue: str) -> List[str]:
         """
