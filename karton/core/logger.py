@@ -1,8 +1,9 @@
 import logging
 import traceback
+from typing import Optional
+
 from .backend import KartonBackend
 from .task import Task
-from typing import Optional
 
 LOGS_QUEUE = "karton.logs"
 

@@ -1,10 +1,10 @@
 import json
 import uuid
 import warnings
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
-from .resource import RemoteResource, ResourceBase
-from typing import Dict, Optional, Any, List, Iterator, Tuple
 from .backend import KartonBackend
+from .resource import RemoteResource, ResourceBase
 
 
 class TaskState(object):

@@ -7,8 +7,9 @@ from typing import Optional, Union, cast
 from .backend import KartonBackend
 from .config import Config
 from .logger import KartonLogHandler
-from .utils import GracefulKiller
 from .task import Task
+from .utils import GracefulKiller
+
 
 class KartonBase(abc.ABC):
     identity = ""

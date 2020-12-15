@@ -10,14 +10,13 @@ import time
 import unittest
 import zipfile
 from io import BytesIO
+from typing import IO, Any, Dict, Iterator, List, Optional, cast
 from unittest import mock
 
 from .karton import Consumer
 from .resource import ResourceBase
-from .utils import get_function_arg_num
 from .task import Task
-
-from typing import Iterator, Optional, cast, IO, List, Any, Dict
+from .utils import get_function_arg_num
 
 __all__ = ["KartonTestCase", "mock"]
 

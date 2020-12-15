@@ -5,16 +5,15 @@ import abc
 import sys
 import time
 import traceback
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from .__version__ import __version__
 from .backend import KartonBind, KartonMetrics
 from .base import KartonBase, KartonServiceBase
+from .config import Config
 from .resource import LocalResource
 from .task import Task, TaskState
 from .utils import get_function_arg_num
-from .config import Config
-
-from typing import Optional, Callable, List, Dict, Any, Tuple, cast
 
 
 class Producer(KartonBase):

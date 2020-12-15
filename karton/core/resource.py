@@ -6,10 +6,9 @@ import tempfile
 import uuid
 import zipfile
 from io import BytesIO
+from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Union, cast
 
 from .backend import KartonBackend
-
-from typing import Optional, List, Any, Dict, Union, cast, BinaryIO, Iterator
 
 
 class ResourceBase(object):

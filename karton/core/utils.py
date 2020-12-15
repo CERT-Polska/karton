@@ -1,6 +1,6 @@
 import inspect
 import signal
-from typing import Callable, Any
+from typing import Any, Callable
 
 
 def get_function_arg_num(fun: Callable) -> int:
