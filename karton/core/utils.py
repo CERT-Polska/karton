@@ -1,21 +1,10 @@
 import inspect
 import signal
-import sys
 from typing import Callable, Any
 
 
-def get_user_input() -> str:
-    if sys.version_info[0] == 2:
-        return raw_input()  # noqa
-    else:
-        return input()
-
-
 def get_function_arg_num(fun: Callable) -> int:
-    if sys.version_info[0] == 2:
-        return len(inspect.getargspec(fun).args)
-    else:
-        return len(inspect.signature(fun).parameters)
+    return len(inspect.signature(fun).parameters)
 
 
 class GracefulKiller:
