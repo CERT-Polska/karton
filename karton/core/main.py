@@ -7,7 +7,6 @@ from redis import StrictRedis
 from .__version__ import __version__
 from .config import Config
 from .karton import Consumer
-from .utils import get_user_input
 
 KartonBind = namedtuple(
     "KartonBind", ["identity", "replicas", "persistent", "version", "filters"]
@@ -90,7 +89,7 @@ def main():
             "Are you sure you want to remove binds for karton {karton_name}?\n"
             "Type in the karton name to confirm".format(karton_name=karton_name)
         )
-        if get_user_input().strip() == karton_name:
+        if input().strip() == karton_name:
             delete_bind(config, karton_name)
         return
 
