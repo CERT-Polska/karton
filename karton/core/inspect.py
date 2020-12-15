@@ -94,7 +94,6 @@ class KartonState:
         self.pending_tasks = [
             task for task in self.tasks if task.status != TaskState.FINISHED
         ]
-        self.log_queue_length = backend.get_log_queue_length()
 
         # Tasks grouped by root_uid
         tasks_per_analysis = defaultdict(list)

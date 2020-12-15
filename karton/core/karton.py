@@ -278,9 +278,12 @@ class LogConsumer(KartonServiceBase):
     def loop(self):
         self.log.info("Logger %s started", self.identity)
 
-        while not self.shutdown:
-            log = self.backend.consume_log()
+        for log in self.backend.consume_log():
+            if self.shutdown:
+                # Consumer shutdown has been requested
+                break
             if not log:
+                # No log record received until timeout, try again.
                 continue
             try:
                 self.process_log(log)
@@ -289,7 +292,6 @@ class LogConsumer(KartonServiceBase):
                 This is log handler exception, so DO NOT USE self.log HERE!
                 """
                 import traceback
-
                 traceback.print_exc()
 
 

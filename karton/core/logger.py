@@ -1,5 +1,6 @@
 import logging
 import traceback
+import warnings
 
 LOGS_QUEUE = "karton.logs"
 
@@ -9,6 +10,7 @@ class KartonLogHandler(logging.Handler):
         logging.Handler.__init__(self)
         self.backend = backend
         self.task = None
+        self.is_consumer_active = True
 
     def set_task(self, task):
         self.task = task
@@ -41,4 +43,7 @@ class KartonLogHandler(logging.Handler):
         if self.task is not None:
             log_line["task"] = self.task.serialize()
 
-        self.backend.produce_log(log_line)
+        log_consumed = self.backend.produce_log(log_line)
+        if self.is_consumer_active and not log_consumed:
+            warnings.warn("There is no active log consumer to receive these logs.")
+        self.is_consumer_active = log_consumed
