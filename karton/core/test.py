@@ -112,7 +112,8 @@ class KartonTestCase(unittest.TestCase):
         cls._karton_mock = KartonMock.from_karton(cls.karton_class)  # type: ignore
 
     def setUp(self) -> None:
-        self.karton = self._karton_mock(self.config, **(self.kwargs or {}))  # type: ignore
+        kwargs = self.kwargs or {}
+        self.karton = self._karton_mock(self.config, **kwargs)  # type: ignore
 
     def get_resource_sha256(self, resource: ResourceBase) -> str:
         h = hashlib.sha256()

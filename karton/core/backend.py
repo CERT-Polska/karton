@@ -8,7 +8,7 @@ from minio import Minio
 from redis import StrictRedis
 from urllib3.response import HTTPResponse
 
-from .task import Task, TaskPriority, TaskState
+from .task import Task, TaskPriority
 
 KARTON_TASKS_QUEUE = "karton.tasks"
 KARTON_OPERATIONS_QUEUE = "karton.operations"
