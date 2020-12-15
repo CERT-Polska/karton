@@ -194,7 +194,7 @@ This can be easily done by overriding `Config` class and using that for `Karton`
 
         def mwdb(self) -> mwdblib.MWDB:
             api_key=self.mwdb_config.get("api_key"),
-            api_url=self.mwdb_config.get("api_url", mwdblib.api.API_URL))
+            api_url=self.mwdb_config.get("api_url", mwdblib.api.API_URL)
 
             mwdb = mwdblib.MWDB(api_key=api_key, api_url=api_url)
             if not api_key:
