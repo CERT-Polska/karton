@@ -381,7 +381,9 @@ class RemoteResource(ResourceBase):
 
         :meta private:
         """
-        cast(KartonBackend, self.backend).remove_object(cast(str, self.bucket), self.uid)
+        cast(KartonBackend, self.backend).remove_object(
+            cast(str, self.bucket), self.uid
+        )
 
     def download(self) -> bytes:
         """
@@ -399,7 +401,9 @@ class RemoteResource(ResourceBase):
 
         :rtype: bytes
         """
-        self._content = cast(KartonBackend, self.backend).download_object(cast(str, self.bucket), self.uid)
+        self._content = cast(KartonBackend, self.backend).download_object(
+            cast(str, self.bucket), self.uid
+        )
         return self._content
 
     def download_to_file(self, path: str) -> None:
@@ -415,7 +419,9 @@ class RemoteResource(ResourceBase):
             with open("sample/sample.exe", "rb") as f:
                 contents = f.read()
         """
-        cast(KartonBackend, self.backend).download_object_to_file(cast(str, self.bucket), self.uid, path)
+        cast(KartonBackend, self.backend).download_object_to_file(
+            cast(str, self.bucket), self.uid, path
+        )
 
     @contextlib.contextmanager
     def download_temporary_file(self) -> Iterator[BinaryIO]:

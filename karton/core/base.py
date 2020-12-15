@@ -114,7 +114,9 @@ class KartonServiceBase(KartonBase):
         This method should be overridden if you want to add more arguments.
         """
         parser = argparse.ArgumentParser(description=cls.args_description())
-        parser.add_argument("--version", action="version", version=cast(str, cls.version))
+        parser.add_argument(
+            "--version", action="version", version=cast(str, cls.version)
+        )
         parser.add_argument("--config-file", help="Alternative configuration path")
         return parser
 
