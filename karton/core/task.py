@@ -1,10 +1,12 @@
 import json
 import uuid
 import warnings
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
 
-from .backend import KartonBackend
 from .resource import RemoteResource, ResourceBase
+
+if TYPE_CHECKING:
+    from .backend import KartonBackend
 
 
 class TaskState(object):
@@ -168,7 +170,7 @@ class Task(object):
             for task_filter in filters
         )
 
-    def set_task_parent(self, parent: Task) -> "Task":
+    def set_task_parent(self, parent: "Task") -> "Task":
         """
         Bind existing Task to parent task
 
@@ -252,7 +254,7 @@ class Task(object):
             if isinstance(value, ResourceBase):
                 yield key, value
 
-    def unserialize_resources(self, backend: Optional[KartonBackend]) -> None:
+    def unserialize_resources(self, backend: Optional["KartonBackend"]) -> None:
         """
         Transforms __karton_resource__ serialized entries into
         RemoteResource object instances
@@ -266,7 +268,7 @@ class Task(object):
                 )
 
     @staticmethod
-    def unserialize(data, backend: Optional[KartonBackend] = None) -> "Task":
+    def unserialize(data, backend: Optional["KartonBackend"] = None) -> "Task":
         """
         Unserialize Task instance from JSON string
 

@@ -6,9 +6,20 @@ import tempfile
 import uuid
 import zipfile
 from io import BytesIO
-from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    BinaryIO,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Union,
+    cast,
+)
 
-from .backend import KartonBackend
+if TYPE_CHECKING:
+    from .backend import KartonBackend
 
 
 class ResourceBase(object):
@@ -263,7 +274,7 @@ class LocalResource(ResourceBase):
                 _flags=flags,
             )
 
-    def _upload(self, backend: KartonBackend) -> None:
+    def _upload(self, backend: "KartonBackend") -> None:
         # Note: never transform resource into Remote
         # Multiple task dispatching with same local, in that case resource
         # can be deleted between tasks.
@@ -279,7 +290,7 @@ class LocalResource(ResourceBase):
         if self._fd:
             self._fd.close()
 
-    def upload(self, backend: KartonBackend) -> None:
+    def upload(self, backend: "KartonBackend") -> None:
         # Internal local resource upload method
         if not self._content and not self._path:
             raise RuntimeError("Can't upload resource without content")
@@ -305,7 +316,7 @@ class RemoteResource(ResourceBase):
         metadata: Optional[Dict[str, Any]] = None,
         uid: Optional[str] = None,
         size: Optional[int] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional["KartonBackend"] = None,
         sha256: Optional[str] = None,
         _flags: Optional[List[str]] = None,
     ) -> None:
@@ -330,7 +341,7 @@ class RemoteResource(ResourceBase):
 
     @classmethod
     def from_dict(
-        cls, dict: Dict[str, Any], backend: Optional[KartonBackend]
+        cls, dict: Dict[str, Any], backend: Optional["KartonBackend"]
     ) -> "RemoteResource":
         """
         Internal deserialization method for remote resources
@@ -381,7 +392,7 @@ class RemoteResource(ResourceBase):
 
         :meta private:
         """
-        cast(KartonBackend, self.backend).remove_object(
+        cast("KartonBackend", self.backend).remove_object(
             cast(str, self.bucket), self.uid
         )
 
@@ -401,7 +412,7 @@ class RemoteResource(ResourceBase):
 
         :rtype: bytes
         """
-        self._content = cast(KartonBackend, self.backend).download_object(
+        self._content = cast("KartonBackend", self.backend).download_object(
             cast(str, self.bucket), self.uid
         )
         return self._content
@@ -419,7 +430,7 @@ class RemoteResource(ResourceBase):
             with open("sample/sample.exe", "rb") as f:
                 contents = f.read()
         """
-        cast(KartonBackend, self.backend).download_object_to_file(
+        cast("KartonBackend", self.backend).download_object_to_file(
             cast(str, self.bucket), self.uid, path
         )
 
