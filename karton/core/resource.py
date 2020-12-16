@@ -49,6 +49,8 @@ class ResourceBase(object):
 
         calculate_hash = sha256 is None
 
+        self._content: Optional[bytes] = None
+
         if content and path:
             raise ValueError("Can't set both path and content for resource")
         if path:
@@ -63,12 +65,14 @@ class ResourceBase(object):
                         sha256_hash.update(byte_block)
                 sha256 = sha256_hash.hexdigest()
         elif content:
-            if type(content) is str:
-                content = cast(str, content).encode()
-            elif type(content) is not bytes:
+            if isinstance(content, str):
+                self._content = content.encode()
+            elif isinstance(content, bytes):
+                self._content = content
+            else:
                 raise TypeError("Content can be bytes or str only")
-            if calculate_hash:
-                sha256 = hashlib.sha256(cast(bytes, content)).hexdigest()
+            if calculate_hash and self._content:
+                sha256 = hashlib.sha256(self._content).hexdigest()
 
         # Empty Resource is possible here (e.g. RemoteResource)
 
@@ -81,7 +85,6 @@ class ResourceBase(object):
         self.metadata["sha256"] = sha256
 
         self._uid = _uid or str(uuid.uuid4())
-        self._content: Optional[bytes] = cast(Optional[bytes], content)
         self._path = path
         self._size = _size
         # Flags needed by 3.x.x Karton services
