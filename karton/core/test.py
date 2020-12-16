@@ -164,7 +164,9 @@ class KartonTestCase(unittest.TestCase):
             path = "{}.{}".format(payload_bag_name, key)
             if not isinstance(value, ResourceBase):
                 self.assertEqual(
-                    value, other_value, "Incorrect value of {}".format(path),
+                    value,
+                    other_value,
+                    "Incorrect value of {}".format(path),
                 )
             else:
                 self.assertResourceEqual(value, other_value, path)
