@@ -347,19 +347,17 @@ class KartonBackend:
         queue, data = item
         return self.get_task(data)
 
-    def _log_channel(self, logger_name: Optional[str], level: Optional[str]) -> str:
-        channel = [KARTON_LOG_CHANNEL]
-        if logger_name:
-            channel.append(logger_name)
-            if level:
-                channel.append(level.lower())
-        return ".".join(channel)
+    @staticmethod
+    def _log_channel(logger_name: Optional[str], level: Optional[str]) -> str:
+        return ".".join(
+            [KARTON_LOG_CHANNEL, (level or "*").lower(), logger_name or "*"]
+        )
 
     def produce_log(
         self,
         log_record: Dict[str, Any],
-        logger_name: Optional[str] = None,
-        level: Optional[str] = None,
+        logger_name: str,
+        level: str,
     ) -> bool:
         """
         Push new log record to the logs channel
