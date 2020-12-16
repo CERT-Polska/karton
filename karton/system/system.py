@@ -207,7 +207,9 @@ class SystemService(KartonServiceBase):
                         # Update task status
                         self.backend.register_task(task)
                     # Pass new operation status to log
-                    self.backend.produce_log(operation_body)
+                    self.backend.produce_log(
+                        operation_body, logger_name="karton.operations", level="INFO"
+                    )
             self.gc_collect()
 
     @classmethod
