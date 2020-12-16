@@ -6,8 +6,6 @@ from typing import Optional
 from .backend import KartonBackend
 from .task import Task
 
-LOGS_QUEUE = "karton.logs"
-
 
 class KartonLogHandler(logging.Handler):
     def __init__(self, backend: KartonBackend) -> None:
@@ -50,7 +48,11 @@ class KartonLogHandler(logging.Handler):
         if self.task is not None:
             log_line["task"] = self.task.serialize()
 
-        log_consumed = self.backend.produce_log(log_line)
+        log_consumed = self.backend.produce_log(
+            log_line,
+            logger_name=record.name,
+            level=record.levelname
+        )
         if self.is_consumer_active and not log_consumed:
             warnings.warn("There is no active log consumer to receive these logs.")
         self.is_consumer_active = log_consumed

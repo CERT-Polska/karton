@@ -12,7 +12,7 @@ from .task import Task, TaskPriority
 
 KARTON_TASKS_QUEUE = "karton.tasks"
 KARTON_OPERATIONS_QUEUE = "karton.operations"
-KARTON_LOGS_CHANNEL = "karton.logs"
+KARTON_LOG_CHANNEL = "karton.log"
 KARTON_BINDS_HSET = "karton.binds"
 KARTON_TASK_NAMESPACE = "karton.task"
 
@@ -347,25 +347,52 @@ class KartonBackend:
         queue, data = item
         return self.get_task(data)
 
-    def produce_log(self, log_record: Dict[str, Any]) -> bool:
+    def _log_channel(self, logger_name: Optional[str], level: Optional[str]) -> str:
+        channel = [KARTON_LOG_CHANNEL]
+        if logger_name:
+            channel.append(logger_name)
+            if level:
+                channel.append(level.lower())
+        return ".".join(channel)
+
+    def produce_log(
+        self,
+        log_record: Dict[str, Any],
+        logger_name: Optional[str] = None,
+        level: Optional[str] = None,
+    ) -> bool:
         """
         Push new log record to the logs channel
 
         :param log_record: dict with log record
+        :param logger_name; logger name
+        :param level: log level
         :return: True if any active log consumer received log record
         """
-        return self.redis.publish(KARTON_LOGS_CHANNEL, json.dumps(log_record)) > 0
+        return (
+            self.redis.publish(
+                self._log_channel(logger_name, level), json.dumps(log_record)
+            )
+            > 0
+        )
 
-    def consume_log(self, timeout: int = 5) -> Iterator[Optional[Dict[str, Any]]]:
+    def consume_log(
+        self,
+        timeout: int = 5,
+        logger_name: Optional[str] = None,
+        level: Optional[str] = None,
+    ) -> Iterator[Optional[Dict[str, Any]]]:
         """
         Subscribe logs channel and yield subsequent log records
         or None if timeout has been reached.
 
         :param timeout: Waiting for log record timeout (default: 5)
+        :param logger_name: logger name (if you want to listen for specific logger events)
+        :param level: log level
         :return: dict with log record
         """
         with self.redis.pubsub() as pubsub:
-            pubsub.subscribe(KARTON_LOGS_CHANNEL)
+            pubsub.psubscribe(f"{self._log_channel(logger_name, level)}*")
             while pubsub.subscribed:
                 item = pubsub.get_message(
                     ignore_subscribe_messages=True, timeout=timeout
