@@ -49,9 +49,7 @@ class KartonLogHandler(logging.Handler):
             log_line["task"] = self.task.serialize()
 
         log_consumed = self.backend.produce_log(
-            log_line,
-            logger_name=record.name,
-            level=record.levelname
+            log_line, logger_name=record.name, level=record.levelname
         )
         if self.is_consumer_active and not log_consumed:
             warnings.warn("There is no active log consumer to receive logged messages.")
