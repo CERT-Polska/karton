@@ -45,8 +45,13 @@ class TestResource(ResourceBase):
         pass
 
     def download_to_file(self, path: str) -> None:
+        if not self._content:
+            raise RuntimeError(
+                "Cannot download data to a file because content is set to none"
+            )
+
         with open(path, "wb") as f:
-            f.write(cast(bytes, self._content))
+            f.write(self._content)
 
     @contextlib.contextmanager
     def download_temporary_file(self) -> Iterator[IO[bytes]]:
@@ -56,7 +61,12 @@ class TestResource(ResourceBase):
 
     @contextlib.contextmanager
     def zip_file(self) -> Iterator[zipfile.ZipFile]:
-        yield zipfile.ZipFile(BytesIO(cast(bytes, self._content)))
+        if self._content is None:
+            raise RuntimeError(
+                "Cannot zipfile resource contents because they are set to none"
+            )
+
+        yield zipfile.ZipFile(BytesIO(self._content))
 
     def extract_to_directory(self, path: str) -> None:
         with self.zip_file() as zf:
@@ -154,9 +164,7 @@ class KartonTestCase(unittest.TestCase):
             path = "{}.{}".format(payload_bag_name, key)
             if not isinstance(value, ResourceBase):
                 self.assertEqual(
-                    value,
-                    other_value,
-                    "Incorrect value of {}".format(path),
+                    value, other_value, "Incorrect value of {}".format(path),
                 )
             else:
                 self.assertResourceEqual(value, other_value, path)
