@@ -1,6 +1,7 @@
 import argparse
 import json
 from collections import Counter, namedtuple
+from typing import Any, Dict, List
 
 from redis import StrictRedis
 
@@ -13,9 +14,9 @@ KartonBind = namedtuple(
 )
 
 
-def get_service_binds(config):
+def get_service_binds(config: Config) -> List[KartonBind]:
     redis = StrictRedis(decode_responses=True, **config.redis_config)
-    replica_no = Counter()
+    replica_no: Dict[Any, int] = Counter()
 
     # count replicas for each identity
     for client in redis.client_list():
@@ -41,12 +42,12 @@ def get_service_binds(config):
     return services
 
 
-def print_bind_list(config):
+def print_bind_list(config: Config) -> None:
     for k in get_service_binds(config):
         print(k)
 
 
-def delete_bind(config, karton_name):
+def delete_bind(config: Config, karton_name: str) -> None:
     binds = {k.identity: k for k in get_service_binds(config)}
     if karton_name not in binds:
         print("Trying to delete a karton bind that doesn't exist")
@@ -61,7 +62,7 @@ def delete_bind(config, karton_name):
 
     class KartonDummy(Consumer):
         persistent = False
-        filters = []
+        filters: List[Dict[str, Any]] = []
 
         def process(self, task):
             pass
@@ -71,7 +72,7 @@ def delete_bind(config, karton_name):
     karton.loop()
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Your red pill to the karton-verse")
     parser.add_argument("--list", action="store_true", help="List active karton binds")
     parser.add_argument(

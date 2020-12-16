@@ -14,7 +14,7 @@ class KartonQueue:
         self.state = state
 
     @property
-    def last_update(self) -> int:
+    def last_update(self) -> float:
         return max(task.last_update for task in self.tasks)
 
     @property
@@ -37,7 +37,7 @@ class KartonAnalysis:
         self.state = state
 
     @property
-    def last_update(self) -> int:
+    def last_update(self) -> float:
         return max(task.last_update for task in self.tasks)
 
     @property
