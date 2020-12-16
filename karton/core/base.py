@@ -2,27 +2,30 @@ import abc
 import argparse
 import logging
 import textwrap
-from typing import Optional
+from typing import Optional, Union, cast
 
 from .backend import KartonBackend
 from .config import Config
 from .logger import KartonLogHandler
+from .task import Task
 from .utils import GracefulKiller
 
 
 class KartonBase(abc.ABC):
     identity = ""
 
-    def __init__(self, config=None, identity=None):
+    def __init__(
+        self, config: Optional[Config] = None, identity: Optional[str] = None
+    ) -> None:
         self.config = config or Config()
         # If not passed via constructor - get it from class
         if identity is not None:
             self.identity = identity
         self.backend = KartonBackend(self.config)
         self.log_handler = KartonLogHandler(backend=self.backend)
-        self.current_task = None
+        self.current_task: Optional[Task] = None
 
-    def setup_logger(self, level=None):
+    def setup_logger(self, level: Optional[Union[str, int]] = None) -> None:
         """
         Setup logger for Karton service (StreamHandler and `karton.logs` handler)
 
@@ -33,13 +36,15 @@ class KartonBase(abc.ABC):
                       (unless different value is set in Karton config)
         """
         if level is None:
-            log_level = logging.INFO
             if self.config.config.has_section("logging"):
-                log_level = self.config["logging"].get("level", logging.INFO)
+                level = self.config["logging"].get("level", logging.INFO)
+            else:
+                level = logging.INFO
+
+        if type(level) is str and cast(str, level).isdigit():
+            log_level: Union[str, int] = int(level)
         else:
             log_level = level
-        if type(log_level) is str and log_level.isdigit():
-            log_level = int(log_level)
 
         if not self.identity:
             raise ValueError("Can't setup logger without identity")
@@ -54,7 +59,7 @@ class KartonBase(abc.ABC):
         logger.addHandler(self.log_handler)
 
     @property
-    def log(self):
+    def log(self) -> logging.Logger:
         """
         Return Logger instance for Karton service
 
@@ -76,43 +81,47 @@ class KartonServiceBase(KartonBase):
 
     version: Optional[str] = None
 
-    def __init__(self, config=None, identity=None):
+    def __init__(
+        self, config: Optional[Config] = None, identity: Optional[str] = None
+    ) -> None:
         super().__init__(config=config, identity=identity)
         self.setup_logger()
         self.shutdown = False
         self.killer = GracefulKiller(self.graceful_shutdown)
 
-    def graceful_shutdown(self):
+    def graceful_shutdown(self) -> None:
         self.log.info("Gracefully shutting down!")
         self.shutdown = True
 
     # Base class for Karton services
     @abc.abstractmethod
-    def loop(self):
+    def loop(self) -> None:
         # Karton service entrypoint
         raise NotImplementedError
 
     @classmethod
-    def args_description(cls):
+    def args_description(cls) -> str:
         """Return short description for argument parser."""
         if not cls.__doc__:
             return ""
         return textwrap.dedent(cls.__doc__).strip().splitlines()[0]
 
     @classmethod
-    def args_parser(cls):
+    def args_parser(cls) -> argparse.ArgumentParser:
         """
         Return ArgumentParser for main() class method.
 
         This method should be overridden if you want to add more arguments.
         """
         parser = argparse.ArgumentParser(description=cls.args_description())
-        parser.add_argument("--version", action="version", version=cls.version)
+        parser.add_argument(
+            "--version", action="version", version=cast(str, cls.version)
+        )
         parser.add_argument("--config-file", help="Alternative configuration path")
         return parser
 
     @classmethod
-    def main(cls):
+    def main(cls) -> None:
         """Main method invoked from CLI."""
         parser = cls.args_parser()
         args = parser.parse_args()

@@ -1,19 +1,23 @@
 import logging
 import traceback
+from typing import Optional
+
+from .backend import KartonBackend
+from .task import Task
 
 LOGS_QUEUE = "karton.logs"
 
 
 class KartonLogHandler(logging.Handler):
-    def __init__(self, backend):
+    def __init__(self, backend: KartonBackend) -> None:
         logging.Handler.__init__(self)
         self.backend = backend
-        self.task = None
+        self.task: Optional[Task] = None
 
-    def set_task(self, task):
+    def set_task(self, task: Task) -> None:
         self.task = task
 
-    def emit(self, record):
+    def emit(self, record: logging.LogRecord) -> None:
         ignore_fields = [
             "args",
             "asctime",
@@ -33,8 +37,11 @@ class KartonLogHandler(logging.Handler):
         if record.exc_info:
             log_line["excText"] = logging.Formatter().formatException(record.exc_info)
             log_line["excValue"] = str(record.exc_info[1])
-            log_line["excType"] = record.exc_info[0].__name__
             log_line["excTraceback"] = traceback.format_exception(*record.exc_info)
+
+            exc_type = record.exc_info[0]
+            if exc_type:
+                log_line["excType"] = exc_type.__name__
 
         log_line["type"] = "log"
 

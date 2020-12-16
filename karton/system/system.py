@@ -1,5 +1,7 @@
+import argparse
 import json
 import time
+from typing import Optional
 
 from karton.core.__version__ import __version__
 from karton.core.backend import KARTON_TASKS_QUEUE, KartonMetrics
@@ -21,11 +23,11 @@ class SystemService(KartonServiceBase):
     TASK_STARTED_TIMEOUT = 24 * 3600
     TASK_CRASHED_TIMEOUT = 3 * 24 * 3600
 
-    def __init__(self, config):
+    def __init__(self, config: Optional[Config]) -> None:
         super(SystemService, self).__init__(config=config)
-        self.last_gc_trigger = 0
+        self.last_gc_trigger = 0.0
 
-    def gc_collect_resources(self):
+    def gc_collect_resources(self) -> None:
         karton_bucket = self.backend.default_bucket_name
         resources_to_remove = set(self.backend.list_objects(karton_bucket))
         tasks = self.backend.get_all_tasks()
@@ -52,7 +54,7 @@ class SystemService(KartonServiceBase):
                     object_name,
                 )
 
-    def gc_collect_tasks(self):
+    def gc_collect_tasks(self) -> None:
         root_tasks = set()
         running_root_tasks = set()
         tasks = self.backend.get_all_tasks()
@@ -116,7 +118,7 @@ class SystemService(KartonServiceBase):
             # TODO: Notification needed
             self.log.debug("GC: Finished root task %s", finished_root_task)
 
-    def gc_collect(self):
+    def gc_collect(self) -> None:
         if time.time() > (self.last_gc_trigger + self.GC_INTERVAL):
             try:
                 self.gc_collect_tasks()
@@ -125,7 +127,7 @@ class SystemService(KartonServiceBase):
                 self.log.exception("GC: Exception during garbage collection")
             self.last_gc_trigger = time.time()
 
-    def process_task(self, task):
+    def process_task(self, task: Task) -> None:
         online_consumers = self.backend.get_online_consumers()
 
         self.log.info("[%s] Processing task %s", task.root_uid, task.uid)
@@ -162,7 +164,7 @@ class SystemService(KartonServiceBase):
                 )
                 self.backend.increment_metrics(KartonMetrics.TASK_ASSIGNED, identity)
 
-    def loop(self):
+    def loop(self) -> None:
         self.log.info("Manager {} started".format(self.identity))
 
         while not self.shutdown:
@@ -179,6 +181,11 @@ class SystemService(KartonServiceBase):
                 if queue == "karton.tasks":
                     task_uid = body
                     task = self.backend.get_task(task_uid)
+                    if task is None:
+                        raise RuntimeError(
+                            "Task disappeared while popping, this should never happen"
+                        )
+
                     self.process_task(task)
                     task.last_update = time.time()
                     task.status = TaskState.FINISHED
@@ -204,14 +211,14 @@ class SystemService(KartonServiceBase):
             self.gc_collect()
 
     @classmethod
-    def args_parser(cls):
+    def args_parser(cls) -> argparse.ArgumentParser:
         parser = super().args_parser()
         parser.add_argument(
             "--setup-bucket", action="store_true", help="Create missing bucket in MinIO"
         )
         return parser
 
-    def ensure_bucket_exsits(self, create):
+    def ensure_bucket_exsits(self, create: bool) -> bool:
         bucket_name = self.backend.default_bucket_name
         bucket_exists = self.backend.check_bucket_exists(bucket_name, create=create)
         if not bucket_exists:
@@ -227,7 +234,7 @@ class SystemService(KartonServiceBase):
         return True
 
     @classmethod
-    def main(cls):
+    def main(cls) -> None:
         parser = cls.args_parser()
         args = parser.parse_args()
 

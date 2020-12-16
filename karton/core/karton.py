@@ -5,10 +5,12 @@ import abc
 import sys
 import time
 import traceback
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from .__version__ import __version__
 from .backend import KartonBind, KartonMetrics
 from .base import KartonBase, KartonServiceBase
+from .config import Config
 from .resource import LocalResource
 from .task import Task, TaskState
 from .utils import get_function_arg_num
@@ -42,10 +44,12 @@ class Producer(KartonBase):
         producer.send_task(task)
     """
 
-    def __init__(self, config=None, identity=None):
+    def __init__(
+        self, config: Optional[Config] = None, identity: Optional[str] = None
+    ) -> None:
         super(Producer, self).__init__(config=config, identity=identity)
 
-    def send_task(self, task):
+    def send_task(self, task: Task) -> bool:
         """
         Sends a task to the unrouted task queue. Takes care of logging.
         Given task will be child of task we are currently handling (if such exists).
@@ -90,19 +94,26 @@ class Consumer(KartonServiceBase):
     Base consumer class
     """
 
-    filters = None
-    persistent = True
-    version = None
+    filters: List[Dict[str, Any]] = []
+    persistent: bool = True
+    version: Optional[str] = None
 
-    def __init__(self, config=None, identity=None):
+    def __init__(
+        self, config: Optional[Config] = None, identity: Optional[str] = None
+    ) -> None:
         super(Consumer, self).__init__(config=config, identity=identity)
 
-        self.current_task = None
-        self._pre_hooks = []
-        self._post_hooks = []
+        if self.filters is None:
+            raise ValueError("Cannot bind consumer on Empty binds")
+
+        self.current_task: Optional[Task] = None
+        self._pre_hooks: List[Tuple[Optional[str], Callable[[Task], None]]] = []
+        self._post_hooks: List[
+            Tuple[Optional[str], Callable[[Task, Optional[Exception]], None]]
+        ] = []
 
     @abc.abstractmethod
-    def process(self, *args):
+    def process(self, *args) -> None:
         """
         Task processing method.
 
@@ -111,7 +122,7 @@ class Consumer(KartonServiceBase):
         """
         raise NotImplementedError()
 
-    def internal_process(self, task: Task):
+    def internal_process(self, task: Task) -> None:
         self.current_task = task
         self.log_handler.set_task(self.current_task)
 
@@ -169,7 +180,7 @@ class Consumer(KartonServiceBase):
             )
 
     @property
-    def _bind(self):
+    def _bind(self) -> KartonBind:
         return KartonBind(
             identity=self.identity,
             info=self.__class__.__doc__,
@@ -178,7 +189,9 @@ class Consumer(KartonServiceBase):
             persistent=self.persistent,
         )
 
-    def add_pre_hook(self, callback, name=None):
+    def add_pre_hook(
+        self, callback: Callable[[Task], None], name: Optional[str] = None
+    ) -> None:
         """
         Add a function to be called before processing each task.
 
@@ -190,7 +203,11 @@ class Consumer(KartonServiceBase):
         """
         self._pre_hooks.append((name, callback))
 
-    def add_post_hook(self, callback, name=None):
+    def add_post_hook(
+        self,
+        callback: Callable[[Task, Optional[Exception]], None],
+        name: Optional[str] = None,
+    ) -> None:
         """
         Add a function to be called after processing each task.
 
@@ -204,29 +221,29 @@ class Consumer(KartonServiceBase):
         """
         self._post_hooks.append((name, callback))
 
-    def _run_pre_hooks(self):
+    def _run_pre_hooks(self) -> None:
         """ Run registered preprocessing hooks """
         for name, callback in self._pre_hooks:
             try:
-                callback(self.current_task)
+                callback(cast(Task, self.current_task))
             except Exception:
                 if name:
                     self.log.exception("Pre-hook (%s) failed", name)
                 else:
                     self.log.exception("Pre-hook failed")
 
-    def _run_post_hooks(self, exception):
+    def _run_post_hooks(self, exception: Optional[Exception]) -> None:
         """ Run registered postprocessing hooks """
         for name, callback in self._post_hooks:
             try:
-                callback(self.current_task, exception)
+                callback(cast(Task, self.current_task), exception)
             except Exception:
                 if name:
                     self.log.exception("Post-hook (%s) failed", name)
                 else:
                     self.log.exception("Post-hook failed")
 
-    def loop(self):
+    def loop(self) -> None:
         """
         Blocking loop that consumes tasks and runs
         :py:meth:`karton.Consumer.process` as a handler
@@ -265,17 +282,19 @@ class LogConsumer(KartonServiceBase):
     Base class for log consumer subsystems
     """
 
-    def __init__(self, config=None, identity=None):
+    def __init__(
+        self, config: Optional[Config] = None, identity: Optional[str] = None
+    ) -> None:
         super(LogConsumer, self).__init__(config=config, identity=identity)
 
     @abc.abstractmethod
-    def process_log(self, event):
+    def process_log(self, event: Dict[str, Any]) -> None:
         """
         Expected to be overloaded
         """
         raise NotImplementedError()
 
-    def loop(self):
+    def loop(self) -> None:
         self.log.info("Logger %s started", self.identity)
 
         while not self.shutdown:
