@@ -429,7 +429,10 @@ class RemoteResource(ResourceBase):
         """
         if self.backend is None:
             raise RuntimeError(
-                "Resource object can't be downloaded because it's not bound to the backend"
+                (
+                    "Resource object can't be downloaded because it's not bound to "
+                    "the backend"
+                )
             )
         if self.bucket is None:
             raise RuntimeError(
@@ -454,7 +457,10 @@ class RemoteResource(ResourceBase):
         """
         if self.backend is None:
             raise RuntimeError(
-                "Resource object can't be downloaded because it's not bound to the backend"
+                (
+                    "Resource object can't be downloaded because it's not bound to "
+                    "the backend"
+                )
             )
         if self.bucket is None:
             raise RuntimeError(
