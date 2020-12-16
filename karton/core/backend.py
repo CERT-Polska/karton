@@ -383,7 +383,7 @@ class KartonBackend:
         level: Optional[str] = None,
     ) -> Iterator[Optional[Dict[str, Any]]]:
         """
-        Subscribe logs channel and yield subsequent log records
+        Subscribe to logs channel and yield subsequent log records
         or None if timeout has been reached.
 
         :param timeout: Waiting for log record timeout (default: 5)
