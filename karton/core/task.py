@@ -1,4 +1,5 @@
 import json
+import time
 import uuid
 import warnings
 from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
@@ -82,7 +83,7 @@ class Task(object):
         self.headers = headers
         self.status = TaskState.DECLARED
 
-        self.last_update: Optional[float] = None
+        self.last_update: float = time.time()
         self.priority = priority or TaskPriority.NORMAL
 
         self.payload = dict(payload)

@@ -15,7 +15,7 @@ class KartonQueue:
 
     @property
     def last_update(self) -> float:
-        return max(task.last_update for task in self.tasks if task.last_update)
+        return max(task.last_update for task in self.tasks)
 
     @property
     def online_consumers_count(self) -> int:
@@ -38,7 +38,7 @@ class KartonAnalysis:
 
     @property
     def last_update(self) -> float:
-        return max(task.last_update for task in self.tasks if task.last_update)
+        return max(task.last_update for task in self.tasks)
 
     @property
     def is_done(self) -> bool:
