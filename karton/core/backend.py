@@ -358,7 +358,7 @@ class KartonBackend:
 
     def consume_log(self, timeout: int = 5) -> Iterator[Optional[Dict[str, Any]]]:
         """
-        Subscribe logs channel and yield subsequent log records
+        Subscribe to logs channel and yield subsequent log records
         or None if timeout has been reached.
 
         :param timeout: Waiting for log record timeout (default: 5)

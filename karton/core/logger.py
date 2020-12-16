@@ -52,5 +52,5 @@ class KartonLogHandler(logging.Handler):
 
         log_consumed = self.backend.produce_log(log_line)
         if self.is_consumer_active and not log_consumed:
-            warnings.warn("There is no active log consumer to receive these logs.")
+            warnings.warn("There is no active log consumer to receive logged messages.")
         self.is_consumer_active = log_consumed
