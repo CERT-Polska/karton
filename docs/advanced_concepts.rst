@@ -126,7 +126,7 @@ For example, if we need to communicate with Malwarecage, we can make Malwarecage
             self.mwdb_config = dict(self.config.items("mwdb"))
 
         def mwdb(self) -> mwdblib.MWDB:
-            api_key=self.mwdb_config.get("api_key"),
+            api_key=self.mwdb_config.get("api_key")
             api_url=self.mwdb_config.get("api_url", mwdblib.api.API_URL)
 
             mwdb = mwdblib.MWDB(api_key=api_key, api_url=api_url)
