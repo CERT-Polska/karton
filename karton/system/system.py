@@ -25,7 +25,7 @@ class SystemService(KartonServiceBase):
 
     def __init__(self, config: Optional[Config]) -> None:
         super(SystemService, self).__init__(config=config)
-        self.last_gc_trigger = 0
+        self.last_gc_trigger = 0.0
 
     def gc_collect_resources(self) -> None:
         karton_bucket = self.backend.default_bucket_name
@@ -181,6 +181,11 @@ class SystemService(KartonServiceBase):
                 if queue == "karton.tasks":
                     task_uid = body
                     task = self.backend.get_task(task_uid)
+                    if task is None:
+                        raise RuntimeError(
+                            "Task disappeared while popping, this should never happen"
+                        )
+
                     self.process_task(task)
                     task.last_update = time.time()
                     task.status = TaskState.FINISHED
