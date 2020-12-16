@@ -281,13 +281,18 @@ class LocalResource(ResourceBase):
         # Note: never transform resource into Remote
         # Multiple task dispatching with same local, in that case resource
         # can be deleted between tasks.
+        if self.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be uploaded because its bucket is not set"
+            )
+
         if self._content:
             # Upload contents
-            backend.upload_object(cast(str, self.bucket), self.uid, self._content)
+            backend.upload_object(self.bucket, self.uid, self._content)
         else:
             # Upload file provided by path
             backend.upload_object_from_file(
-                cast(str, self.bucket), self.uid, cast(str, self._path)
+                self.bucket, self.uid, cast(str, self._path)
             )
         # If file descriptor is managed by Resource, close it after upload
         if self._fd:
@@ -395,9 +400,16 @@ class RemoteResource(ResourceBase):
 
         :meta private:
         """
-        cast("KartonBackend", self.backend).remove_object(
-            cast(str, self.bucket), self.uid
-        )
+        if self.backend is None:
+            raise RuntimeError(
+                "Resource object can't be removed because it's not bound to the backend"
+            )
+        if self.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be removed because its bucket is not set"
+            )
+
+        self.backend.remove_object(self.bucket, self.uid)
 
     def download(self) -> bytes:
         """
@@ -415,9 +427,16 @@ class RemoteResource(ResourceBase):
 
         :rtype: bytes
         """
-        self._content = cast("KartonBackend", self.backend).download_object(
-            cast(str, self.bucket), self.uid
-        )
+        if self.backend is None:
+            raise RuntimeError(
+                "Resource object can't be downloaded because it's not bound to the backend"
+            )
+        if self.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be downlaoded because its bucket is not set"
+            )
+
+        self._content = self.backend.download_object(self.bucket, self.uid)
         return self._content
 
     def download_to_file(self, path: str) -> None:
@@ -433,9 +452,16 @@ class RemoteResource(ResourceBase):
             with open("sample/sample.exe", "rb") as f:
                 contents = f.read()
         """
-        cast("KartonBackend", self.backend).download_object_to_file(
-            cast(str, self.bucket), self.uid, path
-        )
+        if self.backend is None:
+            raise RuntimeError(
+                "Resource object can't be downloaded because it's not bound to the backend"
+            )
+        if self.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be downlaoded because its bucket is not set"
+            )
+
+        self.backend.download_object_to_file(self.bucket, self.uid, path)
 
     @contextlib.contextmanager
     def download_temporary_file(self) -> Iterator[BinaryIO]:
