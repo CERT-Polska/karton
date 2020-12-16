@@ -1,6 +1,7 @@
 import configparser
 import os
 import re
+from typing import Optional
 
 
 class Config(object):
@@ -28,7 +29,7 @@ class Config(object):
         "./karton.ini",
     ]
 
-    def __init__(self, path=None):
+    def __init__(self, path: Optional[str] = None) -> None:
         if path is not None:
             if not os.path.isfile(path):
                 raise IOError("Configuration file not found in " + path)
