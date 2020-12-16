@@ -384,8 +384,8 @@ class KartonBackend:
         Subscribe to logs channel and yield subsequent log records
         or None if timeout has been reached.
 
-        If you want to subscribe only to the specific logger name
-        and log level, pass them via logger_name and level arguments.
+        If you want to subscribe only to a specific logger name
+        and/or log level, pass them via logger_name and level arguments.
 
         :param timeout: Waiting for log record timeout (default: 5)
         :param logger_name: logger name
@@ -393,7 +393,7 @@ class KartonBackend:
         :return: dict with log record
         """
         with self.redis.pubsub() as pubsub:
-            pubsub.psubscribe(f"{self._log_channel(logger_name, level)}*")
+            pubsub.psubscribe(self._log_channel(logger_name, level))
             while pubsub.subscribed:
                 item = pubsub.get_message(
                     ignore_subscribe_messages=True, timeout=timeout
