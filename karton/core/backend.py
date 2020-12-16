@@ -2,7 +2,7 @@ import enum
 import json
 from collections import defaultdict, namedtuple
 from io import BytesIO
-from typing import Any, BinaryIO, Dict, List, Optional, Tuple, Union
+from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Tuple, Union
 
 from minio import Minio
 from redis import StrictRedis
@@ -12,7 +12,7 @@ from .task import Task, TaskPriority
 
 KARTON_TASKS_QUEUE = "karton.tasks"
 KARTON_OPERATIONS_QUEUE = "karton.operations"
-KARTON_LOGS_QUEUE = "karton.logs"
+KARTON_LOG_CHANNEL = "karton.log"
 KARTON_BINDS_HSET = "karton.binds"
 KARTON_TASK_NAMESPACE = "karton.task"
 
@@ -347,34 +347,63 @@ class KartonBackend:
         queue, data = item
         return self.get_task(data)
 
-    def produce_log(self, log_record: Dict[str, Any]) -> None:
+    @staticmethod
+    def _log_channel(logger_name: Optional[str], level: Optional[str]) -> str:
+        return ".".join(
+            [KARTON_LOG_CHANNEL, (level or "*").lower(), logger_name or "*"]
+        )
+
+    def produce_log(
+        self,
+        log_record: Dict[str, Any],
+        logger_name: str,
+        level: str,
+    ) -> bool:
         """
-        Push new log record to the logs queue
+        Push new log record to the logs channel
 
         :param log_record: dict with log record
+        :param logger_name; logger name
+        :param level: log level
+        :return: True if any active log consumer received log record
         """
-        self.redis.lpush(KARTON_LOGS_QUEUE, json.dumps(log_record))
+        return (
+            self.redis.publish(
+                self._log_channel(logger_name, level), json.dumps(log_record)
+            )
+            > 0
+        )
 
-    def consume_log(self, timeout: int = 0) -> Optional[Dict[str, Any]]:
+    def consume_log(
+        self,
+        timeout: int = 5,
+        logger_name: Optional[str] = None,
+        level: Optional[str] = None,
+    ) -> Iterator[Optional[Dict[str, Any]]]:
         """
-        Pop new log record from the logs queue.
-        If there are no items, wait until one appears.
+        Subscribe to logs channel and yield subsequent log records
+        or None if timeout has been reached.
 
-        :param timeout: Waiting for task timeout (default: 0, wait endlessly)
+        If you want to subscribe only to a specific logger name
+        and/or log level, pass them via logger_name and level arguments.
+
+        :param timeout: Waiting for log record timeout (default: 5)
+        :param logger_name: logger name
+        :param level: log level
         :return: dict with log record
         """
-        item = self.consume_queues(KARTON_LOGS_QUEUE, timeout=timeout)
-        if not item:
-            return None
-        queue, data = item
-        body = json.loads(data)
-        if "task" in body and isinstance(body["task"], str):
-            body["task"] = json.loads(body["task"])
-        return body
-
-    def get_log_queue_length(self) -> int:
-        """Return log queue length"""
-        return self.redis.llen(KARTON_LOGS_QUEUE)
+        with self.redis.pubsub() as pubsub:
+            pubsub.psubscribe(self._log_channel(logger_name, level))
+            while pubsub.subscribed:
+                item = pubsub.get_message(
+                    ignore_subscribe_messages=True, timeout=timeout
+                )
+                if item and item["type"] == "message":
+                    body = json.loads(item["data"])
+                    if "task" in body and isinstance(body["task"], str):
+                        body["task"] = json.loads(body["task"])
+                    yield body
+                yield None
 
     def increment_metrics(self, metric: KartonMetrics, identity: str) -> None:
         """

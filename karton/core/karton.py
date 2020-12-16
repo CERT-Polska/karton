@@ -282,6 +282,9 @@ class LogConsumer(KartonServiceBase):
     Base class for log consumer subsystems
     """
 
+    logger_name: Optional[str] = None
+    level: Optional[str] = None
+
     def __init__(
         self, config: Optional[Config] = None, identity: Optional[str] = None
     ) -> None:
@@ -297,9 +300,14 @@ class LogConsumer(KartonServiceBase):
     def loop(self) -> None:
         self.log.info("Logger %s started", self.identity)
 
-        while not self.shutdown:
-            log = self.backend.consume_log()
+        for log in self.backend.consume_log(
+            logger_name=self.logger_name, level=self.level
+        ):
+            if self.shutdown:
+                # Consumer shutdown has been requested
+                break
             if not log:
+                # No log record received until timeout, try again.
                 continue
             try:
                 self.process_log(log)
