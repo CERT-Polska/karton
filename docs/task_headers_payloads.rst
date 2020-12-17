@@ -21,7 +21,7 @@ Example:
         }
     )
 
-Consumers are listening for specific set of headers, which is defined by `filters`.
+Consumers listen for specific set of headers, which is defined by `filters`.
 
 
 .. code-block:: python
@@ -50,7 +50,7 @@ Consumers are listening for specific set of headers, which is defined by `filter
 
 If Karton-System finds that a task matches any of subsets defined by consumer queue filters then the task will be routed to that queue.
 
-Following the convention proposed in examples above, it means that `GenericUnpacker` will get all tasks that apply to samples directly runnable in sandbox (regardless of target platform) or Windows 32-bit only scripts.
+Following the convention proposed in examples above, it means that ``GenericUnpacker`` will get all tasks contain samples directly runnable in sandboxes (regardless of target platform) or Windows 32-bit only scripts.
 
 Headers can be used to process our input differently, depending on the kind of sample:
 
@@ -96,7 +96,7 @@ Payload can be accessed by Consumer using :py:meth:`Task.get_payload` method.
 
 .. code-block:: python
 
-    class Kartonik(Karton):
+    class KartonService(Karton):
         ...
         def process(self, task: Task) -> None:
             entrypoints = task.get_payload("entrypoints", default=[])
@@ -152,7 +152,7 @@ If expected resource is too big for in-memory processing or we want to launch ex
 
 .. code-block:: python
 
-    class Kartonik(Karton):
+    class KartonService(Karton):
         ...
         def process(self, task: Task) -> None:
             archive = task.get_resource("archive")
@@ -208,24 +208,24 @@ Karton library includes a helper method for that kind of archives, called :func:
     )
     self.send_task(task)
 
-Files contained in `directory_path` are stored under relative paths to the provided directory path. Default compression level is `zipfile.ZIP_DEFLATED` instead of `zipfile.ZIP_STORED`.
+Files contained in ``directory_path`` are stored under relative paths to the provided directory path. Default compression level is ``zipfile.ZIP_DEFLATED`` instead of ``zipfile.ZIP_STORED``.
 
 Directory resources are deserialized to the usual :class:`RemoteResource` objects but in contrary to the usual resources they can for example be extracted to directories using :func:`RemoteResource.extract_temporary`
 
 .. code-block:: python
 
-    class Kartonik(Karton):
+    class KartonService(Karton):
         ...
         def process(self, task: Task) -> None:
             dumps = task.get_resource("dumps")
             with dumps.extract_temporary() as dumps_path:
                 ...
 
-If we don't want to extract all files, we can work directly with :class:`zipfile.ZipFile` object, which will be internally downloaded from MinIO to the temporary file using :py:meth:`RemoteResource.download_temporary_file` method internally.
+If we don't want to extract all files, we can work directly with :class:`zipfile.ZipFile` object, which will be internally downloaded from MinIO to the temporary file using :py:meth:`RemoteResource.download_temporary_file` method.
 
 .. code-block:: python
 
-    class Kartonik(Karton):
+    class KartonService(Karton):
         ...
         def process(self, task: Task) -> None:
             dumps = task.get_resource("dumps")
@@ -239,7 +239,7 @@ More information about resources can be found in API documentation.
 Persistent payload
 ------------------
 
-Part of payload that is propagated to the whole task subtree. The common use-case is to keep information related not with single artifact but the whole analysis, so they're available everywhere even if not explicitly passed by the Kartonik.
+Part of payload that is propagated to the whole task subtree. The common use-case is to keep information related not with single artifact but the whole analysis, so they're available everywhere even if not explicitly passed by the Karton Service.
 
 .. code-block:: python
 
@@ -251,11 +251,11 @@ Part of payload that is propagated to the whole task subtree. The common use-cas
         }
     )
 
-Incoming persistent payload (task received by Kartonik) is merged by Karton library with the outgoing tasks (result tasks sent by Kartonik). Kartonik can't overwrite or delete the incoming payload keys. 
+Incoming persistent payload (task received by Karton Service) is merged by Karton library with the outgoing tasks (result tasks sent by Karton Service). Karton service can't overwrite or delete the incoming payload keys. 
 
 .. code-block:: python
 
-    class Kartonik(Karton):
+    class KartonService(Karton):
         ...
         def process(self, task: Task) -> None:
             uploader = task.get_payload("uploader")

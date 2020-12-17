@@ -8,7 +8,7 @@ def get_function_arg_num(fun: Callable) -> int:
 
 
 class GracefulKiller:
-    def __init__(self, handle_func: Callable):
+    def __init__(self, handle_func: Callable) -> None:
         self.handle_func = handle_func
         self.original_sigint_handler = signal.signal(
             signal.SIGINT, self.exit_gracefully

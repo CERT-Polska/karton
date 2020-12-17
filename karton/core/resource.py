@@ -24,7 +24,20 @@ if TYPE_CHECKING:
 
 class ResourceBase(object):
     """
-    Abstract base class for Resource objects.
+    Base resource class, contains the basic logic of both remote and
+    local resources. If you're not implementing your own resource metatypes
+    you'll probably want to look at `:py:meth:`LocalResource or
+    `:py:meth:` RemoteResource instead.
+
+    :param name: Name of the resource (e.g. name of file)
+    :param content: Resource content
+    :param path: Path of file with resource content
+    :param bucket: Alternative MinIO bucket for resource
+    :param metadata: Resource metadata
+    :param sha256: Resource sha256 hash
+    :param _uid: Alternative MinIO resource id
+    :param _fd: File descriptor
+    :param _flag: Resource flags
     """
 
     DIRECTORY_FLAG = "Directory"
@@ -95,7 +108,7 @@ class ResourceBase(object):
         """
         Resource identifier (UUID)
 
-        :rtype: str
+        :return: Resource identifier
         """
         return self._uid
 
@@ -104,7 +117,7 @@ class ResourceBase(object):
         """
         Resource content
 
-        :rtype: Optional[bytes]
+        :return: Resource contents
         """
         return self._content
 
@@ -113,7 +126,7 @@ class ResourceBase(object):
         """
         Resource size
 
-        :rtype: int
+        :return: Resource size
         """
         if self._size is None:
             if self._path:
@@ -127,7 +140,7 @@ class ResourceBase(object):
         """
         Resource sha256
 
-        :rtype: str
+        :return: Hexencoded resource SHA256 hash
         """
         sha256 = self.metadata.get("sha256")
         if sha256 is None:
@@ -165,19 +178,14 @@ class LocalResource(ResourceBase):
         sample = Resource("original_name.exe", path="sample/original_name.exe")
 
     :param name: Name of the resource (e.g. name of file)
-    :type name: str
     :param content: Resource content
-    :type content: bytes or str
     :param path: Path of file with resource content
-    :type path: str
     :param bucket: Alternative MinIO bucket for resource
-    :type bucket: str, optional
     :param metadata: Resource metadata
-    :type metadata: dict, optional
     :param uid: Alternative MinIO resource id
-    :type uid: str, optional
-    :param uid: Resource sha256 hash
-    :type uid: str, optional
+    :param sha256: Resource sha256 hash
+    :param _fd: File descriptor
+    :param _flag: Resource flags
     """
 
     def __init__(
@@ -227,20 +235,13 @@ class LocalResource(ResourceBase):
             dumps = LocalResource.from_directory("dumps", directory_path="dumps/")
 
         :param name: Name of the resource (e.g. name of file)
-        :type name: str
         :param directory_path: Path of the resource directory
-        :type directory_path: str
         :param compression: Compression level (default is zipfile.ZIP_DEFLATED)
-        :type compression: int, optional
         :param in_memory: Don't create temporary file and make in-memory zip file \
                           (default: False)
-        :type in_memory: bool, optional
         :param bucket: Alternative MinIO bucket for resource
-        :type bucket: str, optional
         :param metadata: Resource metadata
-        :type metadata: dict, optional
         :param uid: Alternative MinIO resource id
-        :type uid: str, optional
         :return: :class:`LocalResource` instance with zipped contents
         """
         out_stream = BytesIO() if in_memory else tempfile.NamedTemporaryFile()
@@ -278,6 +279,13 @@ class LocalResource(ResourceBase):
             )
 
     def _upload(self, backend: "KartonBackend") -> None:
+        """Internal function for uploading resources
+
+        :param backend: KartonBackend to use while uploading the resource
+
+        :meta private:
+        """
+
         # Note: never transform resource into Remote
         # Multiple task dispatching with same local, in that case resource
         # can be deleted between tasks.
@@ -299,10 +307,15 @@ class LocalResource(ResourceBase):
             self._fd.close()
 
     def upload(self, backend: "KartonBackend") -> None:
-        # Internal local resource upload method
+        """Internal function for uploading resources
+
+        :param backend: KartonBackend to use while uploading the resource
+
+        :meta private:
+        """
         if not self._content and not self._path:
             raise RuntimeError("Can't upload resource without content")
-        return self._upload(backend)
+        self._upload(backend)
 
 
 Resource = LocalResource
@@ -315,6 +328,15 @@ class RemoteResource(ResourceBase):
 
     Should never be instantiated directly by subsystem, but can be directly passed to
     outgoing payload.
+
+    :param name: Name of the resource (e.g. name of file)
+    :param bucket: Alternative MinIO bucket for resource
+    :param metadata: Resource metadata
+    :param uid: Alternative MinIO resource id
+    :param size: Resource size
+    :param backend: :py:meth:`KartonBackend` to bind to this resource
+    :param sha256: Resource sha256 hash
+    :param _flag: Resource flags
     """
 
     def __init__(
@@ -343,7 +365,7 @@ class RemoteResource(ResourceBase):
         """
         Checks whether resource is loaded into memory
 
-        :rtype: bool
+        :return: Flag indicating if the resource is loaded or not
         """
         return self._content is not None
 
@@ -355,9 +377,8 @@ class RemoteResource(ResourceBase):
         Internal deserialization method for remote resources
 
         :param dict: Serialized information about resource
-        :type dict: Dict[str, Any]
         :param backend: KartonBackend object
-        :type backend: :class:`karton.core.backend.KartonBackend`
+        :return: Deserialized :py:meth:`RemoteResource` object
 
         :meta private:
         """
@@ -382,7 +403,7 @@ class RemoteResource(ResourceBase):
         Resource content. Performs download when resource was not loaded before.
 
         Returns None if resource is local and payload is provided by path.
-        :rtype: Optional[bytes]
+        :return: Content bytes
         """
         if self._content is None:
             return self.download()
@@ -425,7 +446,7 @@ class RemoteResource(ResourceBase):
 
             self.process_sample(sample)
 
-        :rtype: bytes
+        :return: Downloaded content bytes
         """
         if self.backend is None:
             raise RuntimeError(
@@ -436,7 +457,7 @@ class RemoteResource(ResourceBase):
             )
         if self.bucket is None:
             raise RuntimeError(
-                "Resource object can't be downlaoded because its bucket is not set"
+                "Resource object can't be downloaded because its bucket is not set"
             )
 
         self._content = self.backend.download_object(self.bucket, self.uid)
@@ -454,6 +475,8 @@ class RemoteResource(ResourceBase):
 
             with open("sample/sample.exe", "rb") as f:
                 contents = f.read()
+
+        :param path: Path to download the resource into
         """
         if self.backend is None:
             raise RuntimeError(
@@ -464,7 +487,7 @@ class RemoteResource(ResourceBase):
             )
         if self.bucket is None:
             raise RuntimeError(
-                "Resource object can't be downlaoded because its bucket is not set"
+                "Resource object can't be downloaded because its bucket is not set"
             )
 
         self.backend.download_object_to_file(self.bucket, self.uid, path)
@@ -484,7 +507,7 @@ class RemoteResource(ResourceBase):
 
             # Temporary file is deleted after exitting the "with" scope
 
-        :rtype: ContextManager[BinaryIO]
+        :return: ContextManager with the temporary file
         """
         # That tempfile-fu is necessary because minio.fget_object removes file
         # under provided path and renames its own part-file with downloaded content
@@ -529,7 +552,7 @@ class RemoteResource(ResourceBase):
 
             zipf = zipfile.Zipfile(zip_path)
 
-        :rtype: ContextManager[zipfile.ZipFile]
+        :return: ContextManager with zipfile
         """
         if self._content:
             yield zipfile.ZipFile(BytesIO(self._content))
@@ -545,6 +568,8 @@ class RemoteResource(ResourceBase):
         By default: method downloads zip into temporary file, which is deleted
         after extraction. If you want to load zip into memory, call
         :py:meth:`RemoteResource.download` first.
+
+        :param path: Directory path where the resource should be unpacked
         """
         with self.zip_file() as zf:
             zf.extractall(path)
@@ -569,7 +594,7 @@ class RemoteResource(ResourceBase):
         after extraction. If you want to load zip into memory, call
         :py:meth:`RemoteResource.download` first.
 
-        :rtype: ContextManager[str]
+        :return: ContextManager with the temporary directory
         """
         tmpdir = tempfile.mkdtemp()
         try:
