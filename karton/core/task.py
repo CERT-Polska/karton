@@ -200,7 +200,7 @@ class Task(object):
         """
         Serialize task data into JSON string
         :param indent: Indent to use while serializing
-        :return: Seriazlied task data
+        :return: Serialized task data
 
         :meta private:
         """

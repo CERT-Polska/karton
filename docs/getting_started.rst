@@ -18,7 +18,7 @@ In addition to karton, you'll also need to setup `MinIO <https://docs.min.io/doc
 Configuration
 -------------
 
-Each karton subsystem needs a ``karton.ini`` file that contains the connection parameters for Redis and MinIO.
+Each Karton subsystem needs a ``karton.ini`` file that contains the connection parameters for Redis and MinIO.
 
 You can also use this file to store custom fields and use them e.g. by :ref:`example-overriding-config`.
 
