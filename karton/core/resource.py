@@ -457,7 +457,7 @@ class RemoteResource(ResourceBase):
             )
         if self.bucket is None:
             raise RuntimeError(
-                "Resource object can't be downlaoded because its bucket is not set"
+                "Resource object can't be downloaded because its bucket is not set"
             )
 
         self._content = self.backend.download_object(self.bucket, self.uid)
@@ -487,7 +487,7 @@ class RemoteResource(ResourceBase):
             )
         if self.bucket is None:
             raise RuntimeError(
-                "Resource object can't be downlaoded because its bucket is not set"
+                "Resource object can't be downloaded because its bucket is not set"
             )
 
         self.backend.download_object_to_file(self.bucket, self.uid, path)
@@ -594,7 +594,7 @@ class RemoteResource(ResourceBase):
         after extraction. If you want to load zip into memory, call
         :py:meth:`RemoteResource.download` first.
 
-        :return: ContextManager with the remporary directory
+        :return: ContextManager with the temporary directory
         """
         tmpdir = tempfile.mkdtemp()
         try:

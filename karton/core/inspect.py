@@ -90,7 +90,7 @@ def get_queues_for_tasks(
 
     :param tasks: Task objects to group
     :param state: :py:meth:`KartonBackend` to bind to created queues
-    :return: A dictionary containg the queue names and lists of tasks
+    :return: A dictionary containing the queue names and lists of tasks
     """
     tasks_per_queue = defaultdict(list)
 

@@ -164,7 +164,7 @@ class KartonBackend:
     def unregister_bind(self, identity: str) -> None:
         """
         Removes bind for identity
-        :param bind: Identitiy to unregister
+        :param bind: Identity to be unregistered
         """
         self.redis.hdel(KARTON_BINDS_HSET, identity)
 
