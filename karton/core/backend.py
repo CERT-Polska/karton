@@ -389,10 +389,10 @@ class KartonBackend:
         or None if timeout has been reached.
 
         If you want to subscribe only to a specific logger name
-        and/or log level, pass them via logger_name and level arguments.
+        and/or log level, pass them via logger_filter and level arguments.
 
         :param timeout: Waiting for log record timeout (default: 5)
-        :param logger_filter: Filter for names of consumed loggers
+        :param logger_filter: Filter for name of consumed logger
         :param level: Log level
         :return: Dict with log record
         """

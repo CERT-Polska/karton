@@ -306,7 +306,7 @@ class LogConsumer(KartonServiceBase):
     """
     Base class for log consumer subsystems.
 
-    You can consume logs from specific set of logger names
+    You can consume logs from specific logger
     by setting a :py:meth:`logger_filter` class attribute.
 
     You can also select logs of specific level via
