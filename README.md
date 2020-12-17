@@ -84,7 +84,7 @@ The "router". It recognises samples/files and produces various task types depend
 Generic archive unpacker. Archives uploaded into the system will be extracted, and every file will be processed individually.
 
 #### [karton-config-extractor](https://github.com/CERT-Polska/karton-config-extractor)
-Malware extractor. It uses Yara rules and Python modules to extract static configuration from malware samples and analyses. It's a fishing rod, not a fish - we don't share the modules itself. But it's easy to write your own!
+Malware extractor. It uses Yara rules and Python modules to extract static configuration from malware samples and analyses. It's a fishing rod, not a fish - we don't share the modules themselves. But it's easy to write your own!
 
 #### [karton-mwdb-reporter](https://github.com/CERT-Polska/karton-mwdb-reporter)
 A very important part of the pipeline. Reporter submits all files, tags, comments and other intel produced during the analysis to [MWDB](https://github.com/CERT-Polska/mwdb-core). If you don't use MWDB yet or just prefer other backends, it's easy to write your own reporter.
