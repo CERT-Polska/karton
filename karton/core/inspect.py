@@ -7,7 +7,7 @@ from .task import Task, TaskState
 
 class KartonQueue:
     """
-    View object represting a Karton queue
+    View object representing a Karton queue
 
     :param bind: :py:meth:`KartonBind` object representing the queue bind
     :param tasks: List of tasks currently in queue
@@ -44,7 +44,7 @@ class KartonQueue:
 
 class KartonAnalysis:
     """
-    View object represting a Karton task analysis
+    View object representing a Karton task analysis
 
     :param root_uid: Analysis root task uid
     :param tasks: List of tasks

@@ -367,7 +367,7 @@ class KartonBackend:
         Push new log record to the logs channel
 
         :param log_record: Dict with log record
-        :param logger_name; Logger name
+        :param logger_name: Logger name
         :param level: Log level
         :return: True if any active log consumer received log record
         """

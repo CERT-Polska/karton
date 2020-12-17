@@ -208,7 +208,7 @@ This can be easily done by overriding `Config` class and using that for `Karton`
 Log consumer
 ------------
 
-By default, all logs created in karton systems are published to a specialised using the Redis ``PUBSUB`` pattern.
+By default, all logs created in Karton systems are published to a specialised log consumer using the Redis ``PUBSUB`` pattern.
 
 This is a very simple example of a system that implements the ``LogConsumer`` interface and prints logs to stderr.
 

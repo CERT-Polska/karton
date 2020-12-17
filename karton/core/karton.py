@@ -57,7 +57,7 @@ class Producer(KartonBase):
         Sends a task to the unrouted task queue. Takes care of logging.
         Given task will be child of task we are currently handling (if such exists).
 
-        :param task: Task oject to be sent
+        :param task: Task object to be sent
         :return: Bool indicating if the task was delivered
         """
         self.log.debug("Dispatched task %s", task.uid)
@@ -96,7 +96,7 @@ class Consumer(KartonServiceBase):
     incoming tasks
 
     :param config: Karton config to use for service configuration
-    :param identity: Karton service identitiy
+    :param identity: Karton service identity
     """
 
     filters: List[Dict[str, Any]] = []

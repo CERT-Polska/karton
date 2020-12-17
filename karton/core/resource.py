@@ -594,7 +594,7 @@ class RemoteResource(ResourceBase):
         after extraction. If you want to load zip into memory, call
         :py:meth:`RemoteResource.download` first.
 
-        :return: ContextManager with the remporary directory
+        :return: ContextManager with the temporary directory
         """
         tmpdir = tempfile.mkdtemp()
         try:
