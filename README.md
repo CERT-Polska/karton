@@ -67,9 +67,9 @@ if __name__ == "__main__":
     GenericUnpacker().loop()
 ```
 
-## Karton Systems
+## Karton systems
 
-Since some karton systems are universal and will be useful to anyone running their own karton deployments, we've decided to open-source some of our repositories to the community.
+Since some Karton systems are universal and will be useful to anyone running their own Karton deployments, we've decided to open-source some of our repositories to the community.
 
 #### [karton](https://github.com/CERT-Polska/karton)
 This repository, contains `karton.system` service that acts as the main service responsible for dispatching tasks within the system and `karton.core` module that is used as the python library.
@@ -89,9 +89,6 @@ Malware configuration extractor that tries to extract various embedded informati
 #### [karton-mwdb-reporter](https://github.com/CERT-Polska/karton-mwdb-reporter)
 Analysis artifact reporter that submits all samples, tags, comments and relations between them to [MWDB](https://github.com/CERT-Polska/mwdb-core).
 
-#### [karton-drakvuf](https://github.com/CERT-Polska/karton-drakvuf)
-Malware sample processor that uploads incoming samples to [drakvuf-sandbox](https://github.com/CERT-Polska/drakvuf-sandbox) for analysis.
-
 #### [karton-yaramatcher](https://github.com/CERT-Polska/karton-yaramatcher)
 YARA classifier that spawns new tasks containing information about matched yara rules (rules not included ;)
 
@@ -101,9 +98,15 @@ Karton system that tries to extract executables (and other files) from various e
 #### [karton-autoit-ripper](https://github.com/CERT-Polska/karton-autoit-ripper)
 A small wrapper around [AutoIt-Ripper](https://github.com/nazywam/AutoIt-Ripper) that tries to extract embedded AutoIt scripts and resources from incoming executables.
 
-#### [karton-misp-pusher](https://github.com/CERT-Polska/karton-misp-pusher)
-A reporter that converts the artifacts to a MISP format and submits them as events.
+Coming soon:
 
+#### karton-drakvuf
+Malware sample processor that uploads incoming samples to [drakvuf-sandbox](https://github.com/CERT-Polska/drakvuf-sandbox) for analysis.
+
+#### karton-misp-pusher
+A reporter that converts the artifacts to a MISP format and submits them as events.
 
 Here is an example of how these systems could be linked together to create a basic malware analysis pipeline.
 [![](img/karton-systems.svg)](img/karton-systems.svg?raw=true)
+
+![Co-financed by the Connecting Europe Facility by of the European Union](https://www.cert.pl/wp-content/uploads/2019/02/en_horizontal_cef_logo-1.png)
