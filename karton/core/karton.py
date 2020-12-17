@@ -306,17 +306,17 @@ class LogConsumer(KartonServiceBase):
     """
     Base class for log consumer subsystems.
 
-    You can control the exact identity of logger to bind to by setting the
-    :py:meth:`logger_name` class attribute.
+    You can consume logs from specific logger
+    by setting a :py:meth:`logger_filter` class attribute.
 
-    The log level of consumed logs can also be selected by setting the :py:meth:`level`
-    class attribute.
+    You can also select logs of specific level via
+    :py:meth:`level` class attribute.
 
     :param config: Karton config to use for service configuration
     :param identity: Karton service identity
     """
 
-    logger_name: Optional[str] = None
+    logger_filter: Optional[str] = None
     level: Optional[str] = None
 
     def __init__(
@@ -343,7 +343,7 @@ class LogConsumer(KartonServiceBase):
         self.log.info("Logger %s started", self.identity)
 
         for log in self.backend.consume_log(
-            logger_name=self.logger_name, level=self.level
+            logger_filter=self.logger_filter, level=self.level
         ):
             if self.shutdown:
                 # Consumer shutdown has been requested
