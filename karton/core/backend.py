@@ -8,7 +8,7 @@ from minio import Minio
 from redis import StrictRedis
 from urllib3.response import HTTPResponse
 
-from .task import Task, TaskPriority
+from .task import Task, TaskPriority, TaskState
 
 KARTON_TASKS_QUEUE = "karton.tasks"
 KARTON_OPERATIONS_QUEUE = "karton.operations"
@@ -50,7 +50,7 @@ class KartonBackend:
         return self.config.minio_config["bucket"]
 
     @staticmethod
-    def get_queue_name(identity: str, priority: str) -> str:
+    def get_queue_name(identity: str, priority: TaskPriority) -> str:
         """
         Return Redis routed task queue name for given identity and priority
 
@@ -234,7 +234,7 @@ class KartonBackend:
         self.redis.set(f"{KARTON_TASK_NAMESPACE}:{task.uid}", task.serialize())
 
     def set_task_status(
-        self, task: Task, status: str, consumer: Optional[str] = None
+        self, task: Task, status: TaskState, consumer: Optional[str] = None
     ) -> None:
         """
         Request task status change to be applied by karton-system
