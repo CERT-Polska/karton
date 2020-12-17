@@ -194,9 +194,10 @@ class SystemService(KartonServiceBase):
                 elif queue == "karton.operations":
                     operation_body = json.loads(body)
                     task = Task.unserialize(operation_body["task"])
-                    if task.status != operation_body["status"]:
+                    new_status = TaskState(operation_body["status"])
+                    if task.status != new_status:
                         task.last_update = time.time()
-                        task.status = operation_body["status"]
+                        task.status = new_status
                         self.log.info(
                             "[%s] %s %s task %s",
                             str(task.root_uid),
