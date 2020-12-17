@@ -17,6 +17,12 @@ karton.core.Producer, karton.core.Consumer
 .. autoclass:: karton.core.Karton
    :members:
 
+karton.core.LogConsumer
+-----------------------
+
+.. autoclass:: karton.core.LogConsumer
+   :members:
+
 karton.core.Resource
 --------------------
 

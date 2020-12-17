@@ -29,7 +29,7 @@ What's more important however, is that it runs without any Redis or MinIO intera
                 "numbers": [1, 2, 3, 4],
             })
 
-            # dry-run the fake task on the wrapped karton systemm
+            # dry-run the fake task on the wrapped karton system
             results = self.run_task(task)
 
             # prepare a expected output task and check if it matches the one produced
@@ -58,7 +58,7 @@ That was pretty simple, but what about testing karton systems that accept and sp
 
     class ReverserKartonTestCase(KartonTestCase):
         """Test a karton that expects a KartonResource in "file" key and spawns a new
-        task containg that file reversed.
+        task containing that file reversed.
         """
 
         karton_class = ReverserKarton
@@ -79,7 +79,7 @@ That was pretty simple, but what about testing karton systems that accept and sp
                 "file": input_sample
             })
 
-            # dry-run the fake task on the wrapped karton systemm
+            # dry-run the fake task on the wrapped karton system
             results = self.run_task(task)
 
             # prepare a expected output task and check if it matches the one produced

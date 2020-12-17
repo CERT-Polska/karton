@@ -8,6 +8,8 @@ from .task import Task
 
 
 class KartonLogHandler(logging.Handler):
+    """Base class for karton loggers"""
+
     def __init__(self, backend: KartonBackend) -> None:
         logging.Handler.__init__(self)
         self.backend = backend

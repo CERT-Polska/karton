@@ -24,7 +24,7 @@ Because task headers can be accepted by more than one consumer the task has to b
 
 Each registered consumer monitors its (routed) queue and performs analysis on all tasks that appear there. As soon as the consumer starts working on a given task, it sends a signal to the broker to mark the tasks state as ``TaskState.Started``.
 
-If everything goes smoothly, the consumer finishes the tasks and sends a similiar signal, this time marking the task as ``TaskState.Finished``. If there is a problem and an exception is thrown within the ``self.process`` function, ``TaskState.Crashed`` is used instead.
+If everything goes smoothly, the consumer finishes the tasks and sends a similar signal, this time marking the task as ``TaskState.Finished``. If there is a problem and an exception is thrown within the ``self.process`` function, ``TaskState.Crashed`` is used instead.
 
 As a part of its housekeeping, ``Karton.System`` removes all ``TaskState.Finished`` tasks immediately and ``TaskState.Crashed`` tasks after a certain grace period to allow for inspection and optional retry.
 
@@ -51,9 +51,9 @@ In order to better understand how those identifiers are inherited and passed bet
 
 Handling logging
 ----------------
-By default, all systems inheriting from :py:meth:`karton.core.KartonBase` will have a custom :py:meth:`logging.Logger` instance exposed as :py:meth:`log`. It delivers all logged messages to a queue on the central Redis database.
+By default, all systems inheriting from :py:meth:`karton.core.KartonBase` will have a custom :py:meth:`logging.Logger` instance exposed as :py:meth:`log`. It publishes all logged messages to a special PUBSUB key on the central Redis database.
 
-In order to store the logs into a more persistent storage like Splunk or Rsyslog you have to implement a service that will consume the log entries and send them to the final database, for an example of such service see :ref:`example-consuming-logs`.
+In order to store the logs into a persistent storage like Splunk or Rsyslog you have to implement a service that will consume the log entries and send them to the final database, for an example of such service see :ref:`example-consuming-logs`.
 
 The logging level can be configured using the standard karton config and setting ``level`` in the ``logging`` section to appropriate level like :code:`"DEBUG"`, :code:`"INFO"` or :code:`"ERROR"`.
 
@@ -61,7 +61,7 @@ The logging level can be configured using the standard karton config and setting
 Consumer queue persistence
 --------------------------
 
-Consumer queue is created on the first registration of consumer and it gets new tasks even if all consumer instances are offline. It guarantees that analysis will complete even after short downtime of part of subsystems. Unfortunately, it also blocks completion of the analysis when we connect a Kartonik which is currently developed or temporary.
+Consumer queue is created on the first registration of consumer and it gets new tasks even if all consumer instances are offline. It guarantees that analysis will complete even after short downtime of part of subsystems. Unfortunately, it also blocks completion of the analysis when we connect a Karton Service which is currently developed or temporary.
 
 We can turn off queue persistence using the :code:`persistent = False` attribute in the Karton subsystem class.
 
@@ -114,7 +114,7 @@ During processing we may need to fetch data from external service or use librari
 
 Karton configuration is represented by special object :class:`karton.Config`, which can be explicitly provided as an argument to the Karton constructor. `Config` is based on :class:`configparser.ConfigParser`, so we can extend it with additional sections for custom configuration.
 
-For example, if we need to communicate with Malwarecage, we can make Malwarecage binding available via :code:`self.config.mwdb`
+For example, if we need to communicate with MWDB, we can make MWDB binding available via :code:`self.config.mwdb`
 
 .. code-block:: python
 

@@ -6,7 +6,7 @@ This chapter will describe significant changes introduced in major version relea
 What changed in Karton 4.0.0
 ----------------------------
 
-Karton-System and core servicies are still compatible with both 3.x and 2.x versions.
+Karton-System and core services are still compatible with both 3.x and 2.x versions.
 
 * ``SHA256`` is evaluated always when :class:`Resource` is created. If you already know it and don't want it to be recalculated, pass the hash to the constructor via ``sha256=`` argument.
   
@@ -17,7 +17,7 @@ Karton-System and core servicies are still compatible with both 3.x and 2.x vers
 * :class:`DirectoryResource` has been removed in favor of :class:`Resource.from_directory`. Resources created using this method are still deserialized to the :class:`RemoteDirectoryResource` form
   by older Karton versions. :class:`RemoteDirectoryResource` has been merged into :class:`RemoteResource`, so all resources containing Zip files can be unzipped even if they were created as regular files.
 
-* Asynchronic tasks has been removed. Busy waiting should be used instead.
+* Asynchronous tasks has been removed. Busy waiting should be used instead.
 
 * All crashed tasks are preserved in ``Crashed`` state until they are removed by Karton-System (default is 72 hours) or retried by user. Keep in mind that they hold all the referenced resources, so keep an eye on that queue.
 

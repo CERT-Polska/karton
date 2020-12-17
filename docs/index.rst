@@ -3,10 +3,10 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to karton's documentation!
+Welcome to Karton's documentation!
 ==================================
 Karton is a library made for analysis backend orchestration.
-Allows you to build flexible malware analysis pipelines and attach new systems (`Kartonik`) with ease.
+Allows you to build flexible malware analysis pipelines and attach new Karton Services with ease.
 
 This is achieved by combining powers of a few existing solutions, karton just glues them together and allows you to have some sane amount of abstraction over them.
 

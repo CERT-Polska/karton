@@ -20,7 +20,7 @@ class Config(object):
 
     Environment variables have higher precedence than those loaded from files.
 
-    :param path: path to additional configuration file
+    :param path: Path to additional configuration file
     """
 
     SEARCH_PATHS = [
@@ -45,6 +45,11 @@ class Config(object):
             raise RuntimeError("Missing Redis configuration")
 
     def _load_from_env(self):
+        """Function used for loading configuration items from the environment variables
+
+        :meta private:
+        """
+
         for name, value in os.environ.items():
             # Load env variables named KARTON_[section]_[key]
             # to match ConfigParser structure
