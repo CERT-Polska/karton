@@ -93,7 +93,7 @@ class Producer(KartonBase):
 class Consumer(KartonServiceBase):
     """
     Base consumer class, this is the part of Karton responsible for processing
-    incoming tasks 
+    incoming tasks
 
     :param config: Karton config to use for service configuration
     :param identity: Karton service identitiy

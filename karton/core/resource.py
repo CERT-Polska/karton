@@ -140,7 +140,7 @@ class ResourceBase(object):
         """
         Resource sha256
 
-        :return: Hexencoded resource SHA256 hash 
+        :return: Hexencoded resource SHA256 hash
         """
         sha256 = self.metadata.get("sha256")
         if sha256 is None:

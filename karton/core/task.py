@@ -273,7 +273,9 @@ class Task(object):
                 )
 
     @staticmethod
-    def unserialize(data: Union[str, bytes], backend: Optional["KartonBackend"] = None) -> "Task":
+    def unserialize(
+        data: Union[str, bytes], backend: Optional["KartonBackend"] = None
+    ) -> "Task":
         """
         Unserialize Task instance from JSON string
 

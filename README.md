@@ -1,4 +1,4 @@
-# Karton <img src="img/logo.png" width="64">
+# Karton <img src="img/logo.svg" width="64">
 
 Distributed malware processing framework based on Python, Redis and MinIO.
 

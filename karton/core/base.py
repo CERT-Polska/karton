@@ -80,7 +80,7 @@ class KartonServiceBase(KartonBase):
     """
     Karton base class for looping services.
 
-    You can set a informative 
+    You can set a informative
 
     :param config: Karton config to use for service configuration
     :param identity: Karton service identity to use
