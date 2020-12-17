@@ -381,7 +381,7 @@ class KartonBackend:
     def consume_log(
         self,
         timeout: int = 5,
-        logger_name: Optional[str] = None,
+        logger_filter: Optional[str] = None,
         level: Optional[str] = None,
     ) -> Iterator[Optional[Dict[str, Any]]]:
         """
@@ -392,12 +392,12 @@ class KartonBackend:
         and/or log level, pass them via logger_name and level arguments.
 
         :param timeout: Waiting for log record timeout (default: 5)
-        :param logger_name: Logger name
+        :param logger_filter: Filter for names of consumed loggers
         :param level: Log level
         :return: Dict with log record
         """
         with self.redis.pubsub() as pubsub:
-            pubsub.psubscribe(self._log_channel(logger_name, level))
+            pubsub.psubscribe(self._log_channel(logger_filter, level))
             while pubsub.subscribed:
                 item = pubsub.get_message(
                     ignore_subscribe_messages=True, timeout=timeout
