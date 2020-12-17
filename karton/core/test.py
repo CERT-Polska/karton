@@ -248,8 +248,8 @@ class KartonMock(object):
 
     def __init__(self, config, **kwargs) -> None:
         self.config = config
-        self.current_task = None
-        self._result_tasks = []
+        self.current_task: Optional[Task] = None
+        self._result_tasks: List[Task] = []
 
     @property
     def log(self) -> logging.Logger:

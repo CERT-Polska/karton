@@ -288,22 +288,22 @@ class Task(object):
         if not isinstance(data, str):
             data = data.decode("utf8")
 
-        data = json.loads(data)
+        task_data = json.loads(data)
 
-        task = Task(data["headers"])
-        task.uid = data["uid"]
-        task.root_uid = data["root_uid"]
-        task.parent_uid = data["parent_uid"]
+        task = Task(task_data["headers"])
+        task.uid = task_data["uid"]
+        task.root_uid = task_data["root_uid"]
+        task.parent_uid = task_data["parent_uid"]
         # Compatibility with <= 3.x.x (get)
-        task.orig_uid = data.get("orig_uid", None)
-        task.status = data["status"]
+        task.orig_uid = task_data.get("orig_uid", None)
+        task.status = task_data["status"]
         # Compatibility with <= 3.x.x (get)
-        task.error = data.get("error")
+        task.error = task_data.get("error")
         # Compatibility with <= 2.x.x (get)
-        task.priority = data.get("priority", TaskPriority.NORMAL)
-        task.last_update = data.get("last_update", None)
-        task.payload = data["payload"]
-        task.payload_persistent = data["payload_persistent"]
+        task.priority = task_data.get("priority", TaskPriority.NORMAL)
+        task.last_update = task_data.get("last_update", None)
+        task.payload = task_data["payload"]
+        task.payload_persistent = task_data["payload_persistent"]
         task.unserialize_resources(backend)
         return task
 
