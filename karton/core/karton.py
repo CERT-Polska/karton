@@ -18,7 +18,7 @@ from .utils import get_function_arg_num
 
 class Producer(KartonBase):
     """
-    Producer class. Used for dispatching initial tasks into karton.
+    Producer part of Karton. Used for dispatching initial tasks into karton.
 
     :param config: Karton configuration object (optional)
     :type config: :class:`karton.Config`
@@ -42,6 +42,9 @@ class Producer(KartonBase):
             }
         )
         producer.send_task(task)
+
+    :param config: Karton config to use for service configuration
+    :param identity: Karton producer identitiy
     """
 
     def __init__(
@@ -54,10 +57,8 @@ class Producer(KartonBase):
         Sends a task to the unrouted task queue. Takes care of logging.
         Given task will be child of task we are currently handling (if such exists).
 
-        :param task: task to be sent
-        :type task: :py:class:`karton.Task`
-        :rtype: bool
-        :return: if task was delivered
+        :param task: Task oject to be sent
+        :return: Bool indicating if the task was delivered
         """
         self.log.debug("Dispatched task %s", task.uid)
 
@@ -91,7 +92,11 @@ class Producer(KartonBase):
 
 class Consumer(KartonServiceBase):
     """
-    Base consumer class
+    Base consumer class, this is the part of Karton responsible for processing
+    incoming tasks 
+
+    :param config: Karton config to use for service configuration
+    :param identity: Karton service identitiy
     """
 
     filters: List[Dict[str, Any]] = []
@@ -117,12 +122,24 @@ class Consumer(KartonServiceBase):
         """
         Task processing method.
 
+        :param task: The incoming task object
+
         self.current_task contains task that triggered invocation of
-        :py:meth:`karton.Consumer.process`
+        :py:meth:`karton.Consumer.process` but you should only focus on the passsed
+        task object and shouldn't interact with the field directly.
         """
         raise NotImplementedError()
 
     def internal_process(self, task: Task) -> None:
+        """
+        The internal side of :py:meth:`Consumer.process` function, takes care of
+        synchronizing the task state, handling errors and running task hooks.
+
+        :param task: Task object to process
+
+        :meta private:
+        """
+
         self.current_task = task
         self.log_handler.set_task(self.current_task)
 
@@ -197,9 +214,7 @@ class Consumer(KartonServiceBase):
 
         :param callback: Function of the form ``callback(task)`` where ``task``
             is a :class:`karton.Task`
-        :type callback: function
         :param name: Name of the pre-hook
-        :type name: str, optional
         """
         self._pre_hooks.append((name, callback))
 
@@ -215,14 +230,16 @@ class Consumer(KartonServiceBase):
             where ``task`` is a :class:`karton.Task` and ``exception`` is
             an exception thrown by the :meth:`karton.Consumer.process` function
             or ``None``.
-        :type callback: function
         :param name: Name of the post-hook
-        :type name: str, optional
         """
         self._post_hooks.append((name, callback))
 
     def _run_pre_hooks(self) -> None:
-        """ Run registered preprocessing hooks """
+        """
+        Run registered preprocessing hooks
+
+        :meta private:
+        """
         for name, callback in self._pre_hooks:
             try:
                 callback(cast(Task, self.current_task))
@@ -233,7 +250,13 @@ class Consumer(KartonServiceBase):
                     self.log.exception("Pre-hook failed")
 
     def _run_post_hooks(self, exception: Optional[Exception]) -> None:
-        """ Run registered postprocessing hooks """
+        """
+        Run registered postprocessing hooks
+
+        :param exception: Exception object that was caught while processing the task
+
+        :meta private:
+        """
         for name, callback in self._post_hooks:
             try:
                 callback(cast(Task, self.current_task), exception)
@@ -247,6 +270,8 @@ class Consumer(KartonServiceBase):
         """
         Blocking loop that consumes tasks and runs
         :py:meth:`karton.Consumer.process` as a handler
+
+        :meta private:
         """
         self.log.info("Service %s started", self.identity)
 
@@ -279,7 +304,16 @@ class Consumer(KartonServiceBase):
 
 class LogConsumer(KartonServiceBase):
     """
-    Base class for log consumer subsystems
+    Base class for log consumer subsystems.
+
+    You can control the exact identity of logger to bind to by setting the
+    :py:meth:`logger_name` class attribute.
+
+    The log level of consumed logs can also be selected by setting the :py:meth:`level`
+    class attribute.
+
+    :param config: Karton config to use for service configuration
+    :param identity: Karton service identitiy
     """
 
     logger_name: Optional[str] = None
@@ -293,11 +327,19 @@ class LogConsumer(KartonServiceBase):
     @abc.abstractmethod
     def process_log(self, event: Dict[str, Any]) -> None:
         """
-        Expected to be overloaded
+        The core log handler that should be overwritten in implemented loghandlers
+
+        :param event: Dictionary containing the log event data
         """
         raise NotImplementedError()
 
     def loop(self) -> None:
+        """
+        Internal loop that consumes the log queues and deals with exceptions
+        and graceful exits
+
+        :meta private:
+        """
         self.log.info("Logger %s started", self.identity)
 
         for log in self.backend.consume_log(

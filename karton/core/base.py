@@ -70,13 +70,20 @@ class KartonBase(abc.ABC):
 
             import logging
             logging.getLogger("<identity>")
+
+        :return: :py:meth:`Logging.Logger` instance
         """
         return logging.getLogger(self.identity)
 
 
 class KartonServiceBase(KartonBase):
     """
-    Karton base class for looping services
+    Karton base class for looping services.
+
+    You can set a informative 
+
+    :param config: Karton config to use for service configuration
+    :param identity: Karton service identity to use
     """
 
     version: Optional[str] = None

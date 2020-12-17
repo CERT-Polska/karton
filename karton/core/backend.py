@@ -56,6 +56,7 @@ class KartonBackend:
 
         :param identity: Karton service identity
         :param priority: Queue priority (TaskPriority enum value)
+        :return: Queue name
         """
         return f"karton.queue.{priority}:{identity}"
 
@@ -66,6 +67,7 @@ class KartonBackend:
         ordered by priority (descending). Used internally by Consumer.
 
         :param identity: Karton service identity
+        :return: List of queue names
         """
         return [
             identity,  # Backwards compatibility (2.x.x)
@@ -147,6 +149,7 @@ class KartonBackend:
         Register bind for Karton service and return the old one
 
         :param bind: KartonBind object with bind definition
+        :return: Old KartonBind that was registered under this identity
         """
         with self.redis.pipeline(transaction=True) as pipe:
             pipe.hget(KARTON_BINDS_HSET, bind.identity)
@@ -161,6 +164,7 @@ class KartonBackend:
     def unregister_bind(self, identity: str) -> None:
         """
         Removes bind for identity
+        :param bind: Identitiy to unregister
         """
         self.redis.hdel(KARTON_BINDS_HSET, identity)
 
@@ -275,10 +279,10 @@ class KartonBackend:
 
     def get_task_ids_from_queue(self, queue: str) -> List[str]:
         """
-        Return all task UIDs in queue
+        Return all task UIDs in a queue
 
         :param queue: Queue name
-        :return: Iterator with task identifiers contained in queue
+        :return: List with task identifiers contained in queue
         """
         return self.redis.lrange(queue, 0, -1)
 
@@ -362,9 +366,9 @@ class KartonBackend:
         """
         Push new log record to the logs channel
 
-        :param log_record: dict with log record
-        :param logger_name; logger name
-        :param level: log level
+        :param log_record: Dict with log record
+        :param logger_name; Logger name
+        :param level: Log level
         :return: True if any active log consumer received log record
         """
         return (
@@ -388,9 +392,9 @@ class KartonBackend:
         and/or log level, pass them via logger_name and level arguments.
 
         :param timeout: Waiting for log record timeout (default: 5)
-        :param logger_name: logger name
-        :param level: log level
-        :return: dict with log record
+        :param logger_name: Logger name
+        :param level: Log level
+        :return: Dict with log record
         """
         with self.redis.pubsub() as pubsub:
             pubsub.psubscribe(self._log_channel(logger_name, level))

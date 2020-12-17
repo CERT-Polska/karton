@@ -96,7 +96,7 @@ Payload can be accessed by Consumer using :py:meth:`Task.get_payload` method.
 
 .. code-block:: python
 
-    class Kartonik(Karton):
+    class KartonService(Karton):
         ...
         def process(self, task: Task) -> None:
             entrypoints = task.get_payload("entrypoints", default=[])
@@ -152,7 +152,7 @@ If expected resource is too big for in-memory processing or we want to launch ex
 
 .. code-block:: python
 
-    class Kartonik(Karton):
+    class KartonService(Karton):
         ...
         def process(self, task: Task) -> None:
             archive = task.get_resource("archive")
@@ -214,7 +214,7 @@ Directory resources are deserialized to the usual :class:`RemoteResource` object
 
 .. code-block:: python
 
-    class Kartonik(Karton):
+    class KartonService(Karton):
         ...
         def process(self, task: Task) -> None:
             dumps = task.get_resource("dumps")
@@ -225,7 +225,7 @@ If we don't want to extract all files, we can work directly with :class:`zipfile
 
 .. code-block:: python
 
-    class Kartonik(Karton):
+    class KartonService(Karton):
         ...
         def process(self, task: Task) -> None:
             dumps = task.get_resource("dumps")
@@ -239,7 +239,7 @@ More information about resources can be found in API documentation.
 Persistent payload
 ------------------
 
-Part of payload that is propagated to the whole task subtree. The common use-case is to keep information related not with single artifact but the whole analysis, so they're available everywhere even if not explicitly passed by the Kartonik.
+Part of payload that is propagated to the whole task subtree. The common use-case is to keep information related not with single artifact but the whole analysis, so they're available everywhere even if not explicitly passed by the Karton Service.
 
 .. code-block:: python
 
@@ -251,11 +251,11 @@ Part of payload that is propagated to the whole task subtree. The common use-cas
         }
     )
 
-Incoming persistent payload (task received by Kartonik) is merged by Karton library with the outgoing tasks (result tasks sent by Kartonik). Kartonik can't overwrite or delete the incoming payload keys. 
+Incoming persistent payload (task received by Karton Service) is merged by Karton library with the outgoing tasks (result tasks sent by Karton Service). Karton service can't overwrite or delete the incoming payload keys. 
 
 .. code-block:: python
 
-    class Kartonik(Karton):
+    class KartonService(Karton):
         ...
         def process(self, task: Task) -> None:
             uploader = task.get_payload("uploader")

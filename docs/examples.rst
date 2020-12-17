@@ -98,17 +98,16 @@ Next step is to define `process` method, this is handler for incoming tasks that
 
     def process(self, task: Task) -> None:
        if task.headers["type"] == "sample":
-           return self.process_sample()
+           return self.process_sample(task)
        else:
-           return self.process_config()
+           return self.process_config(task)
 
-    def process_sample(self):
-        remote_resource = self.current_task.get_resource("sample")
-        local_resource = self.download_resource(remote_resource)
+    def process_sample(self, task: Task) -> None:
+        sample = task.get_resource("sample")
         # ...
 
-    def process_config(self):
-        config = self.current_task.get_payload("config")
+    def process_config(self, task: Task) -> None:
+        config = task.get_payload("config")
         # ...
 
 

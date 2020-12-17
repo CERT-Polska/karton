@@ -6,6 +6,14 @@ from .task import Task, TaskState
 
 
 class KartonQueue:
+    """
+    View object represting a Karton queue
+
+    :param bind: :py:meth:`KartonBind` object representing the queue bind
+    :param tasks: List of tasks currently in queue
+    :param state: :py:meth:`KartonBackend` object to be used
+    """
+
     def __init__(
         self, bind: KartonBind, tasks: List[Task], state: "KartonState"
     ) -> None:
@@ -15,22 +23,34 @@ class KartonQueue:
 
     @property
     def last_update(self) -> float:
+        """Get the last task update from this queue"""
         return max(task.last_update for task in self.tasks)
 
     @property
     def online_consumers_count(self) -> int:
+        """Get number of consumers listening on this queue"""
         return len(self.state.replicas[self.bind.identity])
 
     @property
     def pending_tasks(self) -> List[Task]:
+        """Get queue pending tasks"""
         return [task for task in self.tasks if task.status != TaskState.CRASHED]
 
     @property
     def crashed_tasks(self) -> List[Task]:
+        """Get queue crashed tasks"""
         return [task for task in self.tasks if task.status == TaskState.CRASHED]
 
 
 class KartonAnalysis:
+    """
+    View object represting a Karton task analysis
+
+    :param root_uid: Analysis root task uid
+    :param tasks: List of tasks
+    :param state: :py:meth:`KartonBackend` object to be used
+    """
+
     def __init__(self, root_uid: str, tasks: List[Task], state: "KartonState") -> None:
         self.root_uid = root_uid
         self.tasks = tasks
@@ -38,28 +58,40 @@ class KartonAnalysis:
 
     @property
     def last_update(self) -> float:
+        """Check the last task update from the analysis"""
         return max(task.last_update for task in self.tasks)
 
     @property
     def is_done(self) -> bool:
+        """Check if the analysis is completely done"""
         return len(self.pending_tasks) == 0
 
     @property
     def pending_tasks(self) -> List[Task]:
+        """Get analysis pending tasks"""
         return [task for task in self.tasks if task.status != TaskState.CRASHED]
 
     @property
     def pending_queues(self) -> Dict[str, KartonQueue]:
+        """Group analysis tasks by their queues"""
         return get_queues_for_tasks(self.tasks, self.state)
 
     @property
     def crashed_tasks(self) -> List[Task]:
+        """Get analysis crashed tasks"""
         return [task for task in self.tasks if task.status == TaskState.CRASHED]
 
 
 def get_queues_for_tasks(
     tasks: List[Task], state: "KartonState"
 ) -> Dict[str, KartonQueue]:
+    """
+    Group task objects by their queue name
+
+    :param tasks: Task objects to group
+    :param state: :py:meth:`KartonBackend` to bind to created queues
+    :return: A dictionary containg the queue names and lists of tasks
+    """
     tasks_per_queue = defaultdict(list)
 
     for task in tasks:
@@ -84,6 +116,7 @@ class KartonState:
 
     .. versionadded: 4.0.0
 
+    :param backend: :py:meth:`KartonBackend` object to use for data fetching
     """
 
     def __init__(self, backend: KartonBackend) -> None:

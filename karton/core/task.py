@@ -2,7 +2,7 @@ import json
 import time
 import uuid
 import warnings
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple, Union
 
 from .resource import RemoteResource, ResourceBase
 
@@ -35,16 +35,19 @@ class Task(object):
     :param headers: Routing information for other systems, this is what allows for \
                     evaluation of given system usefulness for given task. \
                     Systems filter by these.
-    :type headers: :py:class:`dict`
-    :param payload: any instance of :py:class:`dict` - contains resources \
+    :param payload: Any instance of :py:class:`dict` - contains resources \
                     and additional informations
-    :type payload: :py:class:`dict`
     :param payload_persistent: Persistent payload set for whole task subtree, \
                                propagated from initial task
-    :type payload_persistent: :py:class:`dict`
     :param priority: Priority of whole task subtree, \
                      propagated from initial task like `payload_persistent`
-    :type priority: :class:`TaskPriority`
+    :param parent_uid: Id of a routed task that has created this task by a karton with \
+                       `py:meth:`send_task
+    :param root_uid: Id of a unrouted task that is the root of this tasks analysis tree
+    :param orig_uid: Id of a unrouted (or crashed routed) task that was forked to \
+                     create this task
+    :param uid: This tasks unique identifier
+    :param error: Traceback of a exception that happened while performing this task
     """
 
     def __init__(
@@ -95,6 +98,8 @@ class Task(object):
 
         Used internally by karton-system
 
+        :return: Forked copy of the original task
+
         :meta private:
         """
         new_task = Task(
@@ -140,10 +145,8 @@ class Task(object):
             :code:`Task.derive_task(headers, task)` must be
             ported to :code:`task.derive_task(headers)`
 
-        :param headers: new headers for task
-        :type headers: :py:class:`dict`
-        :rtype: :py:class:`karton.Task`
-        :return: copy of task with new headers
+        :param headers: New headers for the task
+        :return: Copy of task with new headers
         """
         new_task = Task(
             headers=headers,
@@ -154,7 +157,7 @@ class Task(object):
 
     def matches_filters(self, filters: List[Dict[str, Any]]) -> bool:
         """
-        Checks whether provided task headers are matching filters
+        Checks whether provided task headers match filters
 
         :param filters: Task header filters
         :return: True if task headers match specific filters
@@ -171,25 +174,22 @@ class Task(object):
             for task_filter in filters
         )
 
-    def set_task_parent(self, parent: "Task") -> "Task":
+    def set_task_parent(self, parent: "Task"):
         """
         Bind existing Task to parent task
 
-        :param parent: task to bind to
-        :type parent: :py:class:`karton.Task`
+        :param parent: Task to bind to
 
         :meta private:
         """
         self.parent_uid = parent.uid
         self.root_uid = parent.root_uid
-        return self
 
     def merge_persistent_payload(self, other_task: "Task") -> None:
         """
         Merge persistent payload from another task
 
-        :param other_task: task to merge persistent payload from
-        :type other_task: :py:class:`karton.Task`
+        :param other_task: Task from which to merge persistent payload
 
         :meta private:
         """
@@ -202,6 +202,8 @@ class Task(object):
     def serialize(self, indent: Optional[int] = None) -> str:
         """
         Serialize task data into JSON string
+        :param indent: Indent to use while serializing
+        :return: Seriazlied task data
 
         :meta private:
         """
@@ -237,7 +239,7 @@ class Task(object):
 
         Generates tuples (payload_bag, key, value)
 
-        :rtype: Iterator[Tuple[Dict[str, Any], str, Any]]
+        :return: An iterator over all task payload bags
         """
         for payload_bag in [self.payload, self.payload_persistent]:
             for key, value in payload_bag.items():
@@ -249,7 +251,7 @@ class Task(object):
 
         Generates tuples (key, value)
 
-        :rtype: Iterator[Tuple[str, ResourceBase]]
+        :return: An iterator over all task resources
         """
         for _, key, value in self.walk_payload_bags():
             if isinstance(value, ResourceBase):
@@ -260,6 +262,8 @@ class Task(object):
         Transforms __karton_resource__ serialized entries into
         RemoteResource object instances
 
+        :param backend: KartonBackend to use while unserializing resources
+
         :meta private:
         """
         for payload_bag, key, value in self.walk_payload_bags():
@@ -269,15 +273,13 @@ class Task(object):
                 )
 
     @staticmethod
-    def unserialize(data, backend: Optional["KartonBackend"] = None) -> "Task":
+    def unserialize(data: Union[str, bytes], backend: Optional["KartonBackend"] = None) -> "Task":
         """
         Unserialize Task instance from JSON string
 
         :param data: JSON-serialized task
-        :type data: str or bytes
-        :param backend: Backend instance (to be bound to RemoteResource objects)
-        :type backend: KartonBackend, optional if you don't want to \
-                       operate on them (e.g. karton-system)
+        :param backend: Backend instance to be bound to RemoteResource objects
+        :return: Unserialized Task object
 
         :meta private:
         """
@@ -303,19 +305,16 @@ class Task(object):
         task.unserialize_resources(backend)
         return task
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.serialize()
 
     def add_payload(self, name: str, content: Any, persistent: bool = False) -> None:
         """
         Add payload to task
 
-        :type name: str
-        :param name: name of the payload
-        :type content: json serializable
-        :param content: payload to be added
-        :type persistent: bool
-        :param persistent: flag if the param should be persistent
+        :param name: Name of the payload
+        :param content: Payload to be added
+        :param persistent: Flag if the payload should be persistent
         """
         if name in self.payload:
             raise ValueError("Payload already exists")
@@ -339,12 +338,9 @@ class Task(object):
         .. deprecated:: 3.0.0
            Use :meth:`add_payload` instead.
 
-        :type name: str
-        :param name: name of the resource
-        :type resource: :py:class:`karton.ResourceBase`
-        :param resource: resource to be added
-        :type persistent: bool
-        :param persistent: flag if the param should be persistent
+        :param name: Name of the resource
+        :param resource: Resource to be added
+        :param persistent: Flag if the resource should be persistent
         """
         warnings.warn(
             "add_resource is deprecated, use add_payload instead",
@@ -357,11 +353,9 @@ class Task(object):
         """
         Get payload from task
 
-        :type name: str
         :param name: name of the payload
-        :type default: Any (optional)
-        :param default: value to be returned if payload is not present
-        :return: payload content
+        :param default: Value to be returned if payload is not present
+        :return: Payload content
         """
         if name in self.payload_persistent:
             return self.payload_persistent[name]
@@ -374,8 +368,7 @@ class Task(object):
         Ensures that payload contains an Resource object.
         If not - raises :class:`TypeError`
 
-        :param name: name of the resource
-        :type name: str
+        :param name: Name of the resource to get
         :return: :py:class:`karton.ResourceBase` - resource with given name
         """
         resource = self.get_payload(name)
@@ -389,8 +382,7 @@ class Task(object):
 
         If payload doesn't exist or is persistent - raises KeyError
 
-        :param name: payload name to be removed
-        :type name: str
+        :param name: Payload name to be removed
         """
         del self.payload[name]
 
@@ -398,10 +390,8 @@ class Task(object):
         """
         Checks whether payload exists
 
-        :param name: name of the payload to be checked
-        :type name: str
-        :rtype: bool
-        :return: if task's payload contains payload with given name
+        :param name: Name of the payload to be checked
+        :return: If tasks payload contains a value with given name
         """
         return name in self.payload or name in self.payload_persistent
 
@@ -409,9 +399,7 @@ class Task(object):
         """
         Checks whether payload exists and is persistent
 
-        :param name: name of the payload to be checked
-        :type name: str
-        :rtype: bool
-        :return: if task's payload with given name is persistent
+        :param name: Name of the payload to be checked
+        :return: If tasks payload with given name is persistent
         """
         return name in self.payload_persistent

@@ -92,7 +92,7 @@ class KartonTestCase(unittest.TestCase):
         class CutterTestCase(KartonTestCase):
             karton_class = Cutter
 
-        def test_kartonik(self):
+        def test_karton_service(self):
             resource = TestResource('incoming', b'put content here')
             task = Task({
                 'type': 'string'
@@ -126,6 +126,11 @@ class KartonTestCase(unittest.TestCase):
         self.karton = self._karton_mock(self.config, **kwargs)  # type: ignore
 
     def get_resource_sha256(self, resource: ResourceBase) -> str:
+        """Calculate SHA256 hash for a given resource
+
+        :param resource: Resource to be hashed
+        :return: Hexencoded SHA256 digest
+        """
         h = hashlib.sha256()
         if resource._path is not None:
             with open(resource._path, "rb") as f:
@@ -141,6 +146,12 @@ class KartonTestCase(unittest.TestCase):
     def assertResourceEqual(
         self, resource: ResourceBase, expected: ResourceBase, resource_name: str
     ) -> None:
+        """Assert that two resources are equal
+
+        :param resource: Output resource
+        :param expected: Expected resource
+        :param resource_name: Resource name
+        """
         self.assertTrue(
             isinstance(resource, ResourceBase),
             "Resource type mismatch in {}".format(resource_name),
@@ -154,6 +165,12 @@ class KartonTestCase(unittest.TestCase):
     def assertPayloadBagEqual(
         self, payload: Dict[str, Any], expected: Dict[str, Any], payload_bag_name: str
     ) -> None:
+        """Assert that two payload bags are equal
+
+        :param payload: Result payload bag
+        :param expected: Expected payload bag
+        :param payload_bag_name: Bag name
+        """
         self.assertSetEqual(
             set(payload.keys()),
             set(expected.keys()),
@@ -172,6 +189,10 @@ class KartonTestCase(unittest.TestCase):
                 self.assertResourceEqual(value, other_value, path)
 
     def assertTaskEqual(self, task: Task, expected: Task) -> None:
+        """Assert that two tasks objects are equal
+        :param task: Result task
+        :param expected: Expected task
+        """
         self.assertDictEqual(task.headers, expected.headers, "Headers mismatch")
         self.assertPayloadBagEqual(task.payload, expected.payload, "payload")
         self.assertPayloadBagEqual(
@@ -180,11 +201,9 @@ class KartonTestCase(unittest.TestCase):
 
     def assertTasksEqual(self, tasks: List[Task], expected: List[Task]) -> None:
         """
-        Checks whether task lists are equal
+        Assert that two task lists are equal
         :param tasks: Result tasks list
-        :type tasks: List[:py:class:`karton.Task`]
         :param expected: Expected tasks list
-        :type expected: List[:py:class:`karton.Task`]
         """
         self.assertEqual(len(tasks), len(expected), "Incorrect number of tasks sent")
         for task, other in zip(tasks, expected):
@@ -194,9 +213,7 @@ class KartonTestCase(unittest.TestCase):
         """
         Spawns task into tested Karton subsystem instance
         :param task: Task to be spawned
-        :type task: :py:class:`karton.Task`
-        :return: Result tasks sent by Kartonik
-        :rtype: List[:py:class:`karton.Task`]
+        :return: Result tasks sent by Karton Service
         """
         for key, resource in task.iterate_resources():
             if not isinstance(resource, TestResource):
@@ -229,7 +246,7 @@ class KartonMock(object):
 
         return type(karton_class.__name__ + "Mock", (cls,), dict(karton_class.__dict__))
 
-    def __init__(self, config, **kwargs):
+    def __init__(self, config, **kwargs) -> None:
         self.config = config
         self.current_task = None
         self._result_tasks = []
@@ -239,6 +256,11 @@ class KartonMock(object):
         return logging.getLogger(self.identity)
 
     def send_task(self, task: Task) -> None:
+        """Mock the normal send_task and instead just append it to an internal
+        list of output tasks
+
+        :param task: The Task object to send
+        """
         self.log.debug("Dispatched task %s", task.uid)
 
         # Complete information about task
@@ -266,6 +288,7 @@ class KartonMock(object):
         Provides task for processing and compares result tasks with expected ones
 
         :param task: Input task for subsystem
+        :return: List of generated tasks
         """
         self._result_tasks = []
         self.current_task = task
