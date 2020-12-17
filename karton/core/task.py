@@ -1,3 +1,4 @@
+import enum
 import json
 import time
 import uuid
@@ -10,9 +11,7 @@ if TYPE_CHECKING:
     from .backend import KartonBackend
 
 
-class TaskState(object):
-    """Enum for task state"""
-
+class TaskState(enum.Enum):
     DECLARED = "Declared"  # Task declared in TASKS_QUEUE
     SPAWNED = "Spawned"  # Task spawned into subsystem queue
     STARTED = "Started"  # Task is running in subsystem
@@ -20,9 +19,7 @@ class TaskState(object):
     CRASHED = "Crashed"  # Task crashed
 
 
-class TaskPriority(object):
-    """Enum for priority of tasks"""
-
+class TaskPriority(enum.Enum):
     HIGH = "high"
     NORMAL = "normal"
     LOW = "low"
@@ -55,7 +52,7 @@ class Task(object):
         headers: Dict[str, Any],
         payload: Optional[Dict[str, Any]] = None,
         payload_persistent: Optional[Dict[str, Any]] = None,
-        priority: Optional[str] = None,
+        priority: Optional[TaskPriority] = None,
         parent_uid: Optional[str] = None,
         root_uid: Optional[str] = None,
         orig_uid: Optional[str] = None,
@@ -220,8 +217,8 @@ class Task(object):
                 "root_uid": self.root_uid,
                 "parent_uid": self.parent_uid,
                 "orig_uid": self.orig_uid,
-                "status": self.status,
-                "priority": self.priority,
+                "status": self.status.value,
+                "priority": self.priority.value,
                 "last_update": self.last_update,
                 "payload": self.payload,
                 "payload_persistent": self.payload_persistent,
@@ -296,11 +293,15 @@ class Task(object):
         task.parent_uid = task_data["parent_uid"]
         # Compatibility with <= 3.x.x (get)
         task.orig_uid = task_data.get("orig_uid", None)
-        task.status = task_data["status"]
+        task.status = TaskState(task_data["status"])
         # Compatibility with <= 3.x.x (get)
         task.error = task_data.get("error")
         # Compatibility with <= 2.x.x (get)
-        task.priority = task_data.get("priority", TaskPriority.NORMAL)
+        task.priority = (
+            TaskPriority(task_data.get("priority"))
+            if "priority" in task_data
+            else TaskPriority.NORMAL
+        )
         task.last_update = task_data.get("last_update", None)
         task.payload = task_data["payload"]
         task.payload_persistent = task_data["payload_persistent"]
