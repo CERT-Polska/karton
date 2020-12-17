@@ -33,7 +33,7 @@ Producer
 Consumer
 -------------------
 
-Consumer has to define `identity`, name used for identification and binding in RMQ and `filters` - list of dicts determining what tasks system declares it wants to process.
+Consumer has to define ``identity``, a name used for identification and binding in RMQ and ``filters`` - a list of dicts determining what types of tasks the service wants to process.
 
 Elements in the list are OR'ed and items inside dicts are AND'ed.
 
@@ -126,7 +126,7 @@ Karton
 -------------------
 Karton class is simply Producer and Consumer bundled together.
 
-As defined in `karton/karton.py`:
+As defined in `karton/core/karton.py`:
 
 .. code-block:: python
 
@@ -208,11 +208,9 @@ This can be easily done by overriding `Config` class and using that for `Karton`
 Log consumer
 ------------
 
-By default, all logs created in karton systems are pushed onto a single queue called ``karton.logs`` in the Redis database.
+By default, all logs created in karton systems are published to a specialised using the Redis ``PUBSUB`` pattern.
 
-These logs have to be collected in order to prevent our Redis server from blowing up.
-
-This is a very simple example of a system that does that and prints the messages to stderr.
+This is a very simple example of a system that implements the ``LogConsumer`` interface and prints logs to stderr.
 
 
 .. code-block:: python
@@ -227,7 +225,7 @@ This is a very simple example of a system that does that and prints the messages
         def process_log(self, event: dict) -> None:
             # there are "log" and "operation" events
             if event.get("type") == "log":
-                print(f"{event['name']}: {event['message']}", file=sys.stderr)
+                print(f"{event['name']}: {event['message']}", file=sys.stderr, flush=True)
 
 
     if __name__ == "__main__":

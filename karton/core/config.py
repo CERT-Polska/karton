@@ -20,7 +20,7 @@ class Config(object):
 
     Environment variables have higher precedence than those loaded from files.
 
-    :param path: path to additional configuration file
+    :param path: Path to additional configuration file
     """
 
     SEARCH_PATHS = [

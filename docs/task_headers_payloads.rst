@@ -21,7 +21,7 @@ Example:
         }
     )
 
-Consumers are listening for specific set of headers, which is defined by `filters`.
+Consumers listen for specific set of headers, which is defined by `filters`.
 
 
 .. code-block:: python
@@ -50,7 +50,7 @@ Consumers are listening for specific set of headers, which is defined by `filter
 
 If Karton-System finds that a task matches any of subsets defined by consumer queue filters then the task will be routed to that queue.
 
-Following the convention proposed in examples above, it means that `GenericUnpacker` will get all tasks that apply to samples directly runnable in sandbox (regardless of target platform) or Windows 32-bit only scripts.
+Following the convention proposed in examples above, it means that ``GenericUnpacker`` will get all tasks contain samples directly runnable in sandboxes (regardless of target platform) or Windows 32-bit only scripts.
 
 Headers can be used to process our input differently, depending on the kind of sample:
 
@@ -208,7 +208,7 @@ Karton library includes a helper method for that kind of archives, called :func:
     )
     self.send_task(task)
 
-Files contained in `directory_path` are stored under relative paths to the provided directory path. Default compression level is `zipfile.ZIP_DEFLATED` instead of `zipfile.ZIP_STORED`.
+Files contained in ``directory_path`` are stored under relative paths to the provided directory path. Default compression level is ``zipfile.ZIP_DEFLATED`` instead of ``zipfile.ZIP_STORED``.
 
 Directory resources are deserialized to the usual :class:`RemoteResource` objects but in contrary to the usual resources they can for example be extracted to directories using :func:`RemoteResource.extract_temporary`
 
@@ -221,7 +221,7 @@ Directory resources are deserialized to the usual :class:`RemoteResource` object
             with dumps.extract_temporary() as dumps_path:
                 ...
 
-If we don't want to extract all files, we can work directly with :class:`zipfile.ZipFile` object, which will be internally downloaded from MinIO to the temporary file using :py:meth:`RemoteResource.download_temporary_file` method internally.
+If we don't want to extract all files, we can work directly with :class:`zipfile.ZipFile` object, which will be internally downloaded from MinIO to the temporary file using :py:meth:`RemoteResource.download_temporary_file` method.
 
 .. code-block:: python
 

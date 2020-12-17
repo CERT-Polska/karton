@@ -18,7 +18,7 @@ In addition to karton, you'll also need to setup `MinIO <https://docs.min.io/doc
 Configuration
 -------------
 
-Each karton subsystem needs a `karton.ini` file that contains the connection parameters for Redis and MinIO.
+Each karton subsystem needs a ``karton.ini`` file that contains the connection parameters for Redis and MinIO.
 
 You can also use this file to store custom fields and use them e.g. by :ref:`example-overriding-config`.
 
@@ -37,7 +37,7 @@ By default, the config class will look for the config file in several places, bu
     host=localhost
     port=6379
 
-If everything was configured correctly, you should now be able to run the ``karton-system`` broker and get ``Manager karton.system started`` signaling that it's able to connect to Redis and MinIO correctly.
+If everything was configured correctly, you should now be able to run the ``karton-system`` broker and get ``"Manager karton.system started"`` signaling that it was able to connect to Redis and MinIO correctly.
 
 
 Docker-compose development setup

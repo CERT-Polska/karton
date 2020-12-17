@@ -327,7 +327,7 @@ class LogConsumer(KartonServiceBase):
     @abc.abstractmethod
     def process_log(self, event: Dict[str, Any]) -> None:
         """
-        The core log handler that should be overwritten in implemented loghandlers
+        The core log handler that should be overwritten in implemented log handlers
 
         :param event: Dictionary containing the log event data
         """
