@@ -247,7 +247,7 @@ class KartonBackend:
             KARTON_OPERATIONS_QUEUE,
             json.dumps(
                 {
-                    "status": status,
+                    "status": status.value,
                     "identity": consumer,
                     "task": task.serialize(),
                     "type": "operation",
