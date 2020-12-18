@@ -129,7 +129,7 @@ class ResourceBase(object):
         return cast(int, self._size)
 
     @property
-    def sha256(self) -> str:
+    def sha256(self) -> Optional[str]:
         """
         Resource sha256
 
