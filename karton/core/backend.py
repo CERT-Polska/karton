@@ -58,7 +58,7 @@ class KartonBackend:
         :param priority: Queue priority (TaskPriority enum value)
         :return: Queue name
         """
-        return f"karton.queue.{priority}:{identity}"
+        return f"karton.queue.{priority.value}:{identity}"
 
     @staticmethod
     def get_queue_names(identity: str) -> List[str]:
