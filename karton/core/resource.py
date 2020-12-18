@@ -129,17 +129,13 @@ class ResourceBase(object):
         return cast(int, self._size)
 
     @property
-    def sha256(self) -> str:
+    def sha256(self) -> Optional[str]:
         """
         Resource sha256
 
         :return: Hexencoded resource SHA256 hash
         """
-        sha256 = self.metadata.get("sha256")
-        if sha256 is None:
-            # SHA256 can be missing in resources from older Karton versions
-            raise ValueError("Resource is missing sha256")
-        return sha256
+        return self.metadata.get("sha256")
 
     def to_dict(self) -> Dict[str, Any]:
         # Internal serialization method
