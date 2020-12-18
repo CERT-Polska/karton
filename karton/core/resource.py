@@ -88,13 +88,6 @@ class ResourceBase(object):
                 sha256 = hashlib.sha256(self._content).hexdigest()
 
         # Empty Resource is possible here (e.g. RemoteResource)
-
-        # All normal Resources have to have a sha256 value that identifies them
-        if sha256 is None:
-            raise ValueError(
-                "Trying to create a new resource without known sha256 identifier"
-            )
-
         self.metadata["sha256"] = sha256
 
         self._uid = _uid or str(uuid.uuid4())
