@@ -135,8 +135,7 @@ class ResourceBase(object):
 
         :return: Hexencoded resource SHA256 hash
         """
-        sha256 = self.metadata.get("sha256")
-        return sha256
+        return self.metadata.get("sha256")
 
     def to_dict(self) -> Dict[str, Any]:
         # Internal serialization method
