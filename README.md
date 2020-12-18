@@ -4,20 +4,20 @@ Distributed malware processing framework based on Python, Redis and MinIO.
 
 ## The idea
 
-Karton is a framework designed for quickly creating analysis backends.
-It allows you to build flexible malware* analysis pipelines and attach new systems with very little effort.
+Karton is a robust framework for flexible analysis backends.
+It can be used to connect malware* analysis systems into a robust pipeline with very little effort.
 
-When dealing with the increasing number of threats we observe, we very often end up with a lot of scripts stuck together with duct tape and WD-40. These scripts are not production ready, but they do provide real value that should be stored and shared across systems for better threat processing.
+We're in the automation business since a long time. We're dealing with more and more threats, and we have to automate everything to keep up with incidents. Because of this, we often end up with many scripts stuck together with duct tape and WD-40. These scripts are written by analysts in the heat of the moment, fragile and ugly - but they work, and produce intel that must be stored, processed further, sent to other systems or shared with other organisations.
 
-We needed a solution that would allow us to very quickly deploy our PoC scripts and "insert" them into our analysis pipeline so that they could share their analysis results with other entities. And for this exact purpose, we created **Karton**.
+We needed a way to take our PoC scripts and easily insert them into our analysis pipeline. We also wanted to monitor their execution, centralise logging, improve robustness, reduce development inertia... For this exact purpose, we created **Karton**.
 
 
-*\* while Karton was designed with malware analysis in mind, it turned out that it performs quite nicely in other projects where microservice architecture is needed.*
+*\* while Karton was designed with malware analysis in mind, it works nicely in every microservice-oriented project.*
 
 
 ## Installation
 
-Installing the karton library is as easy as a single `pip install` command:
+Installation is as easy as a single `pip install` command:
 
 ```
 pip3 install karton-core
@@ -69,44 +69,44 @@ if __name__ == "__main__":
 
 ## Karton systems
 
-Since some Karton systems are universal and will be useful to anyone running their own Karton deployments, we've decided to open-source some of our repositories to the community.
+Some Karton systems are universal and useful to everyone. We decided to share them with the community.
 
 #### [karton](https://github.com/CERT-Polska/karton)
-This repository, contains `karton.system` service that acts as the main service responsible for dispatching tasks within the system and `karton.core` module that is used as the python library.
+This repository. It contains the `karton.system` service - main service, responsible for dispatching tasks within the system. It also contains the `karton.core` module, that is used as a library by other systems.
 
 #### [karton-dashboard](https://github.com/CERT-Polska/karton-dashboard)
-A small Flask application that allows for task and queue introspection.
+A small Flask dashboard for task and queue management and monitoring.
 
 #### [karton-classifier](https://github.com/CERT-Polska/karton-classifier)
-Our main karton "router", it classifies unknown samples/files and produces various task types depending on the matched format. 
+The "router". It recognises samples/files and produces various task types depending on the file format. Thanks to this, other systems may only listen for tasks with a specific format (for example, only `zip` archives).
 
 #### [karton-archive-extractor](https://github.com/CERT-Polska/karton-archive-extractor)
-Generic archive unpacker that uses [sflock](https://github.com/hatching/sflock) internally.
+Generic archive unpacker. Archives uploaded into the system will be extracted, and every file will be processed individually.
 
 #### [karton-config-extractor](https://github.com/CERT-Polska/karton-config-extractor)
-Malware configuration extractor that tries to extract various embedded information from malware samples and analyses.
+Malware extractor. It uses Yara rules and Python modules to extract static configuration from malware samples and analyses. It's a fishing rod, not a fish - we don't share the modules themselves. But it's easy to write your own!
 
 #### [karton-mwdb-reporter](https://github.com/CERT-Polska/karton-mwdb-reporter)
-Analysis artifact reporter that submits all samples, tags, comments and relations between them to [MWDB](https://github.com/CERT-Polska/mwdb-core).
+A very important part of the pipeline. Reporter submits all files, tags, comments and other intel produced during the analysis to [MWDB](https://github.com/CERT-Polska/mwdb-core). If you don't use MWDB yet or just prefer other backends, it's easy to write your own reporter.
 
 #### [karton-yaramatcher](https://github.com/CERT-Polska/karton-yaramatcher)
-YARA classifier that spawns new tasks containing information about matched yara rules (rules not included ;)
+Automatically runs Yara rules on all files in the pipeline, and tags samples appropriately. Rules not included ;).
 
 #### [karton-asciimagic](https://github.com/CERT-Polska/karton-asciimagic)
-Karton system that tries to extract executables (and other files) from various encodings like `hex`, `base64`, etc.
+Karton system that decodes files encoded with common methods, like `hex`, `base64`, etc. (You wouldn't believe how common it is).
 
 #### [karton-autoit-ripper](https://github.com/CERT-Polska/karton-autoit-ripper)
-A small wrapper around [AutoIt-Ripper](https://github.com/nazywam/AutoIt-Ripper) that tries to extract embedded AutoIt scripts and resources from incoming executables.
+A small wrapper around [AutoIt-Ripper](https://github.com/nazywam/AutoIt-Ripper) that extracts embedded AutoIt scripts and resources from compiled AutoIt executables.
 
 Coming soon:
 
 #### karton-drakvuf
-Malware sample processor that uploads incoming samples to [drakvuf-sandbox](https://github.com/CERT-Polska/drakvuf-sandbox) for analysis.
+Uploads incoming samples to [drakvuf-sandbox](https://github.com/CERT-Polska/drakvuf-sandbox) for dynamic analysis.
 
 #### karton-misp-pusher
-A reporter that converts the artifacts to a MISP format and submits them as events.
+A reporter, that submits observed events to MISP.
 
-Here is an example of how these systems could be linked together to create a basic malware analysis pipeline.
+This is how these systems can be used to form a basic malware analysis pipeline:
 [![](img/karton-systems.svg)](img/karton-systems.svg?raw=true)
 
 ![Co-financed by the Connecting Europe Facility by of the European Union](https://www.cert.pl/wp-content/uploads/2019/02/en_horizontal_cef_logo-1.png)
