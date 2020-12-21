@@ -49,7 +49,10 @@ class KartonBackendMock:
         self.produced_tasks.append(task)
 
     def produce_log(
-        self, log_record: Dict[str, Any], logger_name: str, level: str,
+        self,
+        log_record: Dict[str, Any],
+        logger_name: str,
+        level: str,
     ) -> bool:
         log.debug("Producing a log from [%s]: %s", logger_name, log_record)
         # Return a truthy value to signal that the message has been consumed
@@ -180,7 +183,9 @@ class KartonTestCase(unittest.TestCase):
             path = "{}.{}".format(payload_bag_name, key)
             if not isinstance(value, ResourceBase):
                 self.assertEqual(
-                    value, other_value, "Incorrect value of {}".format(path),
+                    value,
+                    other_value,
+                    "Incorrect value of {}".format(path),
                 )
             else:
                 self.assertResourceEqual(value, other_value, path)
