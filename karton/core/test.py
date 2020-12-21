@@ -1,85 +1,86 @@
 """
 Test stubs for karton subsystem unit tests
 """
-import contextlib
+import configparser
 import hashlib
 import logging
-import shutil
-import tempfile
-import time
 import unittest
-import zipfile
-from io import BytesIO
-from typing import IO, Any, Dict, Iterator, List, Optional, cast
+from typing import Any, BinaryIO, Dict, List, Optional, Union, cast
+from collections import defaultdict
+
+from .backend import KartonMetrics
+from .karton import Config
+from .resource import Resource, ResourceBase
+from .task import Task, TaskState
+from .utils import get_function_arg_num
 from unittest import mock
 
-from .karton import Consumer
-from .resource import ResourceBase
-from .task import Task
-from .utils import get_function_arg_num
 
 __all__ = ["KartonTestCase", "mock"]
 
 
-class TestResource(ResourceBase):
-    """
-    LocalResource imitating RemoteResource for test purposes.
+log = logging.getLogger()
 
-    Should be used in test cases instead of LocalResource objects.
 
-    Passing resource as path is not supported.
+class ConfigMock(Config):
+    def __init__(self) -> None:
+        self.config = configparser.ConfigParser()
 
-    :param name: Name of the resource (e.g. name of file)
-    :type name: str
-    :param content: Resource content
-    :type content: bytes or str
-    :param metadata: Resource metadata
-    :type metadata: dict, optional
-    """
 
-    def download(self) -> Optional[bytes]:
-        return self._content
+class KartonBackendMock:
+    def __init__(self) -> None:
+        self.produced_tasks = []
+        # A custom MinIO system mock
+        self.buckets: Dict[str, bytes] = defaultdict(dict)
 
-    def unload(self) -> None:
-        # Just ignore that call
-        pass
+    @property
+    def default_bucket_name(self) -> str:
+        return "karton.test"
 
-    def download_to_file(self, path: str) -> None:
-        if not self._content:
-            raise RuntimeError(
-                "Cannot download data to a file because content is set to none"
-            )
+    def register_task(self, task: Task) -> None:
+        log.debug("Registering a new task in Redis: %s", task.serialize())
 
+    def set_task_status(
+        self, task: Task, status: TaskState, consumer: Optional[str] = None
+    ) -> None:
+        log.debug("Setting task %s status to %s", task.uid, status)
+
+    def produce_unrouted_task(self, task: Task) -> None:
+        log.debug("Producing a new unrouted task")
+        self.produced_tasks.append(task)
+
+    def produce_log(
+        self, log_record: Dict[str, Any], logger_name: str, level: str,
+    ) -> bool:
+        log.debug("Producing a log from [%s]: %s", logger_name, log_record)
+        # Return a truthy value to signal that the message has been consumed
+        return True
+
+    def increment_metrics(self, metric: KartonMetrics, identity: str) -> None:
+        log.debug("Incrementing metric %s for identity %s", metric, identity)
+
+    def remove_object(self, bucket: str, object_uid: str) -> None:
+        del self.buckets[bucket][object_uid]
+
+    def upload_object(
+        self,
+        bucket: str,
+        object_uid: str,
+        content: Union[bytes, BinaryIO],
+        length: int = None,
+    ) -> None:
+        self.buckets[bucket][object_uid] = content
+
+    def download_object(self, bucket: str, object_uid: str) -> bytes:
+        return self.buckets[bucket][object_uid]
+
+    def upload_object_from_file(self, bucket: str, object_uid: str, path: str) -> None:
+        with open(path, "rb") as f:
+            self.buckets[bucket][object_uid] = f.read()
+
+    def download_object_to_file(self, bucket: str, object_uid: str, path: str) -> None:
         with open(path, "wb") as f:
-            f.write(self._content)
-
-    @contextlib.contextmanager
-    def download_temporary_file(self) -> Iterator[IO[bytes]]:
-        with tempfile.NamedTemporaryFile() as f:
-            self.download_to_file(f.name)
-            yield f
-
-    @contextlib.contextmanager
-    def zip_file(self) -> Iterator[zipfile.ZipFile]:
-        if self._content is None:
-            raise RuntimeError(
-                "Cannot zipfile resource contents because they are set to none"
-            )
-
-        yield zipfile.ZipFile(BytesIO(self._content))
-
-    def extract_to_directory(self, path: str) -> None:
-        with self.zip_file() as zf:
-            zf.extractall(path)
-
-    @contextlib.contextmanager
-    def extract_temporary(self) -> Iterator[str]:
-        tmpdir = tempfile.mkdtemp()
-        try:
-            self.extract_to_directory(tmpdir)
-            yield tmpdir
-        finally:
-            shutil.rmtree(tmpdir)
+            f.write(self.buckets[bucket][object_uid])
 
 
 class KartonTestCase(unittest.TestCase):
@@ -93,7 +94,7 @@ class KartonTestCase(unittest.TestCase):
             karton_class = Cutter
 
         def test_karton_service(self):
-            resource = TestResource('incoming', b'put content here')
+            resource = Resource('incoming', b'put content here')
             task = Task({
                 'type': 'string'
             }, payload={
@@ -115,15 +116,11 @@ class KartonTestCase(unittest.TestCase):
     config = None
     kwargs = None
 
-    longMessage = True
-
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls._karton_mock = KartonMock.from_karton(cls.karton_class)  # type: ignore
-
     def setUp(self) -> None:
         kwargs: Dict[Any, Any] = self.kwargs or {}
-        self.karton = self._karton_mock(self.config, **kwargs)  # type: ignore
+        self.karton = self.karton_class(  # type: ignore
+            config=ConfigMock(), backend=KartonBackendMock(), **kwargs
+        )
 
     def get_resource_sha256(self, resource: ResourceBase) -> str:
         """Calculate SHA256 hash for a given resource
@@ -181,9 +178,7 @@ class KartonTestCase(unittest.TestCase):
             path = "{}.{}".format(payload_bag_name, key)
             if not isinstance(value, ResourceBase):
                 self.assertEqual(
-                    value,
-                    other_value,
-                    "Incorrect value of {}".format(path),
+                    value, other_value, "Incorrect value of {}".format(path),
                 )
             else:
                 self.assertResourceEqual(value, other_value, path)
@@ -215,87 +210,16 @@ class KartonTestCase(unittest.TestCase):
         :param task: Task to be spawned
         :return: Result tasks sent by Karton Service
         """
-        for key, resource in task.iterate_resources():
-            if not isinstance(resource, TestResource):
-                raise TypeError(
-                    "Input resources must be instantiated using TestResource "
-                    "instead of plain LocalResource (payload key: '{}')".format(key)
-                )
-        return self.karton.run_task(task)
+        self.karton.backend.produced_tasks = []
+        self.karton.current_task = task
 
-
-class KartonMock(object):
-    identity = ""
-    filters: List[dict] = []
-
-    @classmethod
-    def from_karton(cls, karton_class):
-        """
-        Turns Consumer into its mocked version, so we can test subsystem
-        without interaction with infrastructure
-
-        :param karton_class: Consumer-based Karton class
-        :type karton_class: Type[Consumer]
-        :return: Type[KartonMock]
-        """
-        if not issubclass(karton_class, Consumer):
-            raise TypeError("Karton must be karton.Consumer subclass")
-
-        if "internal_process" in karton_class.__dict__:
-            raise TypeError("Karton can't override internal_process method")
-
-        return type(karton_class.__name__ + "Mock", (cls,), dict(karton_class.__dict__))
-
-    def __init__(self, config, **kwargs) -> None:
-        self.config = config
-        self.current_task: Optional[Task] = None
-        self._result_tasks: List[Task] = []
-
-    @property
-    def log(self) -> logging.Logger:
-        return logging.getLogger(self.identity)
-
-    def send_task(self, task: Task) -> None:
-        """Mock the normal send_task and instead just append it to an internal
-        list of output tasks
-
-        :param task: The Task object to send
-        """
-        self.log.debug("Dispatched task %s", task.uid)
-
-        # Complete information about task
-        if self.current_task is not None:
-            task.set_task_parent(self.current_task)
-            task.merge_persistent_payload(self.current_task)
-            task.priority = self.current_task.priority
-
-        task.last_update = time.time()
-        task.headers.update({"origin": self.identity})
-
-        self._result_tasks.append(task)
-
-    def process(self) -> None:
-        """
-        Expected to be overwritten
-
-        self.current_task contains task that triggered invocation of
-        :py:meth:`karton.Consumer.process`
-        """
-        raise NotImplementedError()
-
-    def run_task(self, task: Task) -> List[Task]:
-        """
-        Provides task for processing and compares result tasks with expected ones
-
-        :param task: Input task for subsystem
-        :return: List of generated tasks
-        """
-        self._result_tasks = []
-        self.current_task = task
-        if not self.current_task.matches_filters(self.filters):
-            raise RuntimeError("Provided task doesn't match any of filters")
-        if get_function_arg_num(self.process) == 0:
-            self.process()
+        if get_function_arg_num(self.karton.process) == 0:
+            self.karton.process()
         else:
-            self.process(self.current_task)  # type: ignore
-        return self._result_tasks
+            self.karton.process(self.karton.current_task)  # type: ignore
+
+        return self.karton.backend.produced_tasks
+
+
+# Backward compatibility
+TestResource = Resource

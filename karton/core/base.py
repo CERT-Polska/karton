@@ -15,13 +15,18 @@ class KartonBase(abc.ABC):
     identity = ""
 
     def __init__(
-        self, config: Optional[Config] = None, identity: Optional[str] = None
+        self,
+        config: Optional[Config] = None,
+        identity: Optional[str] = None,
+        backend: Optional[KartonBackend] = None,
     ) -> None:
-        self.config = config or Config()
         # If not passed via constructor - get it from class
         if identity is not None:
             self.identity = identity
-        self.backend = KartonBackend(self.config)
+
+        self.config = config or Config()
+        self.backend = backend or KartonBackend(self.config)
+
         self.log_handler = KartonLogHandler(backend=self.backend)
         self.current_task: Optional[Task] = None
 
@@ -85,14 +90,18 @@ class KartonServiceBase(KartonBase):
 
     :param config: Karton config to use for service configuration
     :param identity: Karton service identity to use
+    :param backend: Karton backend to use
     """
 
     version: Optional[str] = None
 
     def __init__(
-        self, config: Optional[Config] = None, identity: Optional[str] = None
+        self,
+        config: Optional[Config] = None,
+        identity: Optional[str] = None,
+        backend: Optional[KartonBackend] = None,
     ) -> None:
-        super().__init__(config=config, identity=identity)
+        super().__init__(config=config, identity=identity, backend=backend)
         self.setup_logger()
         self.shutdown = False
         self.killer = GracefulKiller(self.graceful_shutdown)

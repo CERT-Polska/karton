@@ -8,7 +8,7 @@ import traceback
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from .__version__ import __version__
-from .backend import KartonBind, KartonMetrics
+from .backend import KartonBind, KartonMetrics, KartonBackend
 from .base import KartonBase, KartonServiceBase
 from .config import Config
 from .resource import LocalResource
@@ -45,12 +45,18 @@ class Producer(KartonBase):
 
     :param config: Karton config to use for service configuration
     :param identity: Karton producer identity
+    :param backend: Karton backend to use
     """
 
     def __init__(
-        self, config: Optional[Config] = None, identity: Optional[str] = None
+        self,
+        config: Optional[Config] = None,
+        identity: Optional[str] = None,
+        backend: Optional[KartonBackend] = None,
     ) -> None:
-        super(Producer, self).__init__(config=config, identity=identity)
+        super(Producer, self).__init__(
+            config=config, identity=identity, backend=backend
+        )
 
     def send_task(self, task: Task) -> bool:
         """
@@ -97,6 +103,7 @@ class Consumer(KartonServiceBase):
 
     :param config: Karton config to use for service configuration
     :param identity: Karton service identity
+    :param backend: Karton backend to use
     """
 
     filters: List[Dict[str, Any]] = []
@@ -104,9 +111,14 @@ class Consumer(KartonServiceBase):
     version: Optional[str] = None
 
     def __init__(
-        self, config: Optional[Config] = None, identity: Optional[str] = None
+        self,
+        config: Optional[Config] = None,
+        identity: Optional[str] = None,
+        backend: Optional[KartonBackend] = None,
     ) -> None:
-        super(Consumer, self).__init__(config=config, identity=identity)
+        super(Consumer, self).__init__(
+            config=config, identity=identity, backend=backend
+        )
 
         if self.filters is None:
             raise ValueError("Cannot bind consumer on Empty binds")
@@ -314,15 +326,21 @@ class LogConsumer(KartonServiceBase):
 
     :param config: Karton config to use for service configuration
     :param identity: Karton service identity
+    :param backend: Karton backend to use
     """
 
     logger_filter: Optional[str] = None
     level: Optional[str] = None
 
     def __init__(
-        self, config: Optional[Config] = None, identity: Optional[str] = None
+        self,
+        config: Optional[Config] = None,
+        identity: Optional[str] = None,
+        backend: Optional[KartonBackend] = None,
     ) -> None:
-        super(LogConsumer, self).__init__(config=config, identity=identity)
+        super(LogConsumer, self).__init__(
+            config=config, identity=identity, backend=backend
+        )
 
     @abc.abstractmethod
     def process_log(self, event: Dict[str, Any]) -> None:
