@@ -8,7 +8,7 @@ import traceback
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from .__version__ import __version__
-from .backend import KartonBind, KartonMetrics, KartonBackend
+from .backend import KartonBackend, KartonBind, KartonMetrics
 from .base import KartonBase, KartonServiceBase
 from .config import Config
 from .resource import LocalResource

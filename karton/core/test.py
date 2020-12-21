@@ -5,16 +5,15 @@ import configparser
 import hashlib
 import logging
 import unittest
-from typing import Any, BinaryIO, Dict, List, Optional, Union, cast
 from collections import defaultdict
+from typing import Any, BinaryIO, Dict, List, Optional, Union, cast
+from unittest import mock
 
 from .backend import KartonMetrics
 from .karton import Config
 from .resource import Resource, ResourceBase
 from .task import Task, TaskState
 from .utils import get_function_arg_num
-from unittest import mock
-
 
 __all__ = ["KartonTestCase", "mock"]
 

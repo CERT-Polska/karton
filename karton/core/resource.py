@@ -6,17 +6,8 @@ import tempfile
 import uuid
 import zipfile
 from io import BytesIO
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    BinaryIO,
-    Dict,
-    Iterator,
-    List,
-    Optional,
-    Union,
-    cast,
-)
+from typing import (TYPE_CHECKING, Any, BinaryIO, Dict, Iterator, List,
+                    Optional, Union, cast)
 
 if TYPE_CHECKING:
     from .backend import KartonBackend
