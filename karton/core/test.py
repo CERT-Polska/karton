@@ -28,9 +28,9 @@ class ConfigMock(Config):
 
 class KartonBackendMock:
     def __init__(self) -> None:
-        self.produced_tasks = []
+        self.produced_tasks: List[Task] = []
         # A custom MinIO system mock
-        self.buckets: Dict[str, bytes] = defaultdict(dict)
+        self.buckets: Dict[str, Dict[str, bytes]] = defaultdict(dict)
 
     @property
     def default_bucket_name(self) -> str:
@@ -49,10 +49,7 @@ class KartonBackendMock:
         self.produced_tasks.append(task)
 
     def produce_log(
-        self,
-        log_record: Dict[str, Any],
-        logger_name: str,
-        level: str,
+        self, log_record: Dict[str, Any], logger_name: str, level: str,
     ) -> bool:
         log.debug("Producing a log from [%s]: %s", logger_name, log_record)
         # Return a truthy value to signal that the message has been consumed
@@ -71,7 +68,10 @@ class KartonBackendMock:
         content: Union[bytes, BinaryIO],
         length: int = None,
     ) -> None:
-        self.buckets[bucket][object_uid] = content
+        if isinstance(content, bytes):
+            self.buckets[bucket][object_uid] = content
+        else:
+            self.buckets[bucket][object_uid] = content.read()
 
     def download_object(self, bucket: str, object_uid: str) -> bytes:
         return self.buckets[bucket][object_uid]
@@ -180,9 +180,7 @@ class KartonTestCase(unittest.TestCase):
             path = "{}.{}".format(payload_bag_name, key)
             if not isinstance(value, ResourceBase):
                 self.assertEqual(
-                    value,
-                    other_value,
-                    "Incorrect value of {}".format(path),
+                    value, other_value, "Incorrect value of {}".format(path),
                 )
             else:
                 self.assertResourceEqual(value, other_value, path)
