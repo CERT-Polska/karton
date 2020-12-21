@@ -3,8 +3,7 @@ import json
 import time
 import uuid
 import warnings
-from typing import (TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple,
-                    Union)
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple, Union
 
 from .resource import RemoteResource, ResourceBase
 
