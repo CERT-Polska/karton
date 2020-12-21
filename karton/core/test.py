@@ -49,10 +49,7 @@ class KartonBackendMock:
         self.produced_tasks.append(task)
 
     def produce_log(
-        self,
-        log_record: Dict[str, Any],
-        logger_name: str,
-        level: str,
+        self, log_record: Dict[str, Any], logger_name: str, level: str,
     ) -> bool:
         log.debug("Producing a log from [%s]: %s", logger_name, log_record)
         # Return a truthy value to signal that the message has been consumed
@@ -62,6 +59,7 @@ class KartonBackendMock:
         log.debug("Incrementing metric %s for identity %s", metric, identity)
 
     def remove_object(self, bucket: str, object_uid: str) -> None:
+        log.debug("Deleting object %s from bucket %s", object_uid, bucket)
         del self.buckets[bucket][object_uid]
 
     def upload_object(
@@ -71,21 +69,26 @@ class KartonBackendMock:
         content: Union[bytes, BinaryIO],
         length: int = None,
     ) -> None:
+        log.debug("Uploading object %s to bucket %s", object_uid, bucket)
         if isinstance(content, bytes):
             self.buckets[bucket][object_uid] = content
         else:
             self.buckets[bucket][object_uid] = content.read()
 
     def download_object(self, bucket: str, object_uid: str) -> bytes:
+        log.debug("Downloading object %s from bucket %s", object_uid, bucket)
         return self.buckets[bucket][object_uid]
 
     def upload_object_from_file(self, bucket: str, object_uid: str, path: str) -> None:
+        log.debug("Uploading object %s from file from bucket %s", object_uid, bucket)
         with open(path, "rb") as f:
             self.buckets[bucket][object_uid] = f.read()
 
     def download_object_to_file(self, bucket: str, object_uid: str, path: str) -> None:
+        log.debug("Downloading object %s from bucket %s to file", object_uid, bucket)
         with open(path, "wb") as f:
             f.write(self.buckets[bucket][object_uid])
+
 
 
 class KartonTestCase(unittest.TestCase):
@@ -220,6 +223,7 @@ class KartonTestCase(unittest.TestCase):
         self.karton.backend.produced_tasks = []
         self.karton.current_task = task
 
+        # `consumer.process` might accept the incoming task as an argument or not
         if get_function_arg_num(self.karton.process) == 0:
             self.karton.process()
         else:
