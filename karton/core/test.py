@@ -49,7 +49,10 @@ class KartonBackendMock:
         self.produced_tasks.append(task)
 
     def produce_log(
-        self, log_record: Dict[str, Any], logger_name: str, level: str,
+        self,
+        log_record: Dict[str, Any],
+        logger_name: str,
+        level: str,
     ) -> bool:
         log.debug("Producing a log from [%s]: %s", logger_name, log_record)
         # Return a truthy value to signal that the message has been consumed
@@ -88,7 +91,6 @@ class KartonBackendMock:
         log.debug("Downloading object %s from bucket %s to file", object_uid, bucket)
         with open(path, "wb") as f:
             f.write(self.buckets[bucket][object_uid])
-
 
 
 class KartonTestCase(unittest.TestCase):
