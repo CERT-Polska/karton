@@ -47,14 +47,14 @@ Testing resources
 
 That was pretty simple, but what about testing karton systems that accept and spawn payloads containing resources?
 
-
-:py:meth:`karton.core.test.TestResource` is there for that exact reason. It can be used to create "fake" Resources that are not linked to real MinIO objects.
+:py:meth:`karton.core.test.KartonTestCase` already takes care of them for you. Just use normal :py:meth:`karton.core.Resource` like you would normally do.
 
 
 .. code-block:: python
 
     from reverse import ReverserKarton
     from karton.core.test import KartonTestCase
+    from karton.core import Resource
 
     class ReverserKartonTestCase(KartonTestCase):
         """Test a karton that expects a KartonResource in "file" key and spawns a new
@@ -69,8 +69,8 @@ That was pretty simple, but what about testing karton systems that accept and sp
                 input_data = f.read()
             
             # create fake, mini-independent resources
-            input_sample = TestResource("sample.txt", input_data)
-            output_sample = TestResource("sample.txt", input_data[::-1])
+            input_sample = Resource("sample.txt", input_data)
+            output_sample = Resource("sample.txt", input_data[::-1])
 
             # prepare a fake test task that matches the production format
             task = Task({
