@@ -17,6 +17,7 @@ setup(
     description="Distributed malware analysis orchestration framework",
     namespace_packages=["karton"],
     packages=["karton.core", "karton.system"],
+    package_data={"karton.core": ["py.typed"]},
     install_requires=open("requirements.txt").read().splitlines(),
     entry_points={
         'console_scripts': [
