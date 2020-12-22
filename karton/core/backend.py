@@ -402,7 +402,7 @@ class KartonBackend:
                 item = pubsub.get_message(
                     ignore_subscribe_messages=True, timeout=timeout
                 )
-                if item and item["type"] == "message":
+                if item and item["type"] == "pmessage":
                     body = json.loads(item["data"])
                     if "task" in body and isinstance(body["task"], str):
                         body["task"] = json.loads(body["task"])
