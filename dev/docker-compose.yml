@@ -18,9 +18,11 @@ services:
   system:
     build:
       context: ..
-      dockerfile: dev/system.Dockerfile
     env_file:
       - karton-vars.env
+    command:
+      - "karton-system"
+      - "--setup-bucket"
     depends_on:
       - minio
       - redis
