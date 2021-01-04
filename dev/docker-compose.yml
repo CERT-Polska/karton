@@ -21,7 +21,6 @@ services:
     env_file:
       - karton-vars.env
     command:
-      - "karton-system"
       - "--setup-bucket"
     depends_on:
       - minio
