@@ -38,4 +38,4 @@ jobs:
             - ${{ github.event.ref }}
             # docker's `latest` tag is really `default` and not latest
             - 'latest'
-          push: ${{ github.event_name == 'push' }}
+          push: true
