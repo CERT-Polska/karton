@@ -3,9 +3,6 @@ on:
   push:
     branches:
     - master
-  pull_request:
-    branches:
-    - master
 jobs:
   build_core:
     name: Build image
@@ -22,5 +19,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
           dockerfile: ./Dockerfile
           repository: certpl/karton-system
-          tags: ${{ github.sha }}
-          push: ${{ github.event_name == 'push' }}
+          tags:
+            - ${{ github.sha }}
+            - 'master'
+          push: true
