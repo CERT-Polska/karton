@@ -22,4 +22,4 @@ jobs:
           tags:
             - ${{ github.sha }}
             - 'master'
-          push: ${{ github.event_name == 'push' }}
+          push: true
