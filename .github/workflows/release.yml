@@ -32,10 +32,8 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
           dockerfile: ./Dockerfile
           repository: certpl/karton-system
-          tags:
-            - ${{ github.sha }}
-            # tag release
-            - ${{ github.event.ref }}
-            # docker's `latest` tag is really `default` and not latest
-            - 'latest'
+          tags: |
+            ${{ github.sha }}
+            ${{ github.event.ref }}
+            'latest'
           push: true

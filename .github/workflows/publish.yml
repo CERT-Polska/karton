@@ -19,7 +19,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
           dockerfile: ./Dockerfile
           repository: certpl/karton-system
-          tags:
-            - ${{ github.sha }}
-            - 'master'
+          tags: |
+            ${{ github.sha }}
+            'master'
           push: true
