@@ -20,8 +20,6 @@ jobs:
         password: ${{ secrets.pypi_password }}
   release_dockerhub:
     runs-on: ubuntu-latest
-    env:
-      DOCKER_BUILDKIT: 1
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
