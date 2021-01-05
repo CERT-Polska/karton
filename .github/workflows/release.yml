@@ -1,7 +1,7 @@
 name: Release new Karton core version
 
 on:
-  push:
+  create:
     tags: 'v*.*.*'
 
 jobs:
