@@ -1,59 +1,28 @@
 import argparse
-import json
-from collections import Counter, namedtuple
 from typing import Any, Dict, List
-
-from redis import StrictRedis
 
 from .__version__ import __version__
 from .config import Config
 from .karton import Consumer
-
-KartonBind = namedtuple(
-    "KartonBind", ["identity", "replicas", "persistent", "version", "filters"]
-)
-
-
-def get_service_binds(config: Config) -> List[KartonBind]:
-    redis = StrictRedis(decode_responses=True, **config.redis_config)
-    replica_no: Dict[Any, int] = Counter()
-
-    # count replicas for each identity
-    for client in redis.client_list():
-        replica_no[client["name"]] += 1
-
-    binds = redis.hgetall("karton.binds")
-    services = []
-    for identity, data in binds.items():
-        val = json.loads(data)
-        # karton 2.x compatibility :(
-        if isinstance(val, list):
-            val = val[0]
-
-        services.append(
-            KartonBind(
-                identity,
-                replica_no[identity],
-                val.get("persistent", True),
-                val.get("version", "2.x.x"),
-                val.get("filters", []),
-            )
-        )
-    return services
+from .backend import KartonBackend
 
 
 def print_bind_list(config: Config) -> None:
-    for k in get_service_binds(config):
-        print(k)
+    backend = KartonBackend(config=config)
+    for bind in backend.get_binds():
+        print(bind)
 
 
 def delete_bind(config: Config, karton_name: str) -> None:
-    binds = {k.identity: k for k in get_service_binds(config)}
+    backend = KartonBackend(config=config)
+    binds = {k.identity: k for k in backend.get_binds()}
+    consumers = backend.get_online_consumers()
+
     if karton_name not in binds:
         print("Trying to delete a karton bind that doesn't exist")
         return
 
-    if binds[karton_name].replicas:
+    if consumers.get(karton_name, []):
         print(
             "This bind has active replicas that need to be downscaled "
             "before it can be deleted"
@@ -92,6 +61,9 @@ def main() -> None:
         )
         if input().strip() == karton_name:
             delete_bind(config, karton_name)
+        else:
+            print("abort")
+
         return
 
     if args.list:
