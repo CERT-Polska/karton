@@ -2,9 +2,9 @@ import argparse
 from typing import Any, Dict, List
 
 from .__version__ import __version__
+from .backend import KartonBackend
 from .config import Config
 from .karton import Consumer
-from .backend import KartonBackend
 
 
 def print_bind_list(config: Config) -> None:
