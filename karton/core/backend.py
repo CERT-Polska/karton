@@ -18,7 +18,8 @@ KARTON_TASK_NAMESPACE = "karton.task"
 
 
 KartonBind = namedtuple(
-    "KartonBind", ["identity", "info", "version", "persistent", "filters", "service_version"]
+    "KartonBind",
+    ["identity", "info", "version", "persistent", "filters", "service_version"],
 )
 
 
