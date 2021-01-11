@@ -216,7 +216,7 @@ class Consumer(KartonServiceBase):
             version=__version__,
             filters=self.filters,
             persistent=self.persistent,
-            service_version=self.__class__.__version__,
+            service_version=self.__class__.version,
         )
 
     def add_pre_hook(

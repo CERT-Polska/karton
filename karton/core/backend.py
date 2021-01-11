@@ -115,7 +115,7 @@ class KartonBackend:
                 version="2.x.x",
                 persistent=not identity.endswith(".test"),
                 filters=bind,
-                service_version="?",
+                service_version=None,
             )
         return KartonBind(
             identity=identity,
@@ -123,7 +123,7 @@ class KartonBackend:
             version=bind["version"],
             persistent=bind["persistent"],
             filters=bind["filters"],
-            service_version=bind.get("service_version", "?"),
+            service_version=bind.get("service_version"),
         )
 
     def get_bind(self, identity: str) -> KartonBind:
