@@ -16,8 +16,8 @@ log = logging.getLogger(__name__)
 
 
 def get_user_option(prompt: str, default: str) -> str:
-    user_input = input(prompt + f"\n[{default}] ")
-    print("")  # just for style
+    user_input = input(prompt + "\n" + f"[{default}] ")
+    print("")  # just for style purpose
     return user_input.strip() or default
 
 
@@ -38,7 +38,7 @@ def configuration_wizard(config_filename: str) -> None:
         minio_bucket = get_user_option(
             "Enter the MinIO bucket to use", default="karton"
         )
-        minio_secure = get_user_option("Use ssl ("0" or "1")? ", default="0")
+        minio_secure = get_user_option("Use ssl? ", default="0")
 
         log.info("Testing MinIO connection...")
         minio = Minio(
@@ -53,7 +53,7 @@ def configuration_wizard(config_filename: str) -> None:
         except Exception as e:
             log.info("Error while connecting to MinIO: %s", e)
             retry = get_user_option(
-                "Do you want to try with different MinIO settings ("yes" or "no")?", default="yes"
+                "Do you want to try with different MinIO settings?", default="yes"
             )
             if retry != "yes":
                 log.info("Quitting configuration")
@@ -65,7 +65,7 @@ def configuration_wizard(config_filename: str) -> None:
         if not bucket_exists:
             log.info(
                 (
-                    "The required bucket %s does not exist. To create it automatically, start karton-system with "
+                    "The bucket %s does not exist, consider running karton-system with "
                     "--setup-bucket flag"
                 ),
                 minio_bucket,
@@ -97,7 +97,7 @@ def configuration_wizard(config_filename: str) -> None:
         except Exception as e:
             log.info("Error while connecting to Redis: %s", e)
             retry = get_user_option(
-                "Do you want to try with different Redis settings ("yes" or "no")?", default="yes"
+                "Do you want to try with different Redis settings?", default="yes"
             )
             if retry != "yes":
                 log.info("Quitting configuration")
@@ -166,7 +166,7 @@ def main() -> None:
 
     subparsers.add_parser("list", help="List active karton binds")
 
-    delete_parser = subparsers.add_parser("delete", help="Delete an unused karton bind")
+    delete_parser = subparsers.add_parser("delete", help="Delete a unused karton bind")
     delete_parser.add_argument(
         "-n", "--name", required=True, help="Karton bind identity to remove"
     )
@@ -203,33 +203,32 @@ def main() -> None:
             )
             return
 
-        return configuration_wizard(config_filename)
-    else:
-        try:
-            config = Config(args.config_file)
-        except RuntimeError as e:
-            log.error("Error while initializing the karton config: %s", e)
-            log.error(
-                (
-                    "Please correct the configuration file or run `karton configure` "
-                    "to initialize it"
-                )
-            )
-            return
+        configuration_wizard(config_filename)
+        return
 
-        if args.command == "list":
-            return print_bind_list(config)
-        elif args.command == "delete":
-            karton_name = args.name
-            print(
-                f"Are you sure you want to remove binds for karton {karton_name}?\n"
-                "Type in the karton name to confirm deletion."
+    try:
+        config = Config(args.config_file)
+    except RuntimeError as e:
+        log.error("Error while initializing the karton config: %s", e)
+        log.error(
+            (
+                "Please correct the configuration file or run `karton configure` "
+                "to initialize it"
             )
-            if input().strip() == karton_name:
-                return delete_bind(config, karton_name)
-            else:
-                log.info("abort")
-                return
+        )
+        return
+
+    if args.command == "list":
+        print_bind_list(config)
+    elif args.command == "delete":
+        karton_name = args.name
+        print(
+            f"Are you sure you want to remove binds for karton {karton_name}?\n"
+            "Type in the karton name to confirm deletion."
+        )
+        if input().strip() == karton_name:
+            delete_bind(config, karton_name)
         else:
-            parser.print_help()
-            return
+            log.info("abort")
+    else:
+        parser.print_help()
