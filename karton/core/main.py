@@ -230,3 +230,6 @@ def main() -> None:
             else:
                 log.info("abort")
                 return
+        else:
+            parser.print_help()
+            return
