@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 
 
 def get_user_option(prompt: str, default: str) -> str:
-    user_input = input(prompt + f"\n[{default}] ")
+    user_input = input(f"{prompt}\n[{default}] ")
     print("")  # just for style
     return user_input.strip() or default
 
@@ -51,7 +51,7 @@ def configuration_wizard(config_filename: str) -> None:
         try:
             bucket_exists = minio.bucket_exists(minio_bucket)
         except Exception as e:
-            log.info("Error while connecting to MinIO: %s", e)
+            log.info("Error while connecting to MinIO: %s", e, exc_info=True)
             retry = get_user_option(
                 'Do you want to try with different MinIO settings ("yes", "no")?',
                 default="yes",
@@ -96,7 +96,7 @@ def configuration_wizard(config_filename: str) -> None:
         try:
             redis.ping()
         except Exception as e:
-            log.info("Error while connecting to Redis: %s", e)
+            log.info("Error while connecting to Redis: %s", e. exc_info=True)
             retry = get_user_option(
                 'Do you want to try with different Redis settings ("yes", "no")?',
                 default="yes",
@@ -229,6 +229,6 @@ def main() -> None:
         if input().strip() == karton_name:
             delete_bind(config, karton_name)
         else:
-            log.info("abort")
+            log.info("Aborted.")
     else:
         parser.print_help()
