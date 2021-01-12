@@ -162,7 +162,9 @@ def main() -> None:
         "-v", "--verbose", action="store_true", help="More verbose log output"
     )
 
-    subparsers = parser.add_subparsers(dest="command", help="sub-command help")
+    subparsers = parser.add_subparsers(
+        dest="command", help="sub-command help", required=True
+    )
 
     subparsers.add_parser("list", help="List active karton binds")
 
@@ -230,5 +232,3 @@ def main() -> None:
             delete_bind(config, karton_name)
         else:
             log.info("abort")
-    else:
-        parser.print_help()
