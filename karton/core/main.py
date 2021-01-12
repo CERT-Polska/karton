@@ -16,8 +16,8 @@ log = logging.getLogger(__name__)
 
 
 def get_user_option(prompt: str, default: str) -> str:
-    user_input = input(prompt + "\n" + f"[{default}] ")
-    print("")  # just for style purpose
+    user_input = input(prompt + f"\n[{default}] ")
+    print("")  # just for style
     return user_input.strip() or default
 
 
@@ -38,7 +38,7 @@ def configuration_wizard(config_filename: str) -> None:
         minio_bucket = get_user_option(
             "Enter the MinIO bucket to use", default="karton"
         )
-        minio_secure = get_user_option("Use ssl? ", default="0")
+        minio_secure = get_user_option("Use ssl ("0" or "1")? ", default="0")
 
         log.info("Testing MinIO connection...")
         minio = Minio(
@@ -53,7 +53,7 @@ def configuration_wizard(config_filename: str) -> None:
         except Exception as e:
             log.info("Error while connecting to MinIO: %s", e)
             retry = get_user_option(
-                "Do you want to try with different MinIO settings?", default="yes"
+                "Do you want to try with different MinIO settings ("yes" or "no")?", default="yes"
             )
             if retry != "yes":
                 log.info("Quitting configuration")
@@ -65,7 +65,7 @@ def configuration_wizard(config_filename: str) -> None:
         if not bucket_exists:
             log.info(
                 (
-                    "The bucket %s does not exist, consider running karton-system with "
+                    "The required bucket %s does not exist. To create it automatically, start karton-system with "
                     "--setup-bucket flag"
                 ),
                 minio_bucket,
@@ -97,7 +97,7 @@ def configuration_wizard(config_filename: str) -> None:
         except Exception as e:
             log.info("Error while connecting to Redis: %s", e)
             retry = get_user_option(
-                "Do you want to try with different Redis settings?", default="yes"
+                "Do you want to try with different Redis settings ("yes" or "no")?", default="yes"
             )
             if retry != "yes":
                 log.info("Quitting configuration")
@@ -166,7 +166,7 @@ def main() -> None:
 
     subparsers.add_parser("list", help="List active karton binds")
 
-    delete_parser = subparsers.add_parser("delete", help="Delete a unused karton bind")
+    delete_parser = subparsers.add_parser("delete", help="Delete an unused karton bind")
     delete_parser.add_argument(
         "-n", "--name", required=True, help="Karton bind identity to remove"
     )
