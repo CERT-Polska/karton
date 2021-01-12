@@ -1,7 +1,7 @@
 name: Release new Karton core version
 
 on:
-  create:
+  push:
     tags: 'v*.*.*'
 
 jobs:
@@ -37,6 +37,6 @@ jobs:
         with:
           tags: |
             certpl/karton-system:${{ github.sha }}
-            certpl/karton-system:${{ github.event.ref }}
+            certpl/karton-system:${{ github.event.release.tag_name }}
             certpl/karton-system:latest
           push: true
