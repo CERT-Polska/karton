@@ -169,9 +169,7 @@ def main() -> None:
     subparsers.add_parser("list", help="List active karton binds")
 
     delete_parser = subparsers.add_parser("delete", help="Delete a unused karton bind")
-    delete_parser.add_argument(
-        "-n", "--name", required=True, help="Karton bind identity to remove"
-    )
+    delete_parser.add_argument("identity", help="Karton bind identity to remove")
 
     configure_parser = subparsers.add_parser(
         "configure", help="Create a new configuration file"
@@ -223,7 +221,7 @@ def main() -> None:
     if args.command == "list":
         print_bind_list(config)
     elif args.command == "delete":
-        karton_name = args.name
+        karton_name = args.identity
         print(
             f"Are you sure you want to remove binds for karton {karton_name}?\n"
             "Type in the karton name to confirm deletion."
