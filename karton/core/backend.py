@@ -40,7 +40,7 @@ class KartonBackend:
             decode_responses=True,
         )
         self.minio = Minio(
-            config["minio"]["address"],
+            endpoint=config["minio"]["address"],
             access_key=config["minio"]["access_key"],
             secret_key=config["minio"]["secret_key"],
             secure=bool(int(config["minio"].get("secure", True))),
