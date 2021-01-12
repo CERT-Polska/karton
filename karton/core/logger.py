@@ -10,11 +10,12 @@ from .task import Task
 class KartonLogHandler(logging.Handler):
     """Base class for karton loggers"""
 
-    def __init__(self, backend: KartonBackend) -> None:
+    def __init__(self, backend: KartonBackend, name: str) -> None:
         logging.Handler.__init__(self)
         self.backend = backend
         self.task: Optional[Task] = None
         self.is_consumer_active: bool = True
+        self.logger_name: str = name
 
     def set_task(self, task: Task) -> None:
         self.task = task
@@ -51,7 +52,7 @@ class KartonLogHandler(logging.Handler):
             log_line["task"] = self.task.serialize()
 
         log_consumed = self.backend.produce_log(
-            log_line, logger_name=record.name, level=record.levelname
+            log_line, logger_name=self.logger_name, level=record.levelname
         )
         if self.is_consumer_active and not log_consumed:
             warnings.warn("There is no active log consumer to receive logged messages.")

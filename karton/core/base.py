@@ -27,7 +27,7 @@ class KartonBase(abc.ABC):
         self.config = config or Config()
         self.backend = backend or KartonBackend(self.config)
 
-        self.log_handler = KartonLogHandler(backend=self.backend)
+        self.log_handler = KartonLogHandler(backend=self.backend, name=self.identity)
         self.current_task: Optional[Task] = None
 
     def setup_logger(self, level: Optional[Union[str, int]] = None) -> None:
