@@ -38,7 +38,7 @@ def configuration_wizard(config_filename: str) -> None:
         minio_bucket = get_user_option(
             "Enter the MinIO bucket to use", default="karton"
         )
-        minio_secure = get_user_option('Use ssl ("0", "1")?', default="0")
+        minio_secure = get_user_option('Use SSL ("0", "1")?', default="0")
 
         log.info("Testing MinIO connection...")
         minio = Minio(
@@ -196,7 +196,7 @@ def main() -> None:
         if not args.force and os.path.exists(config_filename):
             log.error(
                 (
-                    "There's already a configuration file under %s, please delete "
+                    "There's already a configuration file under %s. Please delete "
                     "it or specify a different filename using the -c argument"
                 ),
                 config_filename,
