@@ -54,7 +54,7 @@ class KartonBase(abc.ABC):
         if not self.identity:
             raise ValueError("Can't setup logger without identity")
 
-        self.log_handler.setFormatter(logging.Formatter("%(message)s"))
+        self.log_handler.setFormatter(logging.Formatter())
 
         logger = logging.getLogger(self.identity)
         logger.setLevel(log_level)
