@@ -77,7 +77,7 @@ def configuration_wizard(config_filename: str) -> None:
         "secret_key": minio_secret_key,
         "address": minio_address,
         "bucket": minio_bucket,
-        "secure": minio_secure,
+        "secure": str(bool(int(minio_secure))),
     }
 
     log.info("Configuring Redis")
