@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 
 
 def get_user_option(prompt: str, default: str) -> str:
-    user_input = input(prompt + f'\n[{default}] ')
+    user_input = input(prompt + f"\n[{default}] ")
     print("")  # just for style
     return user_input.strip() or default
 
@@ -53,7 +53,8 @@ def configuration_wizard(config_filename: str) -> None:
         except Exception as e:
             log.info("Error while connecting to MinIO: %s", e)
             retry = get_user_option(
-                'Do you want to try with different MinIO settings ("yes", "no")?', default="yes"
+                'Do you want to try with different MinIO settings ("yes", "no")?',
+                default="yes",
             )
             if retry != "yes":
                 log.info("Quitting configuration")
@@ -65,8 +66,8 @@ def configuration_wizard(config_filename: str) -> None:
         if not bucket_exists:
             log.info(
                 (
-                    "The required bucket %s does not exist. To create it automatically, start karton-system with "
-                    "--setup-bucket flag"
+                    "The required bucket %s does not exist. To create it automatically,"
+                    " start karton-system with --setup-bucket flag"
                 ),
                 minio_bucket,
             )
@@ -97,7 +98,8 @@ def configuration_wizard(config_filename: str) -> None:
         except Exception as e:
             log.info("Error while connecting to Redis: %s", e)
             retry = get_user_option(
-                'Do you want to try with different Redis settings ("yes", "no")?', default="yes"
+                'Do you want to try with different Redis settings ("yes", "no")?',
+                default="yes",
             )
             if retry != "yes":
                 log.info("Quitting configuration")
@@ -162,9 +164,7 @@ def main() -> None:
         "-v", "--verbose", action="store_true", help="More verbose log output"
     )
 
-    subparsers = parser.add_subparsers(
-        dest="command", help="sub-command help"
-    )
+    subparsers = parser.add_subparsers(dest="command", help="sub-command help")
 
     subparsers.add_parser("list", help="List active karton binds")
 
