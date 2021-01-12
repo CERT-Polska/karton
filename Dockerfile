@@ -6,4 +6,4 @@ RUN pip install -r requirements.txt
 COPY ./karton ./karton
 COPY ./setup.py ./setup.py
 RUN pip install .
-ENTRYPOINT karton-system
+ENTRYPOINT ["karton-system"]
