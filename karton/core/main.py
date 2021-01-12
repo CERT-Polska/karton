@@ -96,7 +96,7 @@ def configuration_wizard(config_filename: str) -> None:
         try:
             redis.ping()
         except Exception as e:
-            log.info("Error while connecting to Redis: %s", e. exc_info=True)
+            log.info("Error while connecting to Redis: %s", e, exc_info=True)
             retry = get_user_option(
                 'Do you want to try with different Redis settings ("yes", "no")?',
                 default="yes",
