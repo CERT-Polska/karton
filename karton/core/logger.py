@@ -46,6 +46,7 @@ class KartonLogHandler(logging.Handler):
                 log_line["excType"] = exc_type.__name__
 
         log_line["type"] = "log"
+        log_line["message"] = self.format(record)
 
         if self.task is not None:
             log_line["task"] = self.task.serialize()
