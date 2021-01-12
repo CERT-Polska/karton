@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 
 def get_user_option(prompt: str, default: str) -> str:
     user_input = input(prompt + "\n" + f"[{default}] ")
-    print("")  # just for style
+    print("")  # just for style purpose
     return user_input.strip() or default
 
 
@@ -64,7 +64,10 @@ def configuration_wizard(config_filename: str) -> None:
         log.info("Connected to MinIO successfully")
         if not bucket_exists:
             log.info(
-                "The bucket %s does not exist, consider running karton-system with --setup-bucket flag",
+                (
+                    "The bucket %s does not exist, consider running karton-system with "
+                    "--setup-bucket flag"
+                ),
                 minio_bucket,
             )
         break
@@ -107,7 +110,7 @@ def configuration_wizard(config_filename: str) -> None:
 
     config["redis"] = {
         "host": redis_host,
-        "port": int(redis_port),
+        "port": str(int(redis_port)),
     }
 
     with open(config_filename, "w") as configfile:
@@ -128,11 +131,11 @@ def delete_bind(config: Config, karton_name: str) -> None:
     consumers = backend.get_online_consumers()
 
     if karton_name not in binds:
-        print("Trying to delete a karton bind that doesn't exist")
+        log.error("Trying to delete a karton bind that doesn't exist")
         return
 
     if consumers.get(karton_name, []):
-        print(
+        log.error(
             "This bind has active replicas that need to be downscaled "
             "before it can be deleted"
         )
@@ -161,7 +164,7 @@ def main() -> None:
 
     subparsers = parser.add_subparsers(dest="command", help="sub-command help")
 
-    list_parser = subparsers.add_parser("list", help="List active karton binds")
+    subparsers.add_parser("list", help="List active karton binds")
 
     delete_parser = subparsers.add_parser("delete", help="Delete a unused karton bind")
     delete_parser.add_argument(
@@ -225,5 +228,5 @@ def main() -> None:
             if input().strip() == karton_name:
                 return delete_bind(config, karton_name)
             else:
-                print("abort")
+                log.info("abort")
                 return
