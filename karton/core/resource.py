@@ -180,7 +180,7 @@ class LocalResource(ResourceBase):
     def __init__(
         self,
         name: str,
-        content: Optional[bytes] = None,
+        content: Optional[Union[str, bytes]] = None,
         path: Optional[str] = None,
         bucket: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
