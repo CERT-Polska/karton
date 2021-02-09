@@ -36,7 +36,7 @@ Every analysis starts from **initial task** spawned by :class:`karton.Producer`.
 
 .. image:: forking-task.svg
 
-Each task is identified by a tuple of three identifiers:
+Each task is identified by a tuple of four identifiers:
 
 - **uid** - unique task identifier
 - **parent_uid** - identifier of task that spawned current task as a result of processing
