@@ -422,6 +422,9 @@ class KartonBackend:
         """
         self.redis.hincrby(metric.value, identity, 1)
 
+    def get_metrics(self, metric: KartonMetrics) -> Dict[str, int]:
+        return {k: int(v) for k, v in self.redis.hgetall(metric.value).items()}
+
     def upload_object(
         self,
         bucket: str,
