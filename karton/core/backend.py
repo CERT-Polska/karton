@@ -422,6 +422,14 @@ class KartonBackend:
         """
         self.redis.hincrby(metric.value, identity, 1)
 
+    def get_metrics(self, metric: KartonMetrics) -> Dict[str, int]:
+        """
+        Get a {karton-identity: current-number-of-tasks} mapping for a given metric.
+
+        :param metric: Operation metric type
+        """
+        return {k: int(v) for k, v in self.redis.hgetall(metric.value).items()}
+
     def upload_object(
         self,
         bucket: str,
