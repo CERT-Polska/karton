@@ -106,13 +106,13 @@ class ResourceBase(object):
         return self._uid
 
     @property
-    def content(self) -> Optional[bytes]:
+    def content(self) -> bytes:
         """
-        Resource content
+        Resource content. Must be overriden in a derived class.
 
         :return: Resource contents
         """
-        return self._content
+        raise NotImplementedError()
 
     @property
     def size(self) -> int:
@@ -200,6 +200,19 @@ class LocalResource(ResourceBase):
             _flags=_flags,
         )
         self._fd = _fd
+
+    @property
+    def content(self) -> bytes:
+        """
+        Resource content. Reads the file if the file was not read before.
+
+        :return: Content bytes
+        """
+        if self._content is None:
+            assert self._path is not None
+            with open(self._path, "rb") as local_file:
+                self._content = local_file.read()
+        return self._content
 
     @classmethod
     def from_directory(
@@ -387,11 +400,10 @@ class RemoteResource(ResourceBase):
         )
 
     @property
-    def content(self) -> Optional[bytes]:
+    def content(self) -> bytes:
         """
         Resource content. Performs download when resource was not loaded before.
 
-        Returns None if resource is local and payload is provided by path.
         :return: Content bytes
         """
         if self._content is None:
