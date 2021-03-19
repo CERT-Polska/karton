@@ -14,6 +14,7 @@ from .karton import Consumer, LogConsumer
 
 log = logging.getLogger(__name__)
 
+
 class BasicLogger(LogConsumer):
     identity = "karton.basic-logger"
 
@@ -23,6 +24,7 @@ class BasicLogger(LogConsumer):
             name = event.get("name")
             msg = event.get("message")
             print(f"[{level}] {name}: {msg}")
+
 
 def get_user_option(prompt: str, default: str) -> str:
     user_input = input(f"{prompt}\n[{default}] ")
@@ -176,7 +178,11 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command", help="sub-command help")
 
     subparsers.add_parser("list", help="List active karton binds")
-    subparsers.add_parser("logs", help="Start streaming logs")
+
+    logs_parser = subparsers.add_parser("logs", help="Start streaming logs")
+    logs_parser.add_argument(
+        "--filter", help="Service identity filter", default="*", required=False
+    )
 
     delete_parser = subparsers.add_parser("delete", help="Delete an unused karton bind")
     delete_parser.add_argument("identity", help="Karton bind identity to remove")
@@ -241,6 +247,7 @@ def main() -> None:
         else:
             log.info("Aborted.")
     elif args.command == "logs":
+        BasicLogger.logger_filter = args.filter
         BasicLogger().loop()
     else:
         parser.print_help()
