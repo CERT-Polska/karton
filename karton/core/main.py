@@ -10,10 +10,19 @@ from redis import StrictRedis
 from .__version__ import __version__
 from .backend import KartonBackend
 from .config import Config
-from .karton import Consumer
+from .karton import Consumer, LogConsumer
 
 log = logging.getLogger(__name__)
 
+class BasicLogger(LogConsumer):
+    identity = "karton.basic-logger"
+
+    def process_log(self, event):
+        if event.get("type") == "log":
+            level = event.get("levelname")
+            name = event.get("name")
+            msg = event.get("message")
+            print(f"[{level}] {name}: {msg}")
 
 def get_user_option(prompt: str, default: str) -> str:
     user_input = input(f"{prompt}\n[{default}] ")
@@ -167,6 +176,7 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command", help="sub-command help")
 
     subparsers.add_parser("list", help="List active karton binds")
+    subparsers.add_parser("logs", help="Start streaming logs")
 
     delete_parser = subparsers.add_parser("delete", help="Delete an unused karton bind")
     delete_parser.add_argument("identity", help="Karton bind identity to remove")
@@ -230,5 +240,7 @@ def main() -> None:
             delete_bind(config, karton_name)
         else:
             log.info("Aborted.")
+    elif args.command == "logs":
+        BasicLogger().loop()
     else:
         parser.print_help()
