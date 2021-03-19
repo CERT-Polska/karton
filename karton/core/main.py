@@ -180,9 +180,7 @@ def main() -> None:
     subparsers.add_parser("list", help="List active karton binds")
 
     logs_parser = subparsers.add_parser("logs", help="Start streaming logs")
-    logs_parser.add_argument(
-        "--filter", help="Service identity filter", default="*", required=False
-    )
+    logs_parser.add_argument("--filter", help="Service identity filter", required=False)
 
     delete_parser = subparsers.add_parser("delete", help="Delete an unused karton bind")
     delete_parser.add_argument("identity", help="Karton bind identity to remove")
