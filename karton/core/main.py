@@ -15,8 +15,8 @@ from .karton import Consumer, LogConsumer
 log = logging.getLogger(__name__)
 
 
-class BasicLogger(LogConsumer):
-    identity = "karton.basic-logger"
+class CliLogger(LogConsumer):
+    identity = "karton.cli-logger"
 
     def process_log(self, event):
         if event.get("type") == "log":
@@ -245,7 +245,7 @@ def main() -> None:
         else:
             log.info("Aborted.")
     elif args.command == "logs":
-        BasicLogger.logger_filter = args.filter
-        BasicLogger().loop()
+        CliLogger.logger_filter = args.filter
+        CliLogger().loop()
     else:
         parser.print_help()
