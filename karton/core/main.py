@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 class CliLogger(LogConsumer):
     identity = "karton.cli-logger"
 
-    def process_log(self, event):
+    def process_log(self, event: Dict[str, Any]) -> Any:
         if event.get("type") == "log":
             level = event.get("levelname")
             name = event.get("name")
