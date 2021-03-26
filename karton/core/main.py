@@ -10,9 +10,20 @@ from redis import StrictRedis
 from .__version__ import __version__
 from .backend import KartonBackend
 from .config import Config
-from .karton import Consumer
+from .karton import Consumer, LogConsumer
 
 log = logging.getLogger(__name__)
+
+
+class CliLogger(LogConsumer):
+    identity = "karton.cli-logger"
+
+    def process_log(self, event: Dict[str, Any]) -> Any:
+        if event.get("type") == "log":
+            level = event.get("levelname")
+            name = event.get("name")
+            msg = event.get("message")
+            print(f"[{level}] {name}: {msg}")
 
 
 def get_user_option(prompt: str, default: str) -> str:
@@ -168,6 +179,13 @@ def main() -> None:
 
     subparsers.add_parser("list", help="List active karton binds")
 
+    logs_parser = subparsers.add_parser("logs", help="Start streaming logs")
+    logs_parser.add_argument(
+        "--filter",
+        help='Service identity filter e.g. "karton.classifier-*"',
+        required=False,
+    )
+
     delete_parser = subparsers.add_parser("delete", help="Delete an unused karton bind")
     delete_parser.add_argument("identity", help="Karton bind identity to remove")
 
@@ -230,5 +248,8 @@ def main() -> None:
             delete_bind(config, karton_name)
         else:
             log.info("Aborted.")
+    elif args.command == "logs":
+        CliLogger.logger_filter = args.filter
+        CliLogger().loop()
     else:
         parser.print_help()
