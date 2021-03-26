@@ -42,8 +42,12 @@ class KartonBackend:
             secure=bool(int(config["minio"].get("secure", True))),
         )
 
-    def make_redis(self, config):
+    def make_redis(self, config) -> StrictRedis:
         """
+        Create and test a Redis connection.
+
+        :param config: The karton configuration
+        :return: Redis conection
         """
         redis_args = {
             "host": config["redis"]["host"],
