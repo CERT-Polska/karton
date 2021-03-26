@@ -88,7 +88,7 @@ class ResourceBase(object):
                 sha256 = hashlib.sha256(self._content).hexdigest()
 
         # Empty Resource is possible here (e.g. RemoteResource)
-        self.metadata["sha256"] = sha256
+        self.metadata["sha256"] = sha256  # DEPRECATED
 
         self._uid = _uid or str(uuid.uuid4())
         self._path = path
