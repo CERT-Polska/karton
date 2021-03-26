@@ -7,7 +7,7 @@ Distributed malware processing framework based on Python, Redis and MinIO.
 Karton is a robust framework for creating **flexible** and **lightweight** malware analysis backends.
 It can be used to connect malware* analysis systems into a robust pipeline with very little effort.
 
-We're in the automation business since a long time. We're dealing with more and more threats, and we have to automate everything to keep up with incidents. Because of this, we often end up with many scripts stuck together with duct tape and WD-40. These scripts are written by analysts in the heat of the moment, fragile and ugly - but they work, and produce intel that must be stored, processed further, sent to other systems or shared with other organisations.
+We've been in the automation business for a long time. We're dealing with more and more threats, and we have to automate everything to keep up with incidents. Because of this, we often end up with many scripts stuck together with ~~duck~~ duct tape and WD-40. These scripts are written by analysts in the heat of the moment, fragile and ugly - but they work, and produce intel that must be stored, processed further, sent to other systems or shared with other organisations.
 
 We needed a way to take our PoC scripts and easily insert them into our analysis pipeline. We also wanted to monitor their execution, centralise logging, improve robustness, reduce development inertia... For this exact purpose, we created **Karton**.
 
