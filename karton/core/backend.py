@@ -5,7 +5,7 @@ from io import BytesIO
 from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Tuple, Union
 
 from minio import Minio
-from redis import StrictRedis
+from redis import AuthenticationError, StrictRedis
 from urllib3.response import HTTPResponse
 
 from .task import Task, TaskPriority, TaskState
@@ -34,17 +34,38 @@ class KartonMetrics(enum.Enum):
 class KartonBackend:
     def __init__(self, config):
         self.config = config
-        self.redis = StrictRedis(
-            host=config["redis"]["host"],
-            port=int(config["redis"].get("port", 6379)),
-            decode_responses=True,
-        )
+        self.redis = self.make_redis(config)
         self.minio = Minio(
             endpoint=config["minio"]["address"],
             access_key=config["minio"]["access_key"],
             secret_key=config["minio"]["secret_key"],
             secure=bool(int(config["minio"].get("secure", True))),
         )
+
+    def make_redis(self, config) -> StrictRedis:
+        """
+        Create and test a Redis connection.
+
+        :param config: The karton configuration
+        :return: Redis conection
+        """
+        redis_args = {
+            "host": config["redis"]["host"],
+            "port": int(config["redis"].get("port", 6379)),
+            "password": config["redis"].get("password"),
+            "decode_responses": True,
+        }
+        try:
+            redis = StrictRedis(**redis_args)
+            redis.ping()
+        except AuthenticationError:
+            # Maybe we've sent a wrong password.
+            # Or maybe the server is not (yet) password protected
+            # To make smooth transition possible, try to login insecurely
+            del redis_args["password"]
+            redis = StrictRedis(**redis_args)
+            redis.ping()
+        return redis
 
     @property
     def default_bucket_name(self) -> str:

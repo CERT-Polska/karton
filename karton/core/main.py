@@ -36,20 +36,25 @@ def configuration_wizard(config_filename: str) -> None:
     config = ConfigParser()
 
     log.info("Configuring MinIO")
+    minio_access_key = "minioadmin"
+    minio_secret_key = "minioadmin"
+    minio_address = "localhost:9000"
+    minio_bucket = "karton"
+    minio_secure = "0"
     while True:
         minio_access_key = get_user_option(
-            "Enter the MinIO access key", default="minioadmin"
+            "Enter the MinIO access key", default=minio_access_key
         )
         minio_secret_key = get_user_option(
-            "Enter the MinIO secret key", default="minioadmin"
+            "Enter the MinIO secret key", default=minio_secret_key
         )
         minio_address = get_user_option(
-            "Enter the MinIO address", default="localhost:9000"
+            "Enter the MinIO address", default=minio_address
         )
         minio_bucket = get_user_option(
-            "Enter the MinIO bucket to use", default="karton"
+            "Enter the MinIO bucket to use", default=minio_bucket
         )
-        minio_secure = get_user_option('Use SSL ("0", "1")?', default="0")
+        minio_secure = get_user_option('Use SSL ("0", "1")?', default=minio_secure)
 
         log.info("Testing MinIO connection...")
         minio = Minio(
@@ -89,19 +94,25 @@ def configuration_wizard(config_filename: str) -> None:
         "secret_key": minio_secret_key,
         "address": minio_address,
         "bucket": minio_bucket,
-        "secure": str(bool(int(minio_secure))),
+        "secure": minio_secure,
     }
 
     log.info("Configuring Redis")
 
+    redis_host = "localhost"
+    redis_port = "6379"
     while True:
-        redis_host = get_user_option("Enter the Redis host", default="localhost")
-        redis_port = get_user_option("Enter the Redis port", default="6379")
+        redis_host = get_user_option("Enter the Redis host", default=redis_host)
+        redis_port = get_user_option("Enter the Redis port", default=redis_port)
+        redis_password = get_user_option(
+            "Enter the Redis password (enter to skip)", default=""
+        )
 
-        log.info("Testing Redis connection...")
+        log.info("Testing the Redis connection...")
         redis = StrictRedis(
             host=redis_host,
             port=int(redis_port),
+            password=redis_password or None,
             decode_responses=True,
         )
         try:
@@ -125,6 +136,9 @@ def configuration_wizard(config_filename: str) -> None:
         "host": redis_host,
         "port": str(int(redis_port)),
     }
+
+    if redis_password:
+        config["redis"]["password"] = redis_password
 
     with open(config_filename, "w") as configfile:
         config.write(configfile)
