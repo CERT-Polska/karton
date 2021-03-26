@@ -189,6 +189,9 @@ class LocalResource(ResourceBase):
         _fd: Optional[BinaryIO] = None,
         _flags: Optional[List[str]] = None,
     ) -> None:
+        if path is None and content is None:
+            raise ValueError("You must provide a path, content or both")
+
         super(LocalResource, self).__init__(
             name,
             content=content,
