@@ -93,7 +93,9 @@ def configuration_wizard(config_filename: str) -> None:
     while True:
         redis_host = get_user_option("Enter the Redis host", default=redis_host)
         redis_port = get_user_option("Enter the Redis port", default=redis_port)
-        redis_password = get_user_option("Enter the Redis password (enter to skip)", default="")
+        redis_password = get_user_option(
+            "Enter the Redis password (enter to skip)", default=""
+        )
 
         log.info("Testing the Redis connection...")
         redis = StrictRedis(
