@@ -5,7 +5,7 @@ from io import BytesIO
 from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Tuple, Union
 
 from minio import Minio
-from redis import StrictRedis, AuthenticationError
+from redis import AuthenticationError, StrictRedis
 from urllib3.response import HTTPResponse
 
 from .task import Task, TaskPriority, TaskState
