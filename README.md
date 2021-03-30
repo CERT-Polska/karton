@@ -100,9 +100,6 @@ A small wrapper around [AutoIt-Ripper](https://github.com/nazywam/AutoIt-Ripper)
 
 Coming soon:
 
-#### karton-drakvuf
-Uploads incoming samples to [drakvuf-sandbox](https://github.com/CERT-Polska/drakvuf-sandbox) for dynamic analysis.
-
 #### karton-misp-pusher
 A reporter, that submits observed events to MISP.
 
