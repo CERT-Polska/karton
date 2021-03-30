@@ -98,10 +98,10 @@ Karton system that decodes files encoded with common methods, like `hex`, `base6
 #### [karton-autoit-ripper](https://github.com/CERT-Polska/karton-autoit-ripper)
 A small wrapper around [AutoIt-Ripper](https://github.com/nazywam/AutoIt-Ripper) that extracts embedded AutoIt scripts and resources from compiled AutoIt executables.
 
-Coming soon:
+#### [DRAKVUF Sandbox](https://github.com/CERT-Polska/drakvuf-sandbox)
+Automated black-box malware analysis system with DRAKVUF engine under the hood, which does not require an agent on guest OS.
 
-#### karton-drakvuf
-Uploads incoming samples to [drakvuf-sandbox](https://github.com/CERT-Polska/drakvuf-sandbox) for dynamic analysis.
+Coming soon:
 
 #### karton-misp-pusher
 A reporter, that submits observed events to MISP.
