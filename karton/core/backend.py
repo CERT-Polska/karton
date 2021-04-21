@@ -1,11 +1,12 @@
 import enum
 import json
+import time
 from collections import defaultdict, namedtuple
 from io import BytesIO
 from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Tuple, Union
 
 from minio import Minio
-from redis import AuthenticationError, StrictRedis
+from redis import AuthenticationError, ConnectionError, StrictRedis
 from urllib3.response import HTTPResponse
 
 from .task import Task, TaskPriority, TaskState
@@ -41,6 +42,8 @@ class KartonBackend:
             secret_key=config["minio"]["secret_key"],
             secure=bool(int(config["minio"].get("secure", True))),
         )
+
+        self.shutdown = False
 
     def make_redis(self, config) -> StrictRedis:
         """
@@ -355,7 +358,30 @@ class KartonBackend:
         :param timeout: Waiting for item timeout (default: 0 = wait forever)
         :return: Tuple of [queue_name, item] objects or None if timeout has been reached
         """
-        return self.redis.blpop(queues, timeout=timeout)
+
+        # retry calls to be able to survive Redis restarts or intermitted network
+        # connectivity issues
+        _retries = 8
+        _delay_secs = 1
+        _backoff = 2
+        while not self.shutdown and _retries:
+            try:
+                ret = self.redis.blpop(queues, timeout=timeout)
+            except ConnectionError as ex:
+                _retries -= 1
+                if not _retries:
+                    raise ex
+
+                for _ in range(int(_delay_secs)):
+                    time.sleep(1)
+                    if self.shutdown:
+                        return None
+
+                _delay_secs *= _backoff
+            except Exception as ex:
+                raise ex
+
+        return ret
 
     def consume_routed_task(self, identity: str, timeout: int = 5) -> Optional[Task]:
         """

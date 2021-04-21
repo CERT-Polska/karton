@@ -111,6 +111,7 @@ class KartonServiceBase(KartonBase):
     def graceful_shutdown(self) -> None:
         self.log.info("Gracefully shutting down!")
         self.shutdown = True
+        self.backend.shutdown = True
 
     # Base class for Karton services
     @abc.abstractmethod
