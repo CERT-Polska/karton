@@ -255,8 +255,8 @@ class LocalResource(ResourceBase):
         # File is zipped into provided out_stream
         with zipfile.ZipFile(out_stream, "w", compression=compression) as zipf:
             for root, dirs, files in os.walk(directory_path):
-                for name in files:
-                    abs_path = os.path.join(root, name)
+                for filename in files:
+                    abs_path = os.path.join(root, filename)
                     zipf.write(abs_path, os.path.relpath(abs_path, directory_path))
 
         # Flag is required by Karton 3.x.x services to recognize that resource
