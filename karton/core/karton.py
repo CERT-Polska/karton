@@ -395,31 +395,33 @@ class Karton(Consumer, Producer):
         super(Karton, self).__init__(config=config, identity=identity, backend=backend)
 
         if self.config.config.has_section("signaling"):
-            if bool(int(self.config["signaling"].get("status", 1))):
+            if self.config.config.getboolean("signaling", "status", fallback=False):
                 self.log.info("Using status signaling")
-                self.add_pre_hook(self._send_status_task_begin, "begin")
-                self.add_post_hook(self._send_status_task_end, "end")
+                self.add_pre_hook(self._send_signaling_status_task_begin, "task_begin")
+                self.add_post_hook(self._send_signaling_status_task_end, "task_end")
 
-    def _send_status_task_begin(self, task: Task) -> None:
-        """Send a begin status task.
-
-        :meta private:
-        """
-        self._send_status_task("begin")
-
-    def _send_status_task_end(self, task: Task, ex: Optional[Exception]) -> None:
-        """Send a begin status task.
+    def _send_signaling_status_task_begin(self, task: Task) -> None:
+        """Send a begin status signaling task.
 
         :meta private:
         """
-        self._send_status_task("end")
+        self._send_signaling_status_task("task_begin")
 
-    def _send_status_task(self, status: str) -> None:
-        """Send a status task.
+    def _send_signaling_status_task_end(
+        self, task: Task, ex: Optional[Exception]
+    ) -> None:
+        """Send a begin status signaling task.
+
+        :meta private:
+        """
+        self._send_signaling_status_task("task_end")
+
+    def _send_signaling_status_task(self, status: str) -> None:
+        """Send a status signaling task.
 
         :param status: Status task identifier.
 
         :meta private:
         """
-        task = Task({"type": "status", "status": status})
+        task = Task({"type": "karton.signaling.status", "status": status})
         self.send_task(task)
