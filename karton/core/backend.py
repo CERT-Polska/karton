@@ -39,7 +39,7 @@ class KartonBackend:
             endpoint=config["minio"]["address"],
             access_key=config["minio"]["access_key"],
             secret_key=config["minio"]["secret_key"],
-            secure=bool(int(config["minio"].get("secure", True))),
+            secure=config.config.getboolean("minio", "secure", fallback=True),
         )
 
     def make_redis(self, config) -> StrictRedis:
