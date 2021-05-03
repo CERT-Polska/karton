@@ -69,7 +69,7 @@ Let's start by writing a producer that spawns new tasks.
     if __name__ == "__main__":
         foo_producer = Producer(identity="foobar-producer")
         for i in range(5):
-            task = Task(headers={"type": "foobar"}, payload={"n": i})
+            task = Task(headers={"type": "foobar"}, payload={"data": i})
             foo_producer.send_task(task)
 
 
