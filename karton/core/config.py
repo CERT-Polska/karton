@@ -21,6 +21,8 @@ class Config(object):
     Environment variables have higher precedence than those loaded from files.
 
     :param path: Path to additional configuration file
+    :param check_sections: Check if sections ``redis`` and ``minio`` are defined
+        in the configuration
     """
 
     SEARCH_PATHS = [
@@ -29,7 +31,9 @@ class Config(object):
         "./karton.ini",
     ]
 
-    def __init__(self, path: Optional[str] = None) -> None:
+    def __init__(
+        self, path: Optional[str] = None, check_sections: Optional[bool] = True
+    ) -> None:
         if path is not None:
             if not os.path.isfile(path):
                 raise IOError("Configuration file not found in " + path)
@@ -39,10 +43,18 @@ class Config(object):
         self.config.read(self.SEARCH_PATHS)
         self._load_from_env()
 
-        if not self.config.has_section("minio"):
-            raise RuntimeError("Missing MinIO configuration")
-        if not self.config.has_section("redis"):
-            raise RuntimeError("Missing Redis configuration")
+        if check_sections:
+            if not self.config.has_section("minio"):
+                raise RuntimeError("Missing MinIO configuration")
+            if not self.config.has_section("redis"):
+                raise RuntimeError("Missing Redis configuration")
+
+    @staticmethod
+    def from_dict(config_dict):
+        config = Config(path=None, check_sections=False)
+        config.config = configparser.ConfigParser()
+        config.config.read_dict(config_dict)
+        return config
 
     def _load_from_env(self):
         """Function used for loading configuration items from the environment variables
