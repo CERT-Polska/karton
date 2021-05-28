@@ -1,7 +1,7 @@
 import configparser
 import os
 import re
-from typing import Optional
+from typing import Dict, Optional
 
 
 class Config(object):
@@ -50,7 +50,7 @@ class Config(object):
                 raise RuntimeError("Missing Redis configuration")
 
     @staticmethod
-    def from_dict(config_dict):
+    def from_dict(config_dict: Dict) -> "Config":
         config = Config(path=None, check_sections=False)
         config.config = configparser.ConfigParser()
         config.config.read_dict(config_dict)
