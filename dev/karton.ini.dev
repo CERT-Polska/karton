@@ -1,7 +1,7 @@
-[minio]
-access_key = karton-test-access
-secret_key = karton-test-key
-address = localhost:9000
+[s3]
+access_key = minioadmin
+secret_key = minioadmin
+address = http://localhost:9000
 bucket = karton
 secure = 0
 

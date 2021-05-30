@@ -4,7 +4,8 @@ from collections import defaultdict, namedtuple
 from io import BytesIO
 from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Tuple, Union
 
-from minio import Minio
+import boto3
+import botocore
 from redis import AuthenticationError, StrictRedis
 from urllib3.response import HTTPResponse
 
@@ -35,11 +36,11 @@ class KartonBackend:
     def __init__(self, config):
         self.config = config
         self.redis = self.make_redis(config)
-        self.minio = Minio(
-            endpoint=config["minio"]["address"],
-            access_key=config["minio"]["access_key"],
-            secret_key=config["minio"]["secret_key"],
-            secure=config.config.getboolean("minio", "secure", fallback=True),
+        self.s3_client = boto3.client(
+            "s3",
+            aws_access_key_id=config["s3"]["access_key"],
+            aws_secret_access_key=config["s3"]["secret_key"],
+            endpoint_url=config["s3"]["address"],
         )
 
     def make_redis(self, config) -> StrictRedis:
@@ -469,7 +470,7 @@ class KartonBackend:
         if isinstance(content, bytes):
             length = len(content)
             content = BytesIO(content)
-        self.minio.put_object(bucket, object_uid, content, length)
+        self.s3_client.put_object(Bucket=bucket, Key=object_uid, Body=content)
 
     def upload_object_from_file(self, bucket: str, object_uid: str, path: str) -> None:
         """
@@ -479,7 +480,8 @@ class KartonBackend:
         :param object_uid: Object identifier
         :param path: Path to the object content
         """
-        self.minio.fput_object(bucket, object_uid, path)
+        with open(path, "rb") as f:
+            self.s3_client.put_object(Bucket=bucket, Key=object_uid, Body=f)
 
     def get_object(self, bucket: str, object_uid: str) -> HTTPResponse:
         """
@@ -493,7 +495,7 @@ class KartonBackend:
         :param object_uid: Object identifier
         :return: Response object with content
         """
-        return self.minio.get_object(bucket, object_uid)
+        return self.s3_client.get_object(Bucket=bucket, Key=object_uid)["Body"].read()
 
     def download_object(self, bucket: str, object_uid: str) -> bytes:
         """
@@ -503,12 +505,8 @@ class KartonBackend:
         :param object_uid: Object identifier
         :return: Content bytes
         """
-        reader = self.minio.get_object(bucket, object_uid)
-        try:
-            return reader.read()
-        finally:
-            reader.release_conn()
-            reader.close()
+        reader = self.s3_client.get_object(Bucket=bucket, Key=object_uid)
+        return reader["Body"].read()
 
     def download_object_to_file(self, bucket: str, object_uid: str, path: str) -> None:
         """
@@ -527,7 +525,7 @@ class KartonBackend:
         :param bucket: Bucket name
         :return: List of object identifiers
         """
-        return [object.object_name for object in self.minio.list_objects(bucket)]
+        return [object for object in self.s3_client.list_objects(Bucket=bucket)]
 
     def remove_object(self, bucket: str, object_uid: str) -> None:
         """
@@ -536,7 +534,7 @@ class KartonBackend:
         :param bucket: Bucket name
         :param object_uid: Object identifier
         """
-        self.minio.remove_object(bucket, object_uid)
+        self.s3_client.delete_object(Bucket=bucket, Key=object_uid)
 
     def check_bucket_exists(self, bucket: str, create: bool = False) -> bool:
         """
@@ -546,8 +544,14 @@ class KartonBackend:
         :param create: Create bucket if doesn't exist
         :return: True if bucket exists yet
         """
-        if self.minio.bucket_exists(bucket):
-            return True
-        if create:
-            self.minio.make_bucket(bucket)
-        return False
+        exists = True
+        try:
+            self.s3_client.head_bucket(Bucket=bucket)
+        except botocore.exceptions.ClientError as e:
+            error_code = e.response['Error']['Code']
+            if error_code == '404':
+                exists = False
+                if create:
+                    self.s3_client.create_bucket(Bucket=bucket)
+                    exists = True
+        return exists

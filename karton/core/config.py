@@ -44,7 +44,7 @@ class Config(object):
         self._load_from_env()
 
         if check_sections:
-            if not self.config.has_section("minio"):
+            if not self.config.has_section("s3"):
                 raise RuntimeError("Missing MinIO configuration")
             if not self.config.has_section("redis"):
                 raise RuntimeError("Missing Redis configuration")
@@ -86,7 +86,7 @@ class Config(object):
     @property
     def minio_config(self):
         """ Compat """
-        return dict(self.config["minio"])
+        return dict(self.config["s3"])
 
     @property
     def redis_config(self):
