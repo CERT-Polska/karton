@@ -144,11 +144,11 @@ class KartonServiceBase(KartonBase):
         )
         return parser
 
+    @staticmethod
     def _filter_from_arg(argument: str) -> Dict[str, str]:
-        parts = argument.split(",")
         new_filter = {}
-        for part in parts:
-            key, value = part.split("=")
+        for part in argument.split(","):
+            key, value = part.split("=", 1)
             new_filter[key] = value
 
         return new_filter
