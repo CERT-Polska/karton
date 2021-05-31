@@ -2,7 +2,7 @@ import abc
 import argparse
 import logging
 import textwrap
-from typing import Optional, Union, cast
+from typing import Dict, Optional, Union, cast
 
 from .backend import KartonBackend
 from .config import Config
@@ -137,7 +137,21 @@ class KartonServiceBase(KartonBase):
             "--version", action="version", version=cast(str, cls.version)
         )
         parser.add_argument("--config-file", help="Alternative configuration path")
+        parser.add_argument(
+            "--add-filter",
+            action="append",
+            help="Extend service filters, syntax: type=sample,extension=exe",
+        )
         return parser
+
+    def _filter_from_arg(argument: str) -> Dict[str, str]:
+        parts = argument.split(",")
+        new_filter = {}
+        for part in parts:
+            key, value = part.split("=")
+            new_filter[key] = value
+
+        return new_filter
 
     @classmethod
     def main(cls) -> None:
@@ -146,4 +160,8 @@ class KartonServiceBase(KartonBase):
         args = parser.parse_args()
         config = Config(args.config_file)
         service = cls(config)
+
+        for added_filter in args.add_filter:
+            service.filters.append(cls._filter_from_arg(added_filter))
+
         service.loop()
