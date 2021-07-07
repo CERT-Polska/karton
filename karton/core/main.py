@@ -264,6 +264,6 @@ def main() -> None:
             log.info("Aborted.")
     elif args.command == "logs":
         CliLogger.logger_filter = args.filter
-        CliLogger(config).loop()
+        CliLogger(config=config).loop()
     else:
         parser.print_help()
