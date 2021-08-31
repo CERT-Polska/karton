@@ -101,6 +101,12 @@ A small wrapper around [AutoIt-Ripper](https://github.com/nazywam/AutoIt-Ripper)
 #### [DRAKVUF Sandbox](https://github.com/CERT-Polska/drakvuf-sandbox)
 Automated black-box malware analysis system with DRAKVUF engine under the hood, which does not require an agent on guest OS.
 
+---
+
+This is how these systems can be used to form a basic malware analysis pipeline:
+[![](img/karton-systems.svg)](img/karton-systems.svg?raw=true)
+
+
 ## Community projects that incorporate the Karton framework
 
 #### [c3rb3ru5d3d53c/karton-unpacker](https://github.com/c3rb3ru5d3d53c/karton-unpacker)
@@ -117,9 +123,5 @@ RetDec unpacker module for the Karton framework
 
 #### [W3ndige/aurora](https://github.com/W3ndige/aurora) / [W3ndige/karton-similarity](https://github.com/W3ndige/karton-similarity)
 Malware similarity platform with modularity in mind.
-
-
-This is how these systems can be used to form a basic malware analysis pipeline:
-[![](img/karton-systems.svg)](img/karton-systems.svg?raw=true)
 
 ![Co-financed by the Connecting Europe Facility by of the European Union](https://www.cert.pl/wp-content/uploads/2019/02/en_horizontal_cef_logo-1.png)
