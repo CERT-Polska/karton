@@ -190,7 +190,7 @@ class LocalResource(ResourceBase):
         _flags: Optional[List[str]] = None,
     ) -> None:
         if path is None and content is None:
-            raise ValueError("You must provide a path, content or both")
+            raise ValueError("You must provide a path or content (but not both)")
 
         super(LocalResource, self).__init__(
             name,
