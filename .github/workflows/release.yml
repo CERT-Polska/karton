@@ -1,8 +1,8 @@
 name: Release new Karton core version
 
 on:
-  push:
-    tags: 'v*.*.*'
+  release:
+    types: [published]
 
 jobs:
   release_pypi:
