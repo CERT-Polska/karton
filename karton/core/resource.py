@@ -160,8 +160,8 @@ class LocalResource(ResourceBase):
     .. code-block:: python
 
         # Creating resource from bytes
-        sample = Resource("original_name.exe", content=b"X5O!P%@AP[4
-        \\PZX54(P^)7CC)7}$EICAR-STANDARD-ANT...")
+        sample = Resource("original_name.exe", content=b"X5O!P%@AP[4\\
+        PZX54(P^)7CC)7}$EICAR-STANDARD-ANT...")
 
         # Creating resource from path
         sample = Resource("original_name.exe", path="sample/original_name.exe")
