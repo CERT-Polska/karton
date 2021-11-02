@@ -220,6 +220,10 @@ def main() -> None:
     else:
         logging.basicConfig(level=logging.INFO)
 
+    if not args.command:
+        parser.print_help()
+        return
+
     if args.command == "configure":
         config_filename = args.config_file or "./karton.ini"
 
