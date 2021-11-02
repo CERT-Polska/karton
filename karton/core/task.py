@@ -39,7 +39,7 @@ class Task(object):
     :param priority: Priority of whole task subtree, \
                      propagated from initial task like `payload_persistent`
     :param parent_uid: Id of a routed task that has created this task by a karton with \
-                       `py:meth:`send_task
+                       :py:meth:`.send_task`
     :param root_uid: Id of a unrouted task that is the root of this tasks analysis tree
     :param orig_uid: Id of a unrouted (or crashed routed) task that was forked to \
                      create this task
