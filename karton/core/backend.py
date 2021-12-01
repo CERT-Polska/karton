@@ -368,7 +368,10 @@ class KartonBackend:
         :param timeout: Waiting for task timeout (default: 5)
         :return: Task object
         """
-        item = self.consume_queues(self.get_queue_names(identity), timeout=timeout,)
+        item = self.consume_queues(
+            self.get_queue_names(identity),
+            timeout=timeout,
+        )
         if not item:
             return None
         queue, data = item
@@ -381,7 +384,10 @@ class KartonBackend:
         )
 
     def produce_log(
-        self, log_record: Dict[str, Any], logger_name: str, level: str,
+        self,
+        log_record: Dict[str, Any],
+        logger_name: str,
+        level: str,
     ) -> bool:
         """
         Push new log record to the logs channel
@@ -549,7 +555,7 @@ class KartonBackend:
 
     def log_identity_output(self, identity: str, headers: Dict[str, Any]) -> None:
         """
-        Store the type of task outputted for given producer to 
+        Store the type of task outputted for given producer to
         be used in tracking karton service connections.
 
         :param identity: producer identity

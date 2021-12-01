@@ -1,7 +1,7 @@
 import argparse
 import json
 import time
-from typing import Optional, Dict, Any
+from typing import Optional
 
 from karton.core.__version__ import __version__
 from karton.core.backend import KARTON_TASKS_QUEUE, KartonMetrics
@@ -132,7 +132,9 @@ class SystemService(KartonServiceBase):
 
         self.log.info("[%s] Processing task %s", task.root_uid, task.uid)
         # store the producer-task relationship in redis for task tracking
-        self.backend.log_identity_output(task.headers.get("origin", "unknown"), task.headers)
+        self.backend.log_identity_output(
+            task.headers.get("origin", "unknown"), task.headers
+        )
 
         for bind in self.backend.get_binds():
             identity = bind.identity
