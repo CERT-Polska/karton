@@ -4,7 +4,11 @@ import time
 from typing import Optional
 
 from karton.core.__version__ import __version__
-from karton.core.backend import KARTON_TASKS_QUEUE, KARTON_OPERATIONS_QUEUE, KartonMetrics
+from karton.core.backend import (
+    KARTON_OPERATIONS_QUEUE,
+    KARTON_TASKS_QUEUE,
+    KartonMetrics,
+)
 from karton.core.base import KartonServiceBase
 from karton.core.config import Config
 from karton.core.task import Task, TaskState
@@ -209,7 +213,9 @@ class SystemService(KartonServiceBase):
                         self.backend.register_task(task)
                     # Pass new operation status to log
                     self.backend.produce_log(
-                        operation_body, logger_name=KARTON_OPERATIONS_QUEUE, level="INFO"
+                        operation_body,
+                        logger_name=KARTON_OPERATIONS_QUEUE,
+                        level="INFO",
                     )
             self.gc_collect()
 
