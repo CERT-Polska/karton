@@ -291,7 +291,7 @@ class KartonBackend:
         :param task: Task object
         """
         self.redis.delete(f"{KARTON_TASK_NAMESPACE}:{task.uid}")
-        for _, resource in task.iterate_resources:
+        for _, resource in task.iterate_resources():
             self.dec_object_counter(bucket=resource.bucket, object_uid=resource._uid)
 
     def get_task_queue(self, queue: str) -> List[Task]:

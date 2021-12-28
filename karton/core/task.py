@@ -108,6 +108,9 @@ class Task(object):
             root_uid=self.root_uid,
             orig_uid=self.uid,
         )
+        for _, resource in self.iterate_resources():
+            self.backend.inc_object_counter(bucket=resource.bucket, object_uid=resource._uid)
+
         return new_task
 
     def derive_task(self, headers: Dict[str, Any]) -> "Task":
