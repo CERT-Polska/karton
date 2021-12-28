@@ -27,34 +27,6 @@ class SystemService(KartonServiceBase):
         super(SystemService, self).__init__(config=config)
         self.last_gc_trigger = 0.0
 
-    def gc_collect_resources(self) -> None:
-        karton_bucket = self.backend.default_bucket_name
-        resources_to_remove = set(self.backend.list_objects(karton_bucket))
-        self.log.info("Minio has %d resources", len(resources_to_remove))
-        # tasks = self.backend.get_all_tasks()
-        # for task in tasks:
-        #     for _, resource in task.iterate_resources():
-        #         # If resource is referenced by task: remove it from set
-        #         if (
-        #             resource.bucket == karton_bucket
-        #             and resource.uid in resources_to_remove
-        #         ):
-        #             resources_to_remove.remove(resource.uid)
-        # for object_name in list(resources_to_remove):
-        #     try:
-        #         self.backend.remove_object(karton_bucket, object_name)
-        #         self.log.debug(
-        #             "GC: Removed unreferenced resource %s:%s",
-        #             karton_bucket,
-        #             object_name,
-        #         )
-        #     except Exception:
-        #         self.log.exception(
-        #             "GC: Error during resource removing %s:%s",
-        #             karton_bucket,
-        #             object_name,
-        #         )
-
     def gc_collect_tasks(self) -> None:
         root_tasks = set()
         running_root_tasks = set()
@@ -123,7 +95,6 @@ class SystemService(KartonServiceBase):
         if time.time() > (self.last_gc_trigger + self.GC_INTERVAL):
             try:
                 self.gc_collect_tasks()
-                self.gc_collect_resources()
             except Exception:
                 self.log.exception("GC: Exception during garbage collection")
             self.last_gc_trigger = time.time()
@@ -155,6 +126,9 @@ class SystemService(KartonServiceBase):
 
             if task.matches_filters(bind.filters):
                 routed_task = task.fork_task()
+                for _, resource in routed_task.iterate_resources():
+                    self.backend.inc_object_counter(bucket=resource.bucket, object_uid=resource._uid)
+
                 routed_task.status = TaskState.SPAWNED
                 routed_task.last_update = time.time()
                 routed_task.headers.update({"receiver": identity})
@@ -186,6 +160,8 @@ class SystemService(KartonServiceBase):
                         raise RuntimeError(
                             "Task disappeared while popping, this should never happen"
                         )
+                    for _, resource in task.iterate_resources():
+                        self.backend.inc_object_counter(bucket=resource.bucket, object_uid=resource._uid)
 
                     self.process_task(task)
                     task.last_update = time.time()

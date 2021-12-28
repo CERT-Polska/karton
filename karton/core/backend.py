@@ -3,6 +3,7 @@ import json
 from collections import defaultdict, namedtuple
 from io import BytesIO
 from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Tuple, Union
+import sys
 
 from minio import Minio
 from redis import AuthenticationError, StrictRedis
@@ -472,7 +473,6 @@ class KartonBackend:
             length = len(content)
             content = BytesIO(content)
         self.minio.put_object(bucket, object_uid, content, length)
-        self.set_object_counter(bucket=bucket, object_uid=object_uid)
 
     def upload_object_from_file(self, bucket: str, object_uid: str, path: str) -> None:
         """
@@ -483,7 +483,6 @@ class KartonBackend:
         :param path: Path to the object content
         """
         self.minio.fput_object(bucket, object_uid, path)
-        self.set_object_counter(bucket=bucket, object_uid=object_uid)
 
     def get_object(self, bucket: str, object_uid: str) -> HTTPResponse:
         """
@@ -557,9 +556,6 @@ class KartonBackend:
         return False
 
 
-    def set_object_counter(self, bucket: str, object_uid: str) -> None:
-        assert self.redis.hincrby(KARTON_BINDS_REFCOUNT, f"{bucket}.{object_uid}", 1) == 1
-
     def inc_object_counter(self, bucket: str, object_uid: str) -> int:
         return self.redis.hincrby(KARTON_BINDS_REFCOUNT, f"{bucket}.{object_uid}", 1)
 
@@ -569,4 +565,5 @@ class KartonBackend:
         # If this is the last reference to the object, we need to remove it
         if new_val == 0:
             self.remove_object(bucket=bucket, object_uid=object_uid)
+            self.redis.hdel(KARTON_BINDS_REFCOUNT, f"{bucket}.{object_uid}")
         return new_val
