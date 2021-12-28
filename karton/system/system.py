@@ -30,29 +30,30 @@ class SystemService(KartonServiceBase):
     def gc_collect_resources(self) -> None:
         karton_bucket = self.backend.default_bucket_name
         resources_to_remove = set(self.backend.list_objects(karton_bucket))
-        tasks = self.backend.get_all_tasks()
-        for task in tasks:
-            for _, resource in task.iterate_resources():
-                # If resource is referenced by task: remove it from set
-                if (
-                    resource.bucket == karton_bucket
-                    and resource.uid in resources_to_remove
-                ):
-                    resources_to_remove.remove(resource.uid)
-        for object_name in list(resources_to_remove):
-            try:
-                self.backend.remove_object(karton_bucket, object_name)
-                self.log.debug(
-                    "GC: Removed unreferenced resource %s:%s",
-                    karton_bucket,
-                    object_name,
-                )
-            except Exception:
-                self.log.exception(
-                    "GC: Error during resource removing %s:%s",
-                    karton_bucket,
-                    object_name,
-                )
+        self.log.info("Minio has %d resources", len(resources_to_remove))
+        # tasks = self.backend.get_all_tasks()
+        # for task in tasks:
+        #     for _, resource in task.iterate_resources():
+        #         # If resource is referenced by task: remove it from set
+        #         if (
+        #             resource.bucket == karton_bucket
+        #             and resource.uid in resources_to_remove
+        #         ):
+        #             resources_to_remove.remove(resource.uid)
+        # for object_name in list(resources_to_remove):
+        #     try:
+        #         self.backend.remove_object(karton_bucket, object_name)
+        #         self.log.debug(
+        #             "GC: Removed unreferenced resource %s:%s",
+        #             karton_bucket,
+        #             object_name,
+        #         )
+        #     except Exception:
+        #         self.log.exception(
+        #             "GC: Error during resource removing %s:%s",
+        #             karton_bucket,
+        #             object_name,
+        #         )
 
     def gc_collect_tasks(self) -> None:
         root_tasks = set()

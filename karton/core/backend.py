@@ -15,7 +15,7 @@ KARTON_OPERATIONS_QUEUE = "karton.operations"
 KARTON_LOG_CHANNEL = "karton.log"
 KARTON_BINDS_HSET = "karton.binds"
 KARTON_TASK_NAMESPACE = "karton.task"
-
+KARTON_BINDS_REFCOUNT = "karton.refcount"
 
 KartonBind = namedtuple(
     "KartonBind",
@@ -291,6 +291,8 @@ class KartonBackend:
         :param task: Task object
         """
         self.redis.delete(f"{KARTON_TASK_NAMESPACE}:{task.uid}")
+        for _, resource in task.iterate_resources:
+            self.dec_object_counter(bucket=resource.bucket, object_uid=resource._uid)
 
     def get_task_queue(self, queue: str) -> List[Task]:
         """
@@ -470,6 +472,7 @@ class KartonBackend:
             length = len(content)
             content = BytesIO(content)
         self.minio.put_object(bucket, object_uid, content, length)
+        self.set_object_counter(bucket=bucket, object_uid=object_uid)
 
     def upload_object_from_file(self, bucket: str, object_uid: str, path: str) -> None:
         """
@@ -480,6 +483,7 @@ class KartonBackend:
         :param path: Path to the object content
         """
         self.minio.fput_object(bucket, object_uid, path)
+        self.set_object_counter(bucket=bucket, object_uid=object_uid)
 
     def get_object(self, bucket: str, object_uid: str) -> HTTPResponse:
         """
@@ -551,3 +555,18 @@ class KartonBackend:
         if create:
             self.minio.make_bucket(bucket)
         return False
+
+
+    def set_object_counter(self, bucket: str, object_uid: str) -> None:
+        assert self.redis.hincrby(KARTON_BINDS_REFCOUNT, f"{bucket}.{object_uid}", 1) == 1
+
+    def inc_object_counter(self, bucket: str, object_uid: str) -> int:
+        return self.redis.hincrby(KARTON_BINDS_REFCOUNT, f"{bucket}.{object_uid}", 1)
+
+    def dec_object_counter(self, bucket: str, object_uid: str) -> int:
+        new_val = self.redis.hincrby(KARTON_BINDS_REFCOUNT, f"{bucket}.{object_uid}", -1)
+
+        # If this is the last reference to the object, we need to remove it
+        if new_val == 0:
+            self.remove_object(bucket=bucket, object_uid=object_uid)
+        return new_val
