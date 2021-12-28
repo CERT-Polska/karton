@@ -4,7 +4,7 @@ import time
 from typing import Optional
 
 from karton.core.__version__ import __version__
-from karton.core.backend import KARTON_TASKS_QUEUE, KartonMetrics
+from karton.core.backend import KARTON_TASKS_QUEUE, KARTON_OPERATIONS_QUEUE, KartonMetrics
 from karton.core.base import KartonServiceBase
 from karton.core.config import Config
 from karton.core.task import Task, TaskState
@@ -172,13 +172,13 @@ class SystemService(KartonServiceBase):
             # karton.operations to avoid races Timeout must be shorter than GC_INTERVAL,
             # but not too long allowing graceful shutdown
             data = self.backend.consume_queues(
-                ["karton.tasks", "karton.operations"], timeout=5
+                [KARTON_TASKS_QUEUE, KARTON_OPERATIONS_QUEUE], timeout=5
             )
             if data:
                 queue, body = data
                 if not isinstance(body, str):
                     body = body.decode("utf-8")
-                if queue == "karton.tasks":
+                if queue == KARTON_TASKS_QUEUE:
                     task_uid = body
                     task = self.backend.get_task(task_uid)
                     if task is None:
@@ -191,7 +191,7 @@ class SystemService(KartonServiceBase):
                     task.status = TaskState.FINISHED
                     # Directly update the task status to be finished
                     self.backend.register_task(task)
-                elif queue == "karton.operations":
+                elif queue == KARTON_OPERATIONS_QUEUE:
                     operation_body = json.loads(body)
                     task = Task.unserialize(operation_body["task"])
                     new_status = TaskState(operation_body["status"])
@@ -209,7 +209,7 @@ class SystemService(KartonServiceBase):
                         self.backend.register_task(task)
                     # Pass new operation status to log
                     self.backend.produce_log(
-                        operation_body, logger_name="karton.operations", level="INFO"
+                        operation_body, logger_name=KARTON_OPERATIONS_QUEUE, level="INFO"
                     )
             self.gc_collect()
 
