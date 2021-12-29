@@ -5,6 +5,7 @@ from io import BytesIO
 from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Tuple, Union
 
 from minio import Minio
+from minio.deleteobjects import DeleteObject
 from redis import AuthenticationError, StrictRedis
 from urllib3.response import HTTPResponse
 
@@ -292,6 +293,16 @@ class KartonBackend:
         """
         self.redis.delete(f"{KARTON_TASK_NAMESPACE}:{task.uid}")
 
+
+    def delete_tasks(self, tasks: List[Task]) -> None:
+        """
+        Remove multiple tasks from Redis
+
+        :param tasks: list of Task objects
+        """
+        keys = [f"{KARTON_TASK_NAMESPACE}:{task.uid}" for task in tasks]
+        self.redis.delete(*keys)
+
     def get_task_queue(self, queue: str) -> List[Task]:
         """
         Return all tasks in provided queue
@@ -443,6 +454,12 @@ class KartonBackend:
         """
         self.redis.hincrby(metric.value, identity, 1)
 
+    def increment_metrics_list(self, metric: KartonMetrics, identities: List[str]) -> None:
+        p = self.redis.pipeline()
+        for identity in identities:
+            p.hincrby(metric.value, identity, 1)
+        p.execute()
+
     def get_metrics(self, metric: KartonMetrics) -> Dict[str, int]:
         """
         Get a {karton-identity: current-number-of-tasks} mapping for a given metric.
@@ -537,6 +554,18 @@ class KartonBackend:
         :param object_uid: Object identifier
         """
         self.minio.remove_object(bucket, object_uid)
+
+    def remove_objects(self, bucket: str, object_uids: List[str]) -> None:
+        """
+        Bulk remove resource objects from object storage
+
+        :param bucket: Bucket name
+        :param object_uid: Object identifiers
+        """
+        delete_objects = [DeleteObject(uid) for uid in object_uids]
+        pir = self.minio.remove_objects(bucket, delete_objects)
+        for x in pir:
+            print(x)
 
     def check_bucket_exists(self, bucket: str, create: bool = False) -> bool:
         """

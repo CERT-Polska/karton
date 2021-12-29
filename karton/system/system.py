@@ -23,14 +23,29 @@ class SystemService(KartonServiceBase):
     TASK_STARTED_TIMEOUT = 24 * 3600
     TASK_CRASHED_TIMEOUT = 3 * 24 * 3600
 
-    def __init__(self, config: Optional[Config]) -> None:
+    def __init__(
+        self,
+        config: Optional[Config],
+        enable_gc: bool = True,
+        enable_router: bool = True,
+        gc_inteval: int = 3*60,
+    ) -> None:
         super(SystemService, self).__init__(config=config)
-        self.last_gc_trigger = 0.0
+        self.last_gc_trigger = time.time()
+        self.enable_gc = enable_gc
+        self.enable_router = enable_router
+        self.gc_inteval = gc_inteval
 
     def gc_collect_resources(self) -> None:
         karton_bucket = self.backend.default_bucket_name
+        start = time.time()
         resources_to_remove = set(self.backend.list_objects(karton_bucket))
+        self.log.info("Resources: List objects: %s", time.time() - start)
+        self.log.info("Resources: List objects: %s objects", len(resources_to_remove))
+        start = time.time()
         tasks = self.backend.get_all_tasks()
+        self.log.info("Resources: Get all tasks: %s", time.time() - start)
+        start = time.time()
         for task in tasks:
             for _, resource in task.iterate_resources():
                 # If resource is referenced by task: remove it from set
@@ -39,27 +54,23 @@ class SystemService(KartonServiceBase):
                     and resource.uid in resources_to_remove
                 ):
                     resources_to_remove.remove(resource.uid)
-        for object_name in list(resources_to_remove):
-            try:
-                self.backend.remove_object(karton_bucket, object_name)
-                self.log.debug(
-                    "GC: Removed unreferenced resource %s:%s",
-                    karton_bucket,
-                    object_name,
-                )
-            except Exception:
-                self.log.exception(
-                    "GC: Error during resource removing %s:%s",
-                    karton_bucket,
-                    object_name,
-                )
+        self.log.info("Resources: For loop: %s", time.time() - start)
+        start = time.time()
+        if resources_to_remove:
+            self.log.info("Resources: Removing %s resources", len(resources_to_remove))
+            self.backend.remove_objects(karton_bucket, list(resources_to_remove))
+        self.log.info("Resources: Remove loop: %s", time.time() - start)
 
     def gc_collect_tasks(self) -> None:
         root_tasks = set()
         running_root_tasks = set()
+        start = time.time()
         tasks = self.backend.get_all_tasks()
+        self.log.info("Tasks: Get all tasks: %s", time.time() - start)
         enqueued_task_uids = self.backend.get_task_ids_from_queue(KARTON_TASKS_QUEUE)
+
         current_time = time.time()
+        to_delete = []
         for task in tasks:
             root_tasks.add(task.root_uid)
             will_delete = False
@@ -107,24 +118,75 @@ class SystemService(KartonServiceBase):
                     task.headers.get("receiver", "<unknown>"),
                 )
             if will_delete:
-                self.backend.delete_task(task)
-                self.backend.increment_metrics(
-                    KartonMetrics.TASK_GARBAGE_COLLECTED,
-                    task.headers.get("receiver", "unknown"),
-                )
+                to_delete.append(task)
             else:
                 running_root_tasks.add(task.root_uid)
+
+        start = time.time()
+        if to_delete:
+            self.log.info("Tasks: Deleting %s tasks", len(to_delete))
+            to_increment = [task.headers.get("receiver", "unknown") for tas in to_delete]
+            self.backend.delete_tasks(to_delete)
+            self.backend.increment_metrics_list(KartonMetrics.TASK_GARBAGE_COLLECTED, to_increment)
+        self.log.info("Tasks: Big loop: %s", time.time() - start)
+
         for finished_root_task in root_tasks.difference(running_root_tasks):
             # TODO: Notification needed
             self.log.debug("GC: Finished root task %s", finished_root_task)
 
+    def process_routing(self) -> None:
+        # Order does matter! task dispatching must be before
+        # karton.operations to avoid races Timeout must be shorter than self.gc_inteval,
+        # but not too long allowing graceful shutdown
+        data = self.backend.consume_queues(
+            ["karton.tasks", "karton.operations"], timeout=5
+        )
+        if data:
+            queue, body = data
+            if not isinstance(body, str):
+                body = body.decode("utf-8")
+            if queue == "karton.tasks":
+                task_uid = body
+                task = self.backend.get_task(task_uid)
+                if task is None:
+                    raise RuntimeError(
+                        "Task disappeared while popping, this should never happen"
+                    )
+
+                self.process_task(task)
+                task.last_update = time.time()
+                task.status = TaskState.FINISHED
+                # Directly update the task status to be finished
+                self.backend.register_task(task)
+            elif queue == "karton.operations":
+                operation_body = json.loads(body)
+                task = Task.unserialize(operation_body["task"])
+                new_status = TaskState(operation_body["status"])
+                if task.status != new_status:
+                    task.last_update = time.time()
+                    task.status = new_status
+                    self.log.info(
+                        "[%s] %s %s task %s",
+                        str(task.root_uid),
+                        operation_body["identity"],
+                        operation_body["status"],
+                        str(task.uid),
+                    )
+                    # Update task status
+                    self.backend.register_task(task)
+                # Pass new operation status to log
+                self.backend.produce_log(
+                    operation_body, logger_name="karton.operations", level="INFO"
+                )
+
     def gc_collect(self) -> None:
-        if time.time() > (self.last_gc_trigger + self.GC_INTERVAL):
+        if time.time() > (self.last_gc_trigger + self.gc_inteval):
             try:
                 self.gc_collect_tasks()
                 self.gc_collect_resources()
             except Exception:
                 self.log.exception("GC: Exception during garbage collection")
+            self.log.info("GC done in %s seconds", time.time() - self.last_gc_trigger)
             self.last_gc_trigger = time.time()
 
     def process_task(self, task: Task) -> None:
@@ -168,56 +230,29 @@ class SystemService(KartonServiceBase):
         self.log.info("Manager {} started".format(self.identity))
 
         while not self.shutdown:
-            # Order does matter! task dispatching must be before
-            # karton.operations to avoid races Timeout must be shorter than GC_INTERVAL,
-            # but not too long allowing graceful shutdown
-            data = self.backend.consume_queues(
-                ["karton.tasks", "karton.operations"], timeout=5
-            )
-            if data:
-                queue, body = data
-                if not isinstance(body, str):
-                    body = body.decode("utf-8")
-                if queue == "karton.tasks":
-                    task_uid = body
-                    task = self.backend.get_task(task_uid)
-                    if task is None:
-                        raise RuntimeError(
-                            "Task disappeared while popping, this should never happen"
-                        )
-
-                    self.process_task(task)
-                    task.last_update = time.time()
-                    task.status = TaskState.FINISHED
-                    # Directly update the task status to be finished
-                    self.backend.register_task(task)
-                elif queue == "karton.operations":
-                    operation_body = json.loads(body)
-                    task = Task.unserialize(operation_body["task"])
-                    new_status = TaskState(operation_body["status"])
-                    if task.status != new_status:
-                        task.last_update = time.time()
-                        task.status = new_status
-                        self.log.info(
-                            "[%s] %s %s task %s",
-                            str(task.root_uid),
-                            operation_body["identity"],
-                            operation_body["status"],
-                            str(task.uid),
-                        )
-                        # Update task status
-                        self.backend.register_task(task)
-                    # Pass new operation status to log
-                    self.backend.produce_log(
-                        operation_body, logger_name="karton.operations", level="INFO"
-                    )
-            self.gc_collect()
+            if self.enable_router:
+                # This will wait for up to 5s, so this is not a busy loop
+                self.process_routing()
+            if self.enable_gc:
+                # This will only do anything once every self.gc_inteval seconds
+                self.gc_collect()
+                if not self.enable_router:
+                    time.sleep(1)  # Avoid a busy loop
 
     @classmethod
     def args_parser(cls) -> argparse.ArgumentParser:
         parser = super().args_parser()
         parser.add_argument(
             "--setup-bucket", action="store_true", help="Create missing bucket in MinIO"
+        )
+        parser.add_argument(
+            "--disable-gc", action="store_true", help="Do not run GC in this instance"
+        )
+        parser.add_argument(
+            "--disable-router", action="store_true", help="Create missing bucket in MinIO"
+        )
+        parser.add_argument(
+            "--gc-interval", type=int, default=3*60, help="Garbage collection interval"
         )
         return parser
 
@@ -242,7 +277,10 @@ class SystemService(KartonServiceBase):
         args = parser.parse_args()
 
         config = Config(args.config_file)
-        service = SystemService(config)
+        enable_gc = not args.disable_gc
+        enable_router = not args.disable_router
+        gc_interval = not args.disable_router
+        service = SystemService(config, enable_gc, enable_router, args.gc_interval)
 
         if not service.ensure_bucket_exsits(args.setup_bucket):
             # If bucket doesn't exist without --setup-bucket: quit
