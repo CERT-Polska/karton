@@ -273,6 +273,8 @@ class KartonBackend:
         :param status: New task status (TaskState)
         :param consumer: Consumer identity
         """
+        if task.status == status:
+            return
         self.redis.rpush(
             KARTON_OPERATIONS_QUEUE,
             json.dumps(
