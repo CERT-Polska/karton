@@ -37,6 +37,7 @@ class SystemService(KartonServiceBase):
         self.gc_inteval = gc_inteval
         self.totaltasks = 0
         self.totalops = 0
+        self.forceops = False
 
     def gc_collect_resources(self) -> None:
         karton_bucket = self.backend.default_bucket_name
@@ -192,8 +193,12 @@ class SystemService(KartonServiceBase):
         # Order does matter! task dispatching must be before
         # karton.operations to avoid races Timeout must be shorter than self.gc_inteval,
         # but not too long allowing graceful shutdown
+        if self.forceops:
+            order = ["karton.operations", "karton.tasks"]
+        else:
+            order = ["karton.tasks", "karton.operations"]
         data = self.backend.consume_queues(
-            ["karton.tasks", "karton.operations"], timeout=5
+            order, timeout=5
         )
         if data:
             queue, body = data
@@ -202,12 +207,15 @@ class SystemService(KartonServiceBase):
                 body = body.decode("utf-8")
             if queue == "karton.tasks":
                 tasks = [body] + self.backend.consume_queues_batch(queue, 100)
+                if len(tasks) < 100:
+                    self.forceops = True
                 self.handle_tasks(tasks)
                 self.totaltasks += time.time() - start
             elif queue == "karton.operations":
                 bodies = [body] + self.backend.consume_queues_batch(queue, 1000)
                 self.handle_operations(bodies)
                 self.totalops += time.time() - start
+                self.forceops = False
 
             self.log.info("Tasks: %s Ops: %s XY: %s", self.totaltasks, self.totalops, self.totaltasks / (self.totalops + 0.0001))
 
