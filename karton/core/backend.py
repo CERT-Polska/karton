@@ -252,6 +252,26 @@ class KartonBackend:
             if task_data is not None
         ]
 
+    def route_task(self, identity: str, task: Task) -> None:
+        pipe = self.redis.pipeline()
+        pipe.set(f"{KARTON_TASK_NAMESPACE}:{task.uid}", task.serialize())
+        pipe.rpush(self.get_queue_name(identity, task.priority), task.uid)
+
+        if task.status != TaskState.SPAWNED:
+            pipe.rpush(
+                KARTON_OPERATIONS_QUEUE,
+                json.dumps(
+                    {
+                        "status": TaskState.SPAWNED,
+                        "identity": identity,
+                        "task": task.serialize(),
+                        "type": "operation",
+                    }
+                ),
+            )
+        pipe.hincrby(KartonMetrics.TASK_ASSIGNED.value, identity, 1)
+        pipe.execute()
+
     def register_task(self, task: Task) -> None:
         """
         Register task in Redis.

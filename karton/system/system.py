@@ -136,20 +136,22 @@ class SystemService(KartonServiceBase):
             # TODO: Notification needed
             self.log.debug("GC: Finished root task %s", finished_root_task)
 
-    def handle_tasks(self, bodies) -> None:
-        for body in bodies:
-            task_uid = body
-            task = self.backend.get_task(task_uid)
+    def handle_tasks(self, task_uids) -> None:
+        self.log.info("Handling a batch of %s tasks", len(task_uids))
+        tasks = self.backend.get_tasks(task_uids)
+        online_consumers = self.backend.get_online_consumers()
+        binds = self.backend.get_binds()
+        for task in tasks:
             if task is None:
                 raise RuntimeError(
                     "Task disappeared while popping, this should never happen"
                 )
 
-            self.process_task(task)
+            self.process_task(task, online_consumers, binds)
             task.last_update = time.time()
             task.status = TaskState.FINISHED
             # Directly update the task status to be finished
-            self.backend.register_task(task)
+        self.backend.register_tasks(tasks)
 
     def handle_operations(self, bodies) -> None:
         self.log.info("Handling a batch of %s operatoins", len(bodies))
@@ -219,12 +221,10 @@ class SystemService(KartonServiceBase):
             self.log.info("GC done in %s seconds", time.time() - self.last_gc_trigger)
             self.last_gc_trigger = time.time()
 
-    def process_task(self, task: Task) -> None:
-        online_consumers = self.backend.get_online_consumers()
-
+    def process_task(self, task: Task, online_consumers, binds) -> None:
         # self.log.info("[%s] Processing task %s", task.root_uid, task.uid)
 
-        for bind in self.backend.get_binds():
+        for bind in binds:
             identity = bind.identity
             if identity not in online_consumers and not bind.persistent:
                 # If unbound and not persistent
@@ -249,12 +249,7 @@ class SystemService(KartonServiceBase):
                 routed_task.status = TaskState.SPAWNED
                 routed_task.last_update = time.time()
                 routed_task.headers.update({"receiver": identity})
-                self.backend.register_task(routed_task)
-                self.backend.produce_routed_task(identity, routed_task)
-                self.backend.set_task_status(
-                    routed_task, TaskState.SPAWNED, consumer=identity
-                )
-                self.backend.increment_metrics(KartonMetrics.TASK_ASSIGNED, identity)
+                self.backend.route_task(identity, routed_task)
 
     def loop(self) -> None:
         self.log.info("Manager {} started".format(self.identity))
