@@ -263,6 +263,17 @@ class KartonBackend:
         """
         self.redis.set(f"{KARTON_TASK_NAMESPACE}:{task.uid}", task.serialize())
 
+    def register_tasks(self, tasks: List[Task]) -> None:
+        """
+        Register tasks in Redis.
+        """
+        
+        taskmap = {
+            f"{KARTON_TASK_NAMESPACE}:{task.uid}": task.serialize() for task in tasks
+        }
+        self.redis.mset(taskmap)
+
+
     def set_task_status(
         self, task: Task, status: TaskState, consumer: Optional[str] = None
     ) -> None:
@@ -370,6 +381,18 @@ class KartonBackend:
         """
         return self.redis.blpop(queues, timeout=timeout)
 
+    def consume_queues_batch(
+        self, queue: str, max_count: int
+    ) -> List[str]:
+        """
+        Get multiple items from the operations queue
+        """
+        p = self.redis.pipeline()
+        # TODO ensure this is atomic (depends on MULTI and EXEC options)
+        p.lrange(queue, 0, max_count - 1)
+        p.ltrim(queue, max_count, -1)
+        return p.execute()[0]
+
     def consume_routed_task(self, identity: str, timeout: int = 5) -> Optional[Task]:
         """
         Get routed task for given consumer identity.
@@ -415,6 +438,28 @@ class KartonBackend:
             )
             > 0
         )
+
+    def produce_logs(
+        self,
+        log_records: List[Dict[str, Any]],
+        logger_name: str,
+        level: str,
+    ) -> bool:
+        """
+        Push new log record to the logs channel
+
+        :param log_record: Dict with log record
+        :param logger_name: Logger name
+        :param level: Log level
+        :return: True if any active log consumer received log record
+        """
+        p = self.redis.pipeline()
+        channel = self._log_channel(logger_name, level)
+        for log_record in log_records:
+            p.publish(
+                channel, json.dumps(log_record)
+            )
+        p.execute()
 
     def consume_log(
         self,

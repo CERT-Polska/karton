@@ -35,6 +35,8 @@ class SystemService(KartonServiceBase):
         self.enable_gc = enable_gc
         self.enable_router = enable_router
         self.gc_inteval = gc_inteval
+        self.totaltasks = 0
+        self.totalops = 0
 
     def gc_collect_resources(self) -> None:
         karton_bucket = self.backend.default_bucket_name
@@ -134,6 +136,56 @@ class SystemService(KartonServiceBase):
             # TODO: Notification needed
             self.log.debug("GC: Finished root task %s", finished_root_task)
 
+    def handle_tasks(self, bodies) -> None:
+        for body in bodies:
+            task_uid = body
+            task = self.backend.get_task(task_uid)
+            if task is None:
+                raise RuntimeError(
+                    "Task disappeared while popping, this should never happen"
+                )
+
+            self.process_task(task)
+            task.last_update = time.time()
+            task.status = TaskState.FINISHED
+            # Directly update the task status to be finished
+            self.backend.register_task(task)
+
+    def handle_operations(self, bodies) -> None:
+        self.log.info("Handling a batch of %s operatoins", len(bodies))
+        operation_bodies = []
+        tasks = []
+        for body in bodies:
+            operation_body = json.loads(body)
+            task = Task.unserialize(operation_body["task"])
+            new_status = TaskState(operation_body["status"])
+            if task.status != new_status:
+                task.last_update = time.time()
+                task.status = new_status
+                # self.log.info(
+                #     "[%s] %s %s task %s",
+                #     str(task.root_uid),
+                #     operation_body["identity"],
+                #     operation_body["status"],
+                #     str(task.uid),
+                # )
+                tasks.append(task)
+            operation_bodies.append(operation_body)
+
+        start = time.time()
+        self.backend.register_tasks(tasks)
+        self.log.info("Registering: %s", time.time() - start)
+
+        start = time.time()
+        # for operation_body in operation_bodies:
+            # Pass new operation status to log
+        self.backend.produce_logs(
+            operation_bodies, logger_name="karton.operations", level="INFO"
+        )
+        self.log.info("Logging: %s", time.time() - start)
+
+
+
     def process_routing(self) -> None:
         # Order does matter! task dispatching must be before
         # karton.operations to avoid races Timeout must be shorter than self.gc_inteval,
@@ -143,41 +195,19 @@ class SystemService(KartonServiceBase):
         )
         if data:
             queue, body = data
+            start = time.time()
             if not isinstance(body, str):
                 body = body.decode("utf-8")
             if queue == "karton.tasks":
-                task_uid = body
-                task = self.backend.get_task(task_uid)
-                if task is None:
-                    raise RuntimeError(
-                        "Task disappeared while popping, this should never happen"
-                    )
-
-                self.process_task(task)
-                task.last_update = time.time()
-                task.status = TaskState.FINISHED
-                # Directly update the task status to be finished
-                self.backend.register_task(task)
+                tasks = [body] + self.backend.consume_queues_batch(queue, 100)
+                self.handle_tasks(tasks)
+                self.totaltasks += time.time() - start
             elif queue == "karton.operations":
-                operation_body = json.loads(body)
-                task = Task.unserialize(operation_body["task"])
-                new_status = TaskState(operation_body["status"])
-                if task.status != new_status:
-                    task.last_update = time.time()
-                    task.status = new_status
-                    self.log.info(
-                        "[%s] %s %s task %s",
-                        str(task.root_uid),
-                        operation_body["identity"],
-                        operation_body["status"],
-                        str(task.uid),
-                    )
-                    # Update task status
-                    self.backend.register_task(task)
-                # Pass new operation status to log
-                self.backend.produce_log(
-                    operation_body, logger_name="karton.operations", level="INFO"
-                )
+                bodies = [body] + self.backend.consume_queues_batch(queue, 1000)
+                self.handle_operations(bodies)
+                self.totalops += time.time() - start
+
+            self.log.info("Tasks: %s Ops: %s XY: %s", self.totaltasks, self.totalops, self.totaltasks / (self.totalops + 0.0001))
 
     def gc_collect(self) -> None:
         if time.time() > (self.last_gc_trigger + self.gc_inteval):
@@ -192,7 +222,7 @@ class SystemService(KartonServiceBase):
     def process_task(self, task: Task) -> None:
         online_consumers = self.backend.get_online_consumers()
 
-        self.log.info("[%s] Processing task %s", task.root_uid, task.uid)
+        # self.log.info("[%s] Processing task %s", task.root_uid, task.uid)
 
         for bind in self.backend.get_binds():
             identity = bind.identity
