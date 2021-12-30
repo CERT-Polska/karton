@@ -1,5 +1,6 @@
 import enum
 import json
+import time
 from collections import defaultdict, namedtuple
 from io import BytesIO
 from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Tuple, Union
@@ -251,38 +252,27 @@ class KartonBackend:
             if task_data is not None
         ]
 
-    def register_task(self, task: Task) -> None:
+    def register_task(self, task: Task, pipe=None) -> None:
         """
-        Register task in Redis.
-
-        Consumer should register only Declared tasks.
-        Status change should be done using set_task_status.
+        Register or update task in Redis.
 
         :param task: Task object
         """
-        self.redis.set(f"{KARTON_TASK_NAMESPACE}:{task.uid}", task.serialize())
+        rs = pipe or self.redis
+        rs.set(f"{KARTON_TASK_NAMESPACE}:{task.uid}", task.serialize())
 
     def set_task_status(
-        self, task: Task, status: TaskState, consumer: Optional[str] = None
+        self, task: Task, status: TaskState, pipe=None
     ) -> None:
         """
         Request task status change to be applied by karton-system
 
         :param task: Task object
         :param status: New task status (TaskState)
-        :param consumer: Consumer identity
         """
-        self.redis.rpush(
-            KARTON_OPERATIONS_QUEUE,
-            json.dumps(
-                {
-                    "status": status.value,
-                    "identity": consumer,
-                    "task": task.serialize(),
-                    "type": "operation",
-                }
-            ),
-        )
+        task.status = status
+        task.last_update = time.time()
+        self.register_task(task, pipe=pipe)
 
     def delete_task(self, task: Task) -> None:
         """
@@ -333,7 +323,7 @@ class KartonBackend:
         """
         self.redis.rpush(KARTON_TASKS_QUEUE, task.uid)
 
-    def produce_routed_task(self, identity: str, task: Task) -> None:
+    def produce_routed_task(self, identity: str, task: Task, pipe=None) -> None:
         """
         Add given task to routed task queue of given identity
 
@@ -342,7 +332,8 @@ class KartonBackend:
         :param identity: Karton service identity
         :param task: Task object
         """
-        self.redis.rpush(self.get_queue_name(identity, task.priority), task.uid)
+        rs = pipe or self.redis
+        rs.rpush(self.get_queue_name(identity, task.priority), task.uid)
 
     def consume_queues(
         self, queues: Union[str, List[str]], timeout: int = 0
@@ -434,14 +425,15 @@ class KartonBackend:
                     yield body
                 yield None
 
-    def increment_metrics(self, metric: KartonMetrics, identity: str) -> None:
+    def increment_metrics(self, metric: KartonMetrics, identity: str, pipe = None) -> None:
         """
         Increments metrics for given operation type and identity
 
         :param metric: Operation metric type
         :param identity: Related Karton service identity
         """
-        self.redis.hincrby(metric.value, identity, 1)
+        rs = pipe or self.redis
+        rs.hincrby(metric.value, identity, 1)
 
     def get_metrics(self, metric: KartonMetrics) -> Dict[str, int]:
         """
@@ -551,3 +543,6 @@ class KartonBackend:
         if create:
             self.minio.make_bucket(bucket)
         return False
+
+    def make_pipeline(self, transaction=False):
+        return self.redis.pipeline(transaction=transaction)

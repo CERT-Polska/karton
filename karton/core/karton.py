@@ -158,7 +158,7 @@ class Consumer(KartonServiceBase):
         if not self.current_task.matches_filters(self.filters):
             self.log.info("Task rejected because binds are no longer valid.")
             self.backend.set_task_status(
-                self.current_task, TaskState.FINISHED, consumer=self.identity
+                self.current_task, TaskState.FINISHED
             )
             # Task rejected: end of processing
             return
@@ -168,7 +168,7 @@ class Consumer(KartonServiceBase):
         try:
             self.log.info("Received new task - %s", self.current_task.uid)
             self.backend.set_task_status(
-                self.current_task, TaskState.STARTED, consumer=self.identity
+                self.current_task, TaskState.STARTED
             )
 
             self._run_pre_hooks()
@@ -205,7 +205,7 @@ class Consumer(KartonServiceBase):
                 self.current_task.error = exception_str
 
             self.backend.set_task_status(
-                self.current_task, task_state, consumer=self.identity
+                self.current_task, task_state
             )
 
     @property
