@@ -79,9 +79,7 @@ class SystemService(KartonServiceBase):
                     for removed_task in removed_tasks:
                         self.log.info("Unwinding task %s", str(removed_task.uid))
                         # Mark task as finished
-                        self.backend.set_task_status(
-                            removed_task, TaskState.FINISHED
-                        )
+                        self.backend.set_task_status(removed_task, TaskState.FINISHED)
                     self.log.info("Non-persistent: removing bind %s", identity)
                     self.backend.unregister_bind(identity)
 
@@ -175,7 +173,9 @@ class SystemService(KartonServiceBase):
                 routed_task.headers.update({"receiver": identity})
                 self.backend.register_task(routed_task, pipe=pipe)
                 self.backend.produce_routed_task(identity, routed_task, pipe=pipe)
-                self.backend.increment_metrics(KartonMetrics.TASK_ASSIGNED, identity, pipe=pipe)
+                self.backend.increment_metrics(
+                    KartonMetrics.TASK_ASSIGNED, identity, pipe=pipe
+                )
 
         # Directly update the task status to be finished
         self.backend.set_task_status(task, TaskState.FINISHED, pipe=pipe)

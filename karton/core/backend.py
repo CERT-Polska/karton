@@ -7,6 +7,7 @@ from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Tuple, Union
 
 from minio import Minio
 from redis import AuthenticationError, StrictRedis
+from redis.client import Pipeline
 from urllib3.response import HTTPResponse
 
 from .task import Task, TaskPriority, TaskState
@@ -252,23 +253,25 @@ class KartonBackend:
             if task_data is not None
         ]
 
-    def register_task(self, task: Task, pipe=None) -> None:
+    def register_task(self, task: Task, pipe: Optional[Pipeline] = None) -> None:
         """
         Register or update task in Redis.
 
         :param task: Task object
+        :param pipe: Optional pipeline object if operation is a part of pipeline
         """
         rs = pipe or self.redis
         rs.set(f"{KARTON_TASK_NAMESPACE}:{task.uid}", task.serialize())
 
     def set_task_status(
-        self, task: Task, status: TaskState, pipe=None
+        self, task: Task, status: TaskState, pipe: Optional[Pipeline] = None
     ) -> None:
         """
         Request task status change to be applied by karton-system
 
         :param task: Task object
         :param status: New task status (TaskState)
+        :param pipe: Optional pipeline object if operation is a part of pipeline
         """
         task.status = status
         task.last_update = time.time()
@@ -323,7 +326,9 @@ class KartonBackend:
         """
         self.redis.rpush(KARTON_TASKS_QUEUE, task.uid)
 
-    def produce_routed_task(self, identity: str, task: Task, pipe=None) -> None:
+    def produce_routed_task(
+        self, identity: str, task: Task, pipe: Optional[Pipeline] = None
+    ) -> None:
         """
         Add given task to routed task queue of given identity
 
@@ -331,6 +336,7 @@ class KartonBackend:
 
         :param identity: Karton service identity
         :param task: Task object
+        :param pipe: Optional pipeline object if operation is a part of pipeline
         """
         rs = pipe or self.redis
         rs.rpush(self.get_queue_name(identity, task.priority), task.uid)
@@ -425,12 +431,15 @@ class KartonBackend:
                     yield body
                 yield None
 
-    def increment_metrics(self, metric: KartonMetrics, identity: str, pipe = None) -> None:
+    def increment_metrics(
+        self, metric: KartonMetrics, identity: str, pipe: Optional[Pipeline] = None
+    ) -> None:
         """
         Increments metrics for given operation type and identity
 
         :param metric: Operation metric type
         :param identity: Related Karton service identity
+        :param pipe: Optional pipeline object if operation is a part of pipeline
         """
         rs = pipe or self.redis
         rs.hincrby(metric.value, identity, 1)
@@ -544,5 +553,5 @@ class KartonBackend:
             self.minio.make_bucket(bucket)
         return False
 
-    def make_pipeline(self, transaction=False):
+    def make_pipeline(self, transaction: bool = False) -> Pipeline:
         return self.redis.pipeline(transaction=transaction)
