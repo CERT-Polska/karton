@@ -39,9 +39,6 @@ class SystemService(KartonServiceBase):
         # Task is created before resource upload to lock the reference to the resource.
         tasks = self.backend.get_all_tasks()
         for task in tasks:
-            if task.status == TaskState.FINISHED:
-                # If task is finished, its references can be safely ignored
-                continue
             for _, resource in task.iterate_resources():
                 # If resource is referenced by task: remove it from set
                 if (
