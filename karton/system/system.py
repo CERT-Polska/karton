@@ -107,14 +107,13 @@ class SystemService(KartonServiceBase):
 
         for task in tasks:
             root_tasks.add(task.root_uid)
-            will_delete = False
             if (
                 task.status == TaskState.DECLARED
                 and task.uid not in enqueued_task_uids
                 and task.last_update is not None
                 and current_time > task.last_update + self.TASK_DISPATCHED_TIMEOUT
             ):
-                will_delete = True
+                to_delete.append(task)
                 self.log.warning(
                     "Task %s is in Dispatched state more than %d seconds. "
                     "Killed. (origin: %s)",
@@ -127,7 +126,7 @@ class SystemService(KartonServiceBase):
                 and task.last_update is not None
                 and current_time > task.last_update + self.TASK_STARTED_TIMEOUT
             ):
-                will_delete = True
+                to_delete.append(task)
                 self.log.warning(
                     "Task %s is in Started state more than %d seconds. "
                     "Killed. (receiver: %s)",
@@ -136,14 +135,14 @@ class SystemService(KartonServiceBase):
                     task.headers.get("receiver", "<unknown>"),
                 )
             elif task.status == TaskState.FINISHED:
-                will_delete = True
+                to_delete.append(task)
                 self.log.debug("GC: Finished task %s", task.uid)
             elif (
                 task.status == TaskState.CRASHED
                 and task.last_update is not None
                 and current_time > task.last_update + self.TASK_CRASHED_TIMEOUT
             ):
-                will_delete = True
+                to_delete.append(task)
                 self.log.debug(
                     "GC: Task %s is in Crashed state more than %d seconds. "
                     "Killed. (receiver: %s)",
@@ -151,8 +150,6 @@ class SystemService(KartonServiceBase):
                     self.TASK_CRASHED_TIMEOUT,
                     task.headers.get("receiver", "<unknown>"),
                 )
-            if will_delete:
-                to_delete.append(task)
             else:
                 running_root_tasks.add(task.root_uid)
 
