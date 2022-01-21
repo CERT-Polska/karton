@@ -376,9 +376,7 @@ class KartonBackend:
         """
         return self.redis.blpop(queues, timeout=timeout)
 
-    def consume_queues_batch(
-        self, queue: str, max_count: int
-    ) -> List[str]:
+    def consume_queues_batch(self, queue: str, max_count: int) -> List[str]:
         """
         Get batch of items from the queue
 
@@ -452,9 +450,7 @@ class KartonBackend:
         p = self.redis.pipeline()
         channel = self._log_channel(logger_name, level)
         for log_record in log_records:
-            p.publish(
-                channel, json.dumps(log_record)
-            )
+            p.publish(channel, json.dumps(log_record))
         p.execute()
 
     def consume_log(
@@ -501,7 +497,9 @@ class KartonBackend:
         rs = pipe or self.redis
         rs.hincrby(metric.value, identity, 1)
 
-    def increment_metrics_list(self, metric: KartonMetrics, identities: List[str]) -> None:
+    def increment_metrics_list(
+        self, metric: KartonMetrics, identities: List[str]
+    ) -> None:
         """
         Increments metrics for multiple identities via single pipeline
 

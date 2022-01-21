@@ -32,15 +32,15 @@ class SystemService(KartonServiceBase):
         config: Optional[Config],
         enable_gc: bool = True,
         enable_router: bool = True,
-        gc_inteval: int = 3*60,
+        gc_interval: int = 3 * 60,
     ) -> None:
         super(SystemService, self).__init__(config=config)
         self.last_gc_trigger = time.time()
         self.enable_gc = enable_gc
         self.enable_router = enable_router
-        self.gc_inteval = gc_inteval
-        self.totaltasks = 0
-        self.totalops = 0
+        self.gc_interval = gc_interval
+        self.totaltasks = 0.0
+        self.totalops = 0.0
 
     def gc_collect_resources(self) -> None:
         # Collects unreferenced resources left in object storage
@@ -50,7 +50,9 @@ class SystemService(KartonServiceBase):
         # Note: it is important to get list of resources before getting list of tasks!
         # Task is created before resource upload to lock the reference to the resource.
         self.log.debug("GC Collect Resources: List objects: %s", time.time() - start)
-        self.log.debug("GC Collect Resources: List objects: %s objects", len(resources_to_remove))
+        self.log.debug(
+            "GC Collect Resources: List objects: %s objects", len(resources_to_remove)
+        )
         start = time.time()
         tasks = self.backend.get_all_tasks()
         self.log.debug("GC Collect Resources: Get all tasks: %s", time.time() - start)
@@ -64,12 +66,14 @@ class SystemService(KartonServiceBase):
                 ):
                     resources_to_remove.remove(resource.uid)
         # Remove unreferenced resources
-        self.log.info("GC Collect Resources: For loop: %s", time.time() - start)
+        self.log.debug("GC Collect Resources: For loop: %s", time.time() - start)
         start = time.time()
         if resources_to_remove:
-            self.log.info("GC Collect Resources: Removing %s resources", len(resources_to_remove))
+            self.log.debug(
+                "GC Collect Resources: Removing %s resources", len(resources_to_remove)
+            )
             self.backend.remove_objects(karton_bucket, list(resources_to_remove))
-        self.log.info("GC Collect Resources: Remove loop: %s", time.time() - start)
+        self.log.debug("GC Collect Resources: Remove loop: %s", time.time() - start)
 
     def gc_collect_abandoned_queues(self):
         online_consumers = self.backend.get_online_consumers()
@@ -95,7 +99,7 @@ class SystemService(KartonServiceBase):
         running_root_tasks = set()
         start = time.time()
         tasks = self.backend.get_all_tasks()
-        self.log.info("GC Collect Tasks: Get all tasks: %s", time.time() - start)
+        self.log.debug("GC Collect Tasks: Get all tasks: %s", time.time() - start)
         enqueued_task_uids = self.backend.get_task_ids_from_queue(KARTON_TASKS_QUEUE)
 
         current_time = time.time()
@@ -155,24 +159,30 @@ class SystemService(KartonServiceBase):
         start = time.time()
         if to_delete:
             self.log.debug("GC Collect Tasks: Deleting %s tasks", len(to_delete))
-            to_increment = [task.headers.get("receiver", "unknown") for task in to_delete]
+            to_increment = [
+                task.headers.get("receiver", "unknown") for task in to_delete
+            ]
             self.backend.delete_tasks(to_delete)
-            self.backend.increment_metrics_list(KartonMetrics.TASK_GARBAGE_COLLECTED, to_increment)
+            self.backend.increment_metrics_list(
+                KartonMetrics.TASK_GARBAGE_COLLECTED, to_increment
+            )
         self.log.debug("GC Collect Tasks: Deleted tasks in %s sec", time.time() - start)
 
         for finished_root_task in root_tasks.difference(running_root_tasks):
             # TODO: Notification needed
-            self.log.debug("GC Collect Tasks: Finished root task %s", finished_root_task)
+            self.log.debug(
+                "GC Collect Tasks: Finished root task %s", finished_root_task
+            )
 
     def gc_collect(self) -> None:
-        if time.time() > (self.last_gc_trigger + self.gc_inteval):
+        if time.time() > (self.last_gc_trigger + self.gc_interval):
             try:
                 self.gc_collect_abandoned_queues()
                 self.gc_collect_tasks()
                 self.gc_collect_resources()
             except Exception:
                 self.log.exception("GC: Exception during garbage collection")
-            self.log.info("GC done in %s seconds", time.time() - self.last_gc_trigger)
+            self.log.debug("GC done in %s seconds", time.time() - self.last_gc_trigger)
             self.last_gc_trigger = time.time()
 
     def route_task(self, task: Task, binds) -> None:
@@ -211,7 +221,11 @@ class SystemService(KartonServiceBase):
         self.backend.register_tasks(tasks)
 
     def handle_operations(self, bodies) -> None:
-        self.log.info("Handling a batch of %s operatoins", len(bodies))
+        """
+        Left for backwards compatibility with Karton <=4.3.0.
+        Earlier versions delegate task status change to karton.system.
+        """
+        self.log.debug("Handling a batch of %s operations", len(bodies))
 
         operation_bodies = []
         tasks = []
@@ -227,18 +241,18 @@ class SystemService(KartonServiceBase):
 
         start = time.time()
         self.backend.register_tasks(tasks)
-        self.log.info("Registering: %s", time.time() - start)
+        self.log.debug("Applied operations in %s sec", time.time() - start)
 
         start = time.time()
         self.backend.produce_logs(
             operation_bodies, logger_name=KARTON_OPERATIONS_QUEUE, level="INFO"
         )
-        self.log.info("Logging: %s", time.time() - start)
+        self.log.debug("Logged operations in %s sec", time.time() - start)
 
     def process_routing(self) -> None:
         # Order does matter! task dispatching must be before
-        # karton.operations to avoid races. Timeout must be shorter than self.gc_interval,
-        # but not too long allowing graceful shutdown
+        # karton.operations to avoid races. Timeout must be shorter
+        # than self.gc_interval, but not too long allowing graceful shutdown
         data = self.backend.consume_queues(
             [KARTON_TASKS_QUEUE, KARTON_OPERATIONS_QUEUE], timeout=5
         )
@@ -256,10 +270,15 @@ class SystemService(KartonServiceBase):
                 self.handle_operations(bodies)
                 self.totalops += time.time() - start
 
-            self.log.info("Tasks: %s Ops: %s XY: %s", self.totaltasks, self.totalops, self.totaltasks / (self.totalops + 0.0001))
+            self.log.debug(
+                "Tasks: %s Ops: %s XY: %s",
+                self.totaltasks,
+                self.totalops,
+                self.totaltasks / (self.totalops + 0.0001),
+            )
 
-    def another_loop(self) -> None:
-        self.log.info("Manager {} started".format(self.identity))
+    def loop(self) -> None:
+        self.log.info("Manager %s started", self.identity)
 
         while not self.shutdown:
             if self.enable_router:
@@ -281,10 +300,15 @@ class SystemService(KartonServiceBase):
             "--disable-gc", action="store_true", help="Do not run GC in this instance"
         )
         parser.add_argument(
-            "--disable-router", action="store_true", help="Create missing bucket in MinIO"
+            "--disable-router",
+            action="store_true",
+            help="Create missing bucket in MinIO",
         )
         parser.add_argument(
-            "--gc-interval", type=int, default=3*60, help="Garbage collection interval"
+            "--gc-interval",
+            type=int,
+            default=3 * 60,
+            help="Garbage collection interval",
         )
         return parser
 
