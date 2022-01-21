@@ -1,5 +1,6 @@
 import enum
 import json
+import time
 from collections import defaultdict, namedtuple
 from io import BytesIO
 from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Tuple, Union
@@ -7,6 +8,7 @@ from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Tuple, Union
 from minio import Minio
 from minio.deleteobjects import DeleteObject
 from redis import AuthenticationError, StrictRedis
+from redis.client import Pipeline
 from urllib3.response import HTTPResponse
 
 from .task import Task, TaskPriority, TaskState
@@ -252,71 +254,41 @@ class KartonBackend:
             if task_data is not None
         ]
 
-    def route_task(self, identity: str, task: Task) -> None:
-        pipe = self.redis.pipeline()
-        pipe.set(f"{KARTON_TASK_NAMESPACE}:{task.uid}", task.serialize())
-        pipe.rpush(self.get_queue_name(identity, task.priority), task.uid)
-
-        if task.status != TaskState.SPAWNED:
-            pipe.rpush(
-                KARTON_OPERATIONS_QUEUE,
-                json.dumps(
-                    {
-                        "status": TaskState.SPAWNED,
-                        "identity": identity,
-                        "task": task.serialize(),
-                        "type": "operation",
-                    }
-                ),
-            )
-        pipe.hincrby(KartonMetrics.TASK_ASSIGNED.value, identity, 1)
-        pipe.execute()
-
-    def register_task(self, task: Task) -> None:
+    def register_task(self, task: Task, pipe: Optional[Pipeline] = None) -> None:
         """
-        Register task in Redis.
-
-        Consumer should register only Declared tasks.
-        Status change should be done using set_task_status.
+        Register or update task in Redis.
 
         :param task: Task object
+        :param pipe: Optional pipeline object if operation is a part of pipeline
         """
-        self.redis.set(f"{KARTON_TASK_NAMESPACE}:{task.uid}", task.serialize())
+        rs = pipe or self.redis
+        rs.set(f"{KARTON_TASK_NAMESPACE}:{task.uid}", task.serialize())
 
     def register_tasks(self, tasks: List[Task]) -> None:
         """
-        Register tasks in Redis.
+        Register or update multiple tasks in Redis.
+        :param task: List of task objects
         """
-        
         taskmap = {
             f"{KARTON_TASK_NAMESPACE}:{task.uid}": task.serialize() for task in tasks
         }
         self.redis.mset(taskmap)
 
-
     def set_task_status(
-        self, task: Task, status: TaskState, consumer: Optional[str] = None
+        self, task: Task, status: TaskState, pipe: Optional[Pipeline] = None
     ) -> None:
         """
         Request task status change to be applied by karton-system
 
         :param task: Task object
         :param status: New task status (TaskState)
-        :param consumer: Consumer identity
+        :param pipe: Optional pipeline object if operation is a part of pipeline
         """
         if task.status == status:
             return
-        self.redis.rpush(
-            KARTON_OPERATIONS_QUEUE,
-            json.dumps(
-                {
-                    "status": status.value,
-                    "identity": consumer,
-                    "task": task.serialize(),
-                    "type": "operation",
-                }
-            ),
-        )
+        task.status = status
+        task.last_update = time.time()
+        self.register_task(task, pipe=pipe)
 
     def delete_task(self, task: Task) -> None:
         """
@@ -325,7 +297,6 @@ class KartonBackend:
         :param task: Task object
         """
         self.redis.delete(f"{KARTON_TASK_NAMESPACE}:{task.uid}")
-
 
     def delete_tasks(self, tasks: List[Task]) -> None:
         """
@@ -377,7 +348,9 @@ class KartonBackend:
         """
         self.redis.rpush(KARTON_TASKS_QUEUE, task.uid)
 
-    def produce_routed_task(self, identity: str, task: Task) -> None:
+    def produce_routed_task(
+        self, identity: str, task: Task, pipe: Optional[Pipeline] = None
+    ) -> None:
         """
         Add given task to routed task queue of given identity
 
@@ -385,8 +358,10 @@ class KartonBackend:
 
         :param identity: Karton service identity
         :param task: Task object
+        :param pipe: Optional pipeline object if operation is a part of pipeline
         """
-        self.redis.rpush(self.get_queue_name(identity, task.priority), task.uid)
+        rs = pipe or self.redis
+        rs.rpush(self.get_queue_name(identity, task.priority), task.uid)
 
     def consume_queues(
         self, queues: Union[str, List[str]], timeout: int = 0
@@ -405,10 +380,12 @@ class KartonBackend:
         self, queue: str, max_count: int
     ) -> List[str]:
         """
-        Get multiple items from the operations queue
+        Get batch of items from the queue
+
+        :param queues: Redis queue name
+        :param max_count: Maximum batch count
         """
-        p = self.redis.pipeline()
-        # TODO ensure this is atomic (depends on MULTI and EXEC options)
+        p = self.redis.pipeline(transaction=True)
         p.lrange(queue, 0, max_count - 1)
         p.ltrim(queue, max_count, -1)
         return p.execute()[0]
@@ -464,14 +441,13 @@ class KartonBackend:
         log_records: List[Dict[str, Any]],
         logger_name: str,
         level: str,
-    ) -> bool:
+    ):
         """
-        Push new log record to the logs channel
+        Push multiple log records to the logs channel
 
-        :param log_record: Dict with log record
+        :param log_records: List of dicts with log record
         :param logger_name: Logger name
         :param level: Log level
-        :return: True if any active log consumer received log record
         """
         p = self.redis.pipeline()
         channel = self._log_channel(logger_name, level)
@@ -512,16 +488,26 @@ class KartonBackend:
                     yield body
                 yield None
 
-    def increment_metrics(self, metric: KartonMetrics, identity: str) -> None:
+    def increment_metrics(
+        self, metric: KartonMetrics, identity: str, pipe: Optional[Pipeline] = None
+    ) -> None:
         """
         Increments metrics for given operation type and identity
 
         :param metric: Operation metric type
         :param identity: Related Karton service identity
+        :param pipe: Optional pipeline object if operation is a part of pipeline
         """
-        self.redis.hincrby(metric.value, identity, 1)
+        rs = pipe or self.redis
+        rs.hincrby(metric.value, identity, 1)
 
     def increment_metrics_list(self, metric: KartonMetrics, identities: List[str]) -> None:
+        """
+        Increments metrics for multiple identities via single pipeline
+
+        :param metric: Operation metric type
+        :param identities: List of Karton service identities
+        """
         p = self.redis.pipeline()
         for identity in identities:
             p.hincrby(metric.value, identity, 1)
@@ -627,12 +613,10 @@ class KartonBackend:
         Bulk remove resource objects from object storage
 
         :param bucket: Bucket name
-        :param object_uid: Object identifiers
+        :param object_uids: Object identifiers
         """
         delete_objects = [DeleteObject(uid) for uid in object_uids]
-        pir = self.minio.remove_objects(bucket, delete_objects)
-        for x in pir:
-            print(x)
+        self.minio.remove_objects(bucket, delete_objects)
 
     def check_bucket_exists(self, bucket: str, create: bool = False) -> bool:
         """
@@ -647,3 +631,6 @@ class KartonBackend:
         if create:
             self.minio.make_bucket(bucket)
         return False
+
+    def make_pipeline(self, transaction: bool = False) -> Pipeline:
+        return self.redis.pipeline(transaction=transaction)

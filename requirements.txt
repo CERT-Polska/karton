@@ -1,2 +1,2 @@
 redis
-minio
+minio>=7.0.0
