@@ -267,7 +267,7 @@ class KartonBackend:
     def register_tasks(self, tasks: List[Task]) -> None:
         """
         Register or update multiple tasks in Redis.
-        :param task: List of task objects
+        :param tasks: List of task objects
         """
         taskmap = {
             f"{KARTON_TASK_NAMESPACE}:{task.uid}": task.serialize() for task in tasks
