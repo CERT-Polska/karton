@@ -497,7 +497,7 @@ class RemoteResource(ResourceBase):
         self.backend.download_object_to_file(self.bucket, self.uid, path)
 
     @contextlib.contextmanager
-    def download_temporary_file(self) -> Iterator[BinaryIO]:
+    def download_temporary_file(self, suffix=None) -> Iterator[BinaryIO]:
         """
         Downloads remote resource into named temporary file.
 
@@ -517,7 +517,7 @@ class RemoteResource(ResourceBase):
         # under provided path and renames its own part-file with downloaded content
         # under previously deleted path
         # Weird move, but ok...
-        tmp = tempfile.NamedTemporaryFile(delete=False)
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
         tmp.close()
         try:
             self.download_to_file(tmp.name)
