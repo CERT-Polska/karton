@@ -17,6 +17,7 @@ KARTON_OPERATIONS_QUEUE = "karton.operations"
 KARTON_LOG_CHANNEL = "karton.log"
 KARTON_BINDS_HSET = "karton.binds"
 KARTON_TASK_NAMESPACE = "karton.task"
+KARTON_OUTPUTS_NAMESPACE = "karton.outputs"
 
 
 KartonBind = namedtuple(
@@ -552,6 +553,18 @@ class KartonBackend:
         if create:
             self.minio.make_bucket(bucket)
         return False
+
+    def log_identity_output(self, identity: str, headers: Dict[str, Any]) -> None:
+        """
+        Store the type of task outputted for given producer to
+        be used in tracking karton service connections.
+
+        :param identity: producer identity
+        :param headers: outputted headers
+        """
+
+        self.redis.sadd(f"{KARTON_OUTPUTS_NAMESPACE}:{identity}", json.dumps(headers))
+        self.redis.expire(f"{KARTON_OUTPUTS_NAMESPACE}:{identity}", 60 * 60)
 
     def make_pipeline(self, transaction: bool = False) -> Pipeline:
         return self.redis.pipeline(transaction=transaction)
