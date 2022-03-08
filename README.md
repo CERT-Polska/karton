@@ -124,4 +124,4 @@ RetDec unpacker module for the Karton framework
 #### [W3ndige/aurora](https://github.com/W3ndige/aurora) / [W3ndige/karton-similarity](https://github.com/W3ndige/karton-similarity)
 Malware similarity platform with modularity in mind.
 
-![Co-financed by the Connecting Europe Facility by of the European Union](https://www.cert.pl/wp-content/uploads/2019/02/en_horizontal_cef_logo-1.png)
+![Co-financed by the Connecting Europe Facility by of the European Union](https://www.cert.pl/uploads/2019/02/en_horizontal_cef_logo-e1550495232540.png)
