@@ -182,7 +182,7 @@ class SystemService(KartonServiceBase):
             self.log.debug("GC done in %s seconds", time.time() - self.last_gc_trigger)
             self.last_gc_trigger = time.time()
 
-    def route_task(self, task: Task, binds) -> None:
+    def route_task(self, task: Task, binds: List[KartonBind]) -> None:
         # Performs routing of task
         self.log.info("[%s] Processing task %s", task.root_uid, task.uid)
         # store the producer-task relationship in redis for task tracking
@@ -205,7 +205,7 @@ class SystemService(KartonServiceBase):
                 )
         pipe.execute()
 
-    def handle_tasks(self, task_uids) -> None:
+    def handle_tasks(self, task_uids: List[int]) -> None:
         self.log.info("Handling a batch of %s tasks", len(task_uids))
         tasks = self.backend.get_tasks(task_uids)
         binds = self.backend.get_binds()
@@ -221,7 +221,7 @@ class SystemService(KartonServiceBase):
             # Directly update the unrouted task status to be finished
         self.backend.register_tasks(tasks)
 
-    def handle_operations(self, bodies) -> None:
+    def handle_operations(self, bodies: List[str]) -> None:
         """
         Left for backwards compatibility with Karton <=4.3.0.
         Earlier versions delegate task status change to karton.system.

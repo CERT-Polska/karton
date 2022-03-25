@@ -381,7 +381,7 @@ class KartonBackend:
         """
         Get batch of items from the queue
 
-        :param queues: Redis queue name
+        :param queue: Redis queue name
         :param max_count: Maximum batch count
         """
         p = self.redis.pipeline(transaction=True)
