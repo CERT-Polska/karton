@@ -379,7 +379,7 @@ class KartonBackend:
 
     def consume_queues_batch(self, queue: str, max_count: int) -> List[str]:
         """
-        Get batch of items from the queue
+        Get a batch of items from the queue
 
         :param queue: Redis queue name
         :param max_count: Maximum batch count
