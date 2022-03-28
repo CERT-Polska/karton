@@ -183,7 +183,6 @@ class SystemService(KartonServiceBase):
         pipe.execute()
 
     def handle_tasks(self, task_uids: List[str]) -> None:
-        self.log.info("Handling a batch of %s tasks", len(task_uids))
         tasks = self.backend.get_tasks(task_uids)
         binds = self.backend.get_binds()
         for task in tasks:
@@ -203,8 +202,6 @@ class SystemService(KartonServiceBase):
         Left for backwards compatibility with Karton <=4.3.0.
         Earlier versions delegate task status change to karton.system.
         """
-        self.log.debug("Handling a batch of %s operations", len(bodies))
-
         operation_bodies = []
         tasks = []
         for body in bodies:
