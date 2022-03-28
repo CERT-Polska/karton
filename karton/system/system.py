@@ -1,12 +1,13 @@
 import argparse
 import json
 import time
-from typing import Optional
+from typing import List, Optional
 
 from karton.core.__version__ import __version__
 from karton.core.backend import (
     KARTON_OPERATIONS_QUEUE,
     KARTON_TASKS_QUEUE,
+    KartonBind,
     KartonMetrics,
 )
 from karton.core.base import KartonServiceBase
@@ -146,9 +147,7 @@ class SystemService(KartonServiceBase):
 
         for finished_root_task in root_tasks.difference(running_root_tasks):
             # TODO: Notification needed
-            self.log.debug(
-                "GC: Finished root task %s", finished_root_task
-            )
+            self.log.debug("GC: Finished root task %s", finished_root_task)
 
     def gc_collect(self) -> None:
         if time.time() > (self.last_gc_trigger + self.gc_interval):
@@ -183,7 +182,7 @@ class SystemService(KartonServiceBase):
                 )
         pipe.execute()
 
-    def handle_tasks(self, task_uids: List[int]) -> None:
+    def handle_tasks(self, task_uids: List[str]) -> None:
         self.log.info("Handling a batch of %s tasks", len(task_uids))
         tasks = self.backend.get_tasks(task_uids)
         binds = self.backend.get_binds()
