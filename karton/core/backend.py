@@ -303,7 +303,7 @@ class KartonBackend:
         """
         Remove multiple tasks from Redis
 
-        :param tasks: list of Task objects
+        :param tasks: List of Task objects
         """
         keys = [f"{KARTON_TASK_NAMESPACE}:{task.uid}" for task in tasks]
         self.redis.delete(*keys)
@@ -440,7 +440,7 @@ class KartonBackend:
         log_records: List[Dict[str, Any]],
         logger_name: str,
         level: str,
-    ):
+    ) -> None:
         """
         Push multiple log records to the logs channel
 

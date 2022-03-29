@@ -231,10 +231,10 @@ class SystemService(KartonServiceBase):
             if not isinstance(body, str):
                 body = body.decode("utf-8")
             if queue == KARTON_TASKS_QUEUE:
-                tasks = [body] + self.backend.consume_queues_batch(queue, 100)
+                tasks = [body] + self.backend.consume_queues_batch(queue, max_count=100)
                 self.handle_tasks(tasks)
             elif queue == KARTON_OPERATIONS_QUEUE:
-                bodies = [body] + self.backend.consume_queues_batch(queue, 1000)
+                bodies = [body] + self.backend.consume_queues_batch(queue, max_count=1000)
                 self.handle_operations(bodies)
 
     def loop(self) -> None:
