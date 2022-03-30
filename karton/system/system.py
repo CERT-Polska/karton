@@ -33,7 +33,7 @@ class SystemService(KartonServiceBase):
         config: Optional[Config],
         enable_gc: bool = True,
         enable_router: bool = True,
-        gc_interval: int = 3 * 60,
+        gc_interval: int = GC_INTERVAL,
     ) -> None:
         super(SystemService, self).__init__(config=config)
         self.last_gc_trigger = time.time()
@@ -269,7 +269,7 @@ class SystemService(KartonServiceBase):
         parser.add_argument(
             "--gc-interval",
             type=int,
-            default=3 * 60,
+            default=cls.GC_INTERVAL,
             help="Garbage collection interval",
         )
         return parser
