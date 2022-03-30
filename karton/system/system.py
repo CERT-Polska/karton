@@ -1,6 +1,6 @@
 import argparse
-import json
 import time
+import json
 from typing import Optional
 
 from karton.core.__version__ import __version__
