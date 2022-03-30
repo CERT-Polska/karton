@@ -234,7 +234,9 @@ class SystemService(KartonServiceBase):
                 tasks = [body] + self.backend.consume_queues_batch(queue, max_count=100)
                 self.handle_tasks(tasks)
             elif queue == KARTON_OPERATIONS_QUEUE:
-                bodies = [body] + self.backend.consume_queues_batch(queue, max_count=1000)
+                bodies = [body] + self.backend.consume_queues_batch(
+                    queue, max_count=1000
+                )
                 self.handle_operations(bodies)
 
     def loop(self) -> None:
