@@ -590,8 +590,8 @@ class KartonBackend:
 
         output_keys = self.redis.keys(f"{KARTON_OUTPUTS_NAMESPACE}:*")
         return [
-            self.unserialize_output(identity, self.redis.smembers(identity))
-            for identity in map(lambda x: x.split(":")[1], output_keys)
+            self.unserialize_output(identity.split(":")[1], self.redis.smembers(identity))
+            for identity in output_keys
         ]
 
     def make_pipeline(self, transaction: bool = False) -> Pipeline:
