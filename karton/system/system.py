@@ -1,7 +1,6 @@
 import argparse
 import time
 import json
-from typing import Optional
 
 from karton.core.__version__ import __version__
 from karton.core.backend import (
@@ -12,6 +11,7 @@ from karton.core.backend import (
 from karton.core.base import KartonServiceBase
 from karton.core.config import Config
 from karton.core.task import Task, TaskState
+from typing import Optional
 
 
 class SystemService(KartonServiceBase):
