@@ -80,15 +80,15 @@ class Config(object):
             self.config[section][key] = value
 
     def __getitem__(self, section):
-        """ Gets a section named `section` from the config """
+        """Gets a section named `section` from the config"""
         return self.config[section]
 
     @property
     def minio_config(self):
-        """ Compat """
+        """Compat"""
         return dict(self.config["minio"])
 
     @property
     def redis_config(self):
-        """ Compat """
+        """Compat"""
         return dict(self.config["redis"])
