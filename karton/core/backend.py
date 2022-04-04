@@ -3,7 +3,7 @@ import json
 import time
 from collections import defaultdict, namedtuple
 from io import BytesIO
-from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Tuple, Union, Set
+from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Set, Tuple, Union
 
 from minio import Minio
 from minio.deleteobjects import DeleteObject
