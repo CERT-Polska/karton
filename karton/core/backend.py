@@ -667,7 +667,9 @@ class KartonBackend:
 
         output_keys = self.redis.keys(f"{KARTON_OUTPUTS_NAMESPACE}:*")
         return [
-            self.unserialize_output(identity.split(":")[1], self.redis.smembers(identity))
+            self.unserialize_output(
+                identity.split(":")[1], self.redis.smembers(identity)
+            )
             for identity in output_keys
         ]
 
