@@ -3,7 +3,7 @@ import json
 import time
 from collections import defaultdict, namedtuple
 from io import BytesIO
-from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Set, Tuple, Union
 
 from minio import Minio
 from minio.deleteobjects import DeleteObject
@@ -25,6 +25,9 @@ KartonBind = namedtuple(
     "KartonBind",
     ["identity", "info", "version", "persistent", "filters", "service_version"],
 )
+
+
+KartonOutputs = namedtuple("KartonOutputs", ["identity", "outputs"])
 
 
 class KartonMetrics(enum.Enum):
@@ -150,6 +153,18 @@ class KartonBackend:
             filters=bind["filters"],
             service_version=bind.get("service_version"),
         )
+
+    @staticmethod
+    def unserialize_output(identity: str, output_data: Set[str]) -> KartonOutputs:
+        """
+        Deserialize KartonOutputs object for given identity.
+
+        :param identity: Karton service identity
+        :param output_data: Serialized output data
+        :return: KartonOutputs object with outputs definition
+        """
+        output = [json.loads(output_type) for output_type in output_data]
+        return KartonOutputs(identity=identity, outputs=output)
 
     def get_bind(self, identity: str) -> KartonBind:
         """
@@ -642,6 +657,21 @@ class KartonBackend:
 
         self.redis.sadd(f"{KARTON_OUTPUTS_NAMESPACE}:{identity}", json.dumps(headers))
         self.redis.expire(f"{KARTON_OUTPUTS_NAMESPACE}:{identity}", 60 * 60)
+
+    def get_outputs(self) -> List[KartonOutputs]:
+        """
+        Get a list of the output types for each karton.
+
+        :return: List of KartonOutputs
+        """
+
+        output_keys = self.redis.keys(f"{KARTON_OUTPUTS_NAMESPACE}:*")
+        return [
+            self.unserialize_output(
+                identity.split(":")[1], self.redis.smembers(identity)
+            )
+            for identity in output_keys
+        ]
 
     def make_pipeline(self, transaction: bool = False) -> Pipeline:
         return self.redis.pipeline(transaction=transaction)
