@@ -1,12 +1,13 @@
 import argparse
 import json
 import time
-from typing import Optional
+from typing import List, Optional
 
 from karton.core.__version__ import __version__
 from karton.core.backend import (
     KARTON_OPERATIONS_QUEUE,
     KARTON_TASKS_QUEUE,
+    KartonBind,
     KartonMetrics,
 )
 from karton.core.base import KartonServiceBase
@@ -27,9 +28,18 @@ class SystemService(KartonServiceBase):
     TASK_STARTED_TIMEOUT = 24 * 3600
     TASK_CRASHED_TIMEOUT = 3 * 24 * 3600
 
-    def __init__(self, config: Optional[Config]) -> None:
+    def __init__(
+        self,
+        config: Optional[Config],
+        enable_gc: bool = True,
+        enable_router: bool = True,
+        gc_interval: int = GC_INTERVAL,
+    ) -> None:
         super(SystemService, self).__init__(config=config)
-        self.last_gc_trigger = 0.0
+        self.last_gc_trigger = time.time()
+        self.enable_gc = enable_gc
+        self.enable_router = enable_router
+        self.gc_interval = gc_interval
 
     def gc_collect_resources(self) -> None:
         # Collects unreferenced resources left in object storage
@@ -47,20 +57,8 @@ class SystemService(KartonServiceBase):
                 ):
                     resources_to_remove.remove(resource.uid)
         # Remove unreferenced resources
-        for object_name in list(resources_to_remove):
-            try:
-                self.backend.remove_object(karton_bucket, object_name)
-                self.log.debug(
-                    "GC: Removed unreferenced resource %s:%s",
-                    karton_bucket,
-                    object_name,
-                )
-            except Exception:
-                self.log.exception(
-                    "GC: Error during resource removing %s:%s",
-                    karton_bucket,
-                    object_name,
-                )
+        if resources_to_remove:
+            self.backend.remove_objects(karton_bucket, list(resources_to_remove))
 
     def gc_collect_abandoned_queues(self):
         online_consumers = self.backend.get_online_consumers()
@@ -86,18 +84,19 @@ class SystemService(KartonServiceBase):
         running_root_tasks = set()
         tasks = self.backend.get_all_tasks()
         enqueued_task_uids = self.backend.get_task_ids_from_queue(KARTON_TASKS_QUEUE)
+
         current_time = time.time()
+        to_delete = []
 
         for task in tasks:
             root_tasks.add(task.root_uid)
-            will_delete = False
             if (
                 task.status == TaskState.DECLARED
                 and task.uid not in enqueued_task_uids
                 and task.last_update is not None
                 and current_time > task.last_update + self.TASK_DISPATCHED_TIMEOUT
             ):
-                will_delete = True
+                to_delete.append(task)
                 self.log.warning(
                     "Task %s is in Dispatched state more than %d seconds. "
                     "Killed. (origin: %s)",
@@ -110,7 +109,7 @@ class SystemService(KartonServiceBase):
                 and task.last_update is not None
                 and current_time > task.last_update + self.TASK_STARTED_TIMEOUT
             ):
-                will_delete = True
+                to_delete.append(task)
                 self.log.warning(
                     "Task %s is in Started state more than %d seconds. "
                     "Killed. (receiver: %s)",
@@ -119,14 +118,14 @@ class SystemService(KartonServiceBase):
                     task.headers.get("receiver", "<unknown>"),
                 )
             elif task.status == TaskState.FINISHED:
-                will_delete = True
+                to_delete.append(task)
                 self.log.debug("GC: Finished task %s", task.uid)
             elif (
                 task.status == TaskState.CRASHED
                 and task.last_update is not None
                 and current_time > task.last_update + self.TASK_CRASHED_TIMEOUT
             ):
-                will_delete = True
+                to_delete.append(task)
                 self.log.debug(
                     "GC: Task %s is in Crashed state more than %d seconds. "
                     "Killed. (receiver: %s)",
@@ -134,20 +133,24 @@ class SystemService(KartonServiceBase):
                     self.TASK_CRASHED_TIMEOUT,
                     task.headers.get("receiver", "<unknown>"),
                 )
-            if will_delete:
-                self.backend.delete_task(task)
-                self.backend.increment_metrics(
-                    KartonMetrics.TASK_GARBAGE_COLLECTED,
-                    task.headers.get("receiver", "unknown"),
-                )
             else:
                 running_root_tasks.add(task.root_uid)
+
+        if to_delete:
+            to_increment = [
+                task.headers.get("receiver", "unknown") for task in to_delete
+            ]
+            self.backend.delete_tasks(to_delete)
+            self.backend.increment_metrics_list(
+                KartonMetrics.TASK_GARBAGE_COLLECTED, to_increment
+            )
+
         for finished_root_task in root_tasks.difference(running_root_tasks):
             # TODO: Notification needed
             self.log.debug("GC: Finished root task %s", finished_root_task)
 
     def gc_collect(self) -> None:
-        if time.time() > (self.last_gc_trigger + self.GC_INTERVAL):
+        if time.time() > (self.last_gc_trigger + self.gc_interval):
             try:
                 self.gc_collect_abandoned_queues()
                 self.gc_collect_tasks()
@@ -156,7 +159,7 @@ class SystemService(KartonServiceBase):
                 self.log.exception("GC: Exception during garbage collection")
             self.last_gc_trigger = time.time()
 
-    def route_task(self, task: Task) -> None:
+    def route_task(self, task: Task, binds: List[KartonBind]) -> None:
         # Performs routing of task
         self.log.info("[%s] Processing task %s", task.root_uid, task.uid)
         # store the producer-task relationship in redis for task tracking
@@ -165,7 +168,7 @@ class SystemService(KartonServiceBase):
         )
 
         pipe = self.backend.make_pipeline()
-        for bind in self.backend.get_binds():
+        for bind in binds:
             identity = bind.identity
             if task.matches_filters(bind.filters):
                 routed_task = task.fork_task()
@@ -177,65 +180,97 @@ class SystemService(KartonServiceBase):
                 self.backend.increment_metrics(
                     KartonMetrics.TASK_ASSIGNED, identity, pipe=pipe
                 )
-
-        # Directly update the task status to be finished
-        self.backend.set_task_status(task, TaskState.FINISHED, pipe=pipe)
         pipe.execute()
 
+    def handle_tasks(self, task_uids: List[str]) -> None:
+        tasks = self.backend.get_tasks(task_uids)
+        binds = self.backend.get_binds()
+        for task in tasks:
+            if task is None:
+                raise RuntimeError(
+                    "Task disappeared while popping, this should never happen"
+                )
+
+            self.route_task(task, binds)
+            task.last_update = time.time()
+            task.status = TaskState.FINISHED
+            # Directly update the unrouted task status to be finished
+        self.backend.register_tasks(tasks)
+
+    def handle_operations(self, bodies: List[str]) -> None:
+        """
+        Left for backwards compatibility with Karton <=4.3.0.
+        Earlier versions delegate task status change to karton.system.
+        """
+        operation_bodies = []
+        tasks = []
+        for body in bodies:
+            operation_body = json.loads(body)
+            task = Task.unserialize(operation_body["task"])
+            new_status = TaskState(operation_body["status"])
+            if task.status != new_status:
+                task.last_update = time.time()
+                task.status = new_status
+                tasks.append(task)
+            operation_bodies.append(operation_body)
+
+        self.backend.register_tasks(tasks)
+        self.backend.produce_logs(
+            operation_bodies, logger_name=KARTON_OPERATIONS_QUEUE, level="INFO"
+        )
+
+    def process_routing(self) -> None:
+        # Order does matter! task dispatching must be before
+        # karton.operations to avoid races. Timeout must be shorter
+        # than self.gc_interval, but not too long allowing graceful shutdown
+        data = self.backend.consume_queues(
+            [KARTON_TASKS_QUEUE, KARTON_OPERATIONS_QUEUE], timeout=5
+        )
+        if data:
+            queue, body = data
+            if not isinstance(body, str):
+                body = body.decode("utf-8")
+            if queue == KARTON_TASKS_QUEUE:
+                tasks = [body] + self.backend.consume_queues_batch(queue, max_count=100)
+                self.handle_tasks(tasks)
+            elif queue == KARTON_OPERATIONS_QUEUE:
+                bodies = [body] + self.backend.consume_queues_batch(
+                    queue, max_count=1000
+                )
+                self.handle_operations(bodies)
+
     def loop(self) -> None:
-        self.log.info("Manager {} started".format(self.identity))
+        self.log.info("Manager %s started", self.identity)
 
         while not self.shutdown:
-            # Timeout must be shorter than GC_INTERVAL,
-            # but not too long allowing graceful shutdown
-            data = self.backend.consume_queues(
-                [KARTON_TASKS_QUEUE, KARTON_OPERATIONS_QUEUE], timeout=5
-            )
-            if data:
-                queue, body = data
-                if not isinstance(body, str):
-                    body = body.decode("utf-8")
-                if queue == KARTON_TASKS_QUEUE:
-                    task_uid = body
-                    task = self.backend.get_task(task_uid)
-                    if task is None:
-                        raise RuntimeError(
-                            "Task disappeared while popping, this should never happen"
-                        )
-                    self.route_task(task)
-                elif queue == KARTON_OPERATIONS_QUEUE:
-                    """
-                    Left for backwards compatibility with Karton <=4.3.0.
-                    Earlier versions delegate task status change to karton.system.
-                    """
-                    operation_body = json.loads(body)
-                    task = Task.unserialize(operation_body["task"])
-                    new_status = TaskState(operation_body["status"])
-                    if task.status != new_status:
-                        task.last_update = time.time()
-                        task.status = new_status
-                        self.log.info(
-                            "[%s] %s %s task %s",
-                            str(task.root_uid),
-                            operation_body["identity"],
-                            operation_body["status"],
-                            str(task.uid),
-                        )
-                        # Update task status
-                        self.backend.register_task(task)
-                    # Pass new operation status to log
-                    self.backend.produce_log(
-                        operation_body,
-                        logger_name=KARTON_OPERATIONS_QUEUE,
-                        level="INFO",
-                    )
-            self.gc_collect()
+            if self.enable_router:
+                # This will wait for up to 5s, so this is not a busy loop
+                self.process_routing()
+            if self.enable_gc:
+                # This will only do anything once every self.gc_interval seconds
+                self.gc_collect()
+                if not self.enable_router:
+                    time.sleep(1)  # Avoid a busy loop
 
     @classmethod
     def args_parser(cls) -> argparse.ArgumentParser:
         parser = super().args_parser()
         parser.add_argument(
             "--setup-bucket", action="store_true", help="Create missing bucket in MinIO"
+        )
+        parser.add_argument(
+            "--disable-gc", action="store_true", help="Do not run GC in this instance"
+        )
+        parser.add_argument(
+            "--disable-router",
+            action="store_true",
+            help="Create missing bucket in MinIO",
+        )
+        parser.add_argument(
+            "--gc-interval",
+            type=int,
+            default=cls.GC_INTERVAL,
+            help="Garbage collection interval",
         )
         return parser
 
@@ -260,7 +295,9 @@ class SystemService(KartonServiceBase):
         args = parser.parse_args()
 
         config = Config(args.config_file)
-        service = SystemService(config)
+        enable_gc = not args.disable_gc
+        enable_router = not args.disable_router
+        service = SystemService(config, enable_gc, enable_router, args.gc_interval)
 
         if not service.ensure_bucket_exsits(args.setup_bucket):
             # If bucket doesn't exist without --setup-bucket: quit

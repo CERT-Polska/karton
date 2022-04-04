@@ -6,6 +6,7 @@ from io import BytesIO
 from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Tuple, Union, Set
 
 from minio import Minio
+from minio.deleteobjects import DeleteObject
 from redis import AuthenticationError, StrictRedis
 from redis.client import Pipeline
 from urllib3.response import HTTPResponse
@@ -279,6 +280,16 @@ class KartonBackend:
         rs = pipe or self.redis
         rs.set(f"{KARTON_TASK_NAMESPACE}:{task.uid}", task.serialize())
 
+    def register_tasks(self, tasks: List[Task]) -> None:
+        """
+        Register or update multiple tasks in Redis.
+        :param tasks: List of task objects
+        """
+        taskmap = {
+            f"{KARTON_TASK_NAMESPACE}:{task.uid}": task.serialize() for task in tasks
+        }
+        self.redis.mset(taskmap)
+
     def set_task_status(
         self, task: Task, status: TaskState, pipe: Optional[Pipeline] = None
     ) -> None:
@@ -289,6 +300,8 @@ class KartonBackend:
         :param status: New task status (TaskState)
         :param pipe: Optional pipeline object if operation is a part of pipeline
         """
+        if task.status == status:
+            return
         task.status = status
         task.last_update = time.time()
         self.register_task(task, pipe=pipe)
@@ -300,6 +313,15 @@ class KartonBackend:
         :param task: Task object
         """
         self.redis.delete(f"{KARTON_TASK_NAMESPACE}:{task.uid}")
+
+    def delete_tasks(self, tasks: List[Task]) -> None:
+        """
+        Remove multiple tasks from Redis
+
+        :param tasks: List of Task objects
+        """
+        keys = [f"{KARTON_TASK_NAMESPACE}:{task.uid}" for task in tasks]
+        self.redis.delete(*keys)
 
     def get_task_queue(self, queue: str) -> List[Task]:
         """
@@ -370,6 +392,18 @@ class KartonBackend:
         """
         return self.redis.blpop(queues, timeout=timeout)
 
+    def consume_queues_batch(self, queue: str, max_count: int) -> List[str]:
+        """
+        Get a batch of items from the queue
+
+        :param queue: Redis queue name
+        :param max_count: Maximum batch count
+        """
+        p = self.redis.pipeline(transaction=True)
+        p.lrange(queue, 0, max_count - 1)
+        p.ltrim(queue, max_count, -1)
+        return p.execute()[0]
+
     def consume_routed_task(self, identity: str, timeout: int = 5) -> Optional[Task]:
         """
         Get routed task for given consumer identity.
@@ -416,6 +450,25 @@ class KartonBackend:
             > 0
         )
 
+    def produce_logs(
+        self,
+        log_records: List[Dict[str, Any]],
+        logger_name: str,
+        level: str,
+    ) -> None:
+        """
+        Push multiple log records to the logs channel
+
+        :param log_records: List of dicts with log record
+        :param logger_name: Logger name
+        :param level: Log level
+        """
+        p = self.redis.pipeline()
+        channel = self._log_channel(logger_name, level)
+        for log_record in log_records:
+            p.publish(channel, json.dumps(log_record))
+        p.execute()
+
     def consume_log(
         self,
         timeout: int = 5,
@@ -459,6 +512,20 @@ class KartonBackend:
         """
         rs = pipe or self.redis
         rs.hincrby(metric.value, identity, 1)
+
+    def increment_metrics_list(
+        self, metric: KartonMetrics, identities: List[str]
+    ) -> None:
+        """
+        Increments metrics for multiple identities via single pipeline
+
+        :param metric: Operation metric type
+        :param identities: List of Karton service identities
+        """
+        p = self.redis.pipeline()
+        for identity in identities:
+            p.hincrby(metric.value, identity, 1)
+        p.execute()
 
     def get_metrics(self, metric: KartonMetrics) -> Dict[str, int]:
         """
@@ -554,6 +621,16 @@ class KartonBackend:
         :param object_uid: Object identifier
         """
         self.minio.remove_object(bucket, object_uid)
+
+    def remove_objects(self, bucket: str, object_uids: List[str]) -> None:
+        """
+        Bulk remove resource objects from object storage
+
+        :param bucket: Bucket name
+        :param object_uids: Object identifiers
+        """
+        delete_objects = [DeleteObject(uid) for uid in object_uids]
+        self.minio.remove_objects(bucket, delete_objects)
 
     def check_bucket_exists(self, bucket: str, create: bool = False) -> bool:
         """
