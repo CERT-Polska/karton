@@ -264,7 +264,7 @@ class SystemService(KartonServiceBase):
         parser.add_argument(
             "--disable-router",
             action="store_true",
-            help="Create missing bucket in MinIO",
+            help="Do not run task routing in this instance",
         )
         parser.add_argument(
             "--gc-interval",
