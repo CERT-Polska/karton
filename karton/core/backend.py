@@ -656,7 +656,7 @@ class KartonBackend:
         """
 
         self.redis.sadd(f"{KARTON_OUTPUTS_NAMESPACE}:{identity}", json.dumps(headers))
-        self.redis.expire(f"{KARTON_OUTPUTS_NAMESPACE}:{identity}", 60 * 60)
+        self.redis.expire(f"{KARTON_OUTPUTS_NAMESPACE}:{identity}", 60 * 60 * 24 * 30)
 
     def get_outputs(self) -> List[KartonOutputs]:
         """
