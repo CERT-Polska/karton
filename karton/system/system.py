@@ -58,7 +58,10 @@ class SystemService(KartonServiceBase):
                     resources_to_remove.remove(resource.uid)
         # Remove unreferenced resources
         if resources_to_remove:
-            self.backend.remove_objects(karton_bucket, list(resources_to_remove))
+            for err in self.backend.remove_objects(
+                karton_bucket, list(resources_to_remove)
+            ):
+                self.log.error(err)
 
     def gc_collect_abandoned_queues(self):
         online_consumers = self.backend.get_online_consumers()
