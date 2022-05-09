@@ -12,6 +12,7 @@ from redis.client import Pipeline
 from urllib3.response import HTTPResponse
 
 from .task import Task, TaskPriority, TaskState
+from .utils import chunks
 
 KARTON_TASKS_QUEUE = "karton.tasks"
 KARTON_OPERATIONS_QUEUE = "karton.operations"
@@ -257,16 +258,18 @@ class KartonBackend:
             if task_data is not None
         ]
 
-    def get_all_tasks(self) -> List[Task]:
+    def get_all_tasks(self, chunk_size=1000) -> List[Task]:
         """
         Get all tasks registered in Redis
 
+        :param chunk_size: Size of chunks passed to the Redis MGET command
         :return: List with Task objects
         """
         tasks = self.redis.keys(f"{KARTON_TASK_NAMESPACE}:*")
         return [
             Task.unserialize(task_data)
-            for task_data in self.redis.mget(tasks)
+            for chunk in chunks(tasks, chunk_size)
+            for task_data in self.redis.mget(chunk)
             if task_data is not None
         ]
 
@@ -314,14 +317,16 @@ class KartonBackend:
         """
         self.redis.delete(f"{KARTON_TASK_NAMESPACE}:{task.uid}")
 
-    def delete_tasks(self, tasks: List[Task]) -> None:
+    def delete_tasks(self, tasks: List[Task], chunk_size: int = 1000) -> None:
         """
         Remove multiple tasks from Redis
 
         :param tasks: List of Task objects
+        :param chunk_size: Size of chunks passed to the Redis DELETE command
         """
         keys = [f"{KARTON_TASK_NAMESPACE}:{task.uid}" for task in tasks]
-        self.redis.delete(*keys)
+        for chunk in chunks(keys, chunk_size):
+            self.redis.delete(*chunk)
 
     def get_task_queue(self, queue: str) -> List[Task]:
         """
