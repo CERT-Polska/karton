@@ -6,7 +6,7 @@ from io import BytesIO
 from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Set, Tuple, Union
 
 from minio import Minio
-from minio.deleteobjects import DeleteObject, DeleteError
+from minio.deleteobjects import DeleteError, DeleteObject
 from redis import AuthenticationError, StrictRedis
 from redis.client import Pipeline
 from urllib3.response import HTTPResponse
@@ -622,7 +622,9 @@ class KartonBackend:
         """
         self.minio.remove_object(bucket, object_uid)
 
-    def remove_objects(self, bucket: str, object_uids: List[str]) -> Iterator[DeleteError]:
+    def remove_objects(
+        self, bucket: str, object_uids: List[str]
+    ) -> Iterator[DeleteError]:
         """
         Bulk remove resource objects from object storage
 
