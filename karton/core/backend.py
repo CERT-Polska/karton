@@ -258,7 +258,7 @@ class KartonBackend:
             if task_data is not None
         ]
 
-    def get_all_tasks(self, chunk_size=1000) -> List[Task]:
+    def get_all_tasks(self, chunk_size: int = 1000) -> List[Task]:
         """
         Get all tasks registered in Redis
 
