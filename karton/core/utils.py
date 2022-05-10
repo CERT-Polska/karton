@@ -1,10 +1,16 @@
 import inspect
 import signal
-from typing import Any, Callable
+from typing import Any, Callable, Iterator, Sequence, TypeVar
+
+T = TypeVar("T")
 
 
 def get_function_arg_num(fun: Callable) -> int:
     return len(inspect.signature(fun).parameters)
+
+
+def chunks(seq: Sequence[T], size: int) -> Iterator[Sequence[T]]:
+    return (seq[pos : pos + size] for pos in range(0, len(seq), size))
 
 
 class GracefulKiller:
