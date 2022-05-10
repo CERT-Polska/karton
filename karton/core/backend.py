@@ -242,19 +242,22 @@ class KartonBackend:
             return None
         return Task.unserialize(task_data, backend=self)
 
-    def get_tasks(self, task_uid_list: List[str]) -> List[Task]:
+    def get_tasks(self, task_uid_list: List[str], chunk_size: int = 1000) -> List[Task]:
         """
         Get multiple tasks for given identifier list
 
         :param task_uid_list: List of task identifiers
+        :param chunk_size: Size of chunks passed to the Redis MGET command
         :return: List of task objects
         """
-        task_list = self.redis.mget(
-            [f"{KARTON_TASK_NAMESPACE}:{task_uid}" for task_uid in task_uid_list]
+        keys = chunks(
+            [f"{KARTON_TASK_NAMESPACE}:{task_uid}" for task_uid in task_uid_list],
+            chunk_size,
         )
         return [
             Task.unserialize(task_data, backend=self)
-            for task_data in task_list
+            for chunk in keys
+            for task_data in self.redis.mget(chunk)
             if task_data is not None
         ]
 
