@@ -24,9 +24,6 @@ class SystemService(KartonServiceBase):
     version = __version__
 
     GC_INTERVAL = 3 * 60
-    TASK_DISPATCHED_TIMEOUT = 24 * 3600
-    TASK_STARTED_TIMEOUT = 24 * 3600
-    TASK_CRASHED_TIMEOUT = 3 * 24 * 3600
 
     def __init__(
         self,
@@ -35,6 +32,18 @@ class SystemService(KartonServiceBase):
         enable_router: bool = True,
         gc_interval: int = GC_INTERVAL,
     ) -> None:
+        self.TASK_DISPATCHED_TIMEOUT = 24 * 3600
+        self.TASK_STARTED_TIMEOUT = 24 * 3600
+        self.TASK_CRASHED_TIMEOUT = 3 * 24 * 3600
+
+        if config.config.has_section("task_timeouts"):
+            self.GC_INTERVAL = config["task_timeouts"].get("GC_INTERVAL", self.GC_INTERVAL)
+            self.TASK_DISPATCHED_TIMEOUT = config["task_timeouts"].get("TASK_DISPATCHED_TIMEOUT",
+                                                                            self.TASK_DISPATCHED_TIMEOUT)
+            self.TASK_STARTED_TIMEOUT = config["task_timeouts"].get("TASK_STARTED_TIMEOUT",
+                                                                         self.TASK_STARTED_TIMEOUT)
+            self.TASK_CRASHED_TIMEOUT = config["task_timeouts"].get("TASK_CRASHED_TIMEOUT",
+                                                                         self.TASK_CRASHED_TIMEOUT)
         super(SystemService, self).__init__(config=config)
         self.last_gc_trigger = time.time()
         self.enable_gc = enable_gc
