@@ -36,7 +36,7 @@ class SystemService(KartonServiceBase):
         self.TASK_STARTED_TIMEOUT = 24 * 3600
         self.TASK_CRASHED_TIMEOUT = 3 * 24 * 3600
 
-        if config.config.has_section("task_timeouts"):
+        if config.config.has_section("karton-system"):
             self.GC_INTERVAL = config["task_timeouts"].get("GC_INTERVAL", self.GC_INTERVAL)
             self.TASK_DISPATCHED_TIMEOUT = config["task_timeouts"].get("TASK_DISPATCHED_TIMEOUT",
                                                                             self.TASK_DISPATCHED_TIMEOUT)
