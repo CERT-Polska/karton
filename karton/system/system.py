@@ -2,6 +2,7 @@ import argparse
 import json
 import time
 from typing import List, Optional
+import sympy
 
 from karton.core.__version__ import __version__
 from karton.core.backend import (
@@ -24,6 +25,9 @@ class SystemService(KartonServiceBase):
     version = __version__
 
     GC_INTERVAL = 3 * 60
+    TASK_DISPATCHED_TIMEOUT = 24 * 3600
+    TASK_STARTED_TIMEOUT = 24 * 3600
+    TASK_CRASHED_TIMEOUT = 3 * 24 * 3600
 
     def __init__(
         self,
@@ -32,23 +36,23 @@ class SystemService(KartonServiceBase):
         enable_router: bool = True,
         gc_interval: int = GC_INTERVAL,
     ) -> None:
-        self.TASK_DISPATCHED_TIMEOUT = 24 * 3600
-        self.TASK_STARTED_TIMEOUT = 24 * 3600
-        self.TASK_CRASHED_TIMEOUT = 3 * 24 * 3600
+        self.gc_interval = gc_interval
+        self.task_dispatched_timeout = self.TASK_DISPATCHED_TIMEOUT
+        self.task_started_timeout = self.TASK_STARTED_TIMEOUT
+        self.task_crashed_timeout = self.TASK_CRASHED_TIMEOUT
 
         if config.config.has_section("karton-system"):
-            self.GC_INTERVAL = config["task_timeouts"].get("GC_INTERVAL", self.GC_INTERVAL)
-            self.TASK_DISPATCHED_TIMEOUT = config["task_timeouts"].get("TASK_DISPATCHED_TIMEOUT",
-                                                                            self.TASK_DISPATCHED_TIMEOUT)
-            self.TASK_STARTED_TIMEOUT = config["task_timeouts"].get("TASK_STARTED_TIMEOUT",
-                                                                         self.TASK_STARTED_TIMEOUT)
-            self.TASK_CRASHED_TIMEOUT = config["task_timeouts"].get("TASK_CRASHED_TIMEOUT",
-                                                                         self.TASK_CRASHED_TIMEOUT)
+            self.gc_interval = int(sympy.sympify(config["task_timeouts"].get("GC_INTERVAL", self.gc_interval)))
+            self.task_dispatched_timeout = int(sympy.sympify(config["task_timeouts"].get(
+                "TASK_DISPATCHED_TIMEOUT", self.task_dispatched_timeout)))
+            self.task_started_timeout = int(sympy.sympify(config["task_timeouts"].get(
+                "TASK_STARTED_TIMEOUT", self.task_started_timeout)))
+            self.task_crashed_timeout = int(sympy.sympify(config["task_timeouts"].get(
+                "TASK_CRASHED_TIMEOUT", self.task_crashed_timeout)))
         super(SystemService, self).__init__(config=config)
         self.last_gc_trigger = time.time()
         self.enable_gc = enable_gc
         self.enable_router = enable_router
-        self.gc_interval = gc_interval
 
     def gc_collect_resources(self) -> None:
         # Collects unreferenced resources left in object storage
@@ -106,27 +110,27 @@ class SystemService(KartonServiceBase):
                 task.status == TaskState.DECLARED
                 and task.uid not in enqueued_task_uids
                 and task.last_update is not None
-                and current_time > task.last_update + self.TASK_DISPATCHED_TIMEOUT
+                and current_time > task.last_update + self.task_dispatched_timeout
             ):
                 to_delete.append(task)
                 self.log.warning(
                     "Task %s is in Dispatched state more than %d seconds. "
                     "Killed. (origin: %s)",
                     task.uid,
-                    self.TASK_DISPATCHED_TIMEOUT,
+                    self.task_dispatched_timeout,
                     task.headers.get("origin", "<unknown>"),
                 )
             elif (
                 task.status == TaskState.STARTED
                 and task.last_update is not None
-                and current_time > task.last_update + self.TASK_STARTED_TIMEOUT
+                and current_time > task.last_update + self.task_started_timeout
             ):
                 to_delete.append(task)
                 self.log.warning(
                     "Task %s is in Started state more than %d seconds. "
                     "Killed. (receiver: %s)",
                     task.uid,
-                    self.TASK_STARTED_TIMEOUT,
+                    self.task_started_timeout,
                     task.headers.get("receiver", "<unknown>"),
                 )
             elif task.status == TaskState.FINISHED:
@@ -135,14 +139,14 @@ class SystemService(KartonServiceBase):
             elif (
                 task.status == TaskState.CRASHED
                 and task.last_update is not None
-                and current_time > task.last_update + self.TASK_CRASHED_TIMEOUT
+                and current_time > task.last_update + self.task_crashed_timeout
             ):
                 to_delete.append(task)
                 self.log.debug(
                     "GC: Task %s is in Crashed state more than %d seconds. "
                     "Killed. (receiver: %s)",
                     task.uid,
-                    self.TASK_CRASHED_TIMEOUT,
+                    self.task_crashed_timeout,
                     task.headers.get("receiver", "<unknown>"),
                 )
             else:
