@@ -2,6 +2,7 @@ import argparse
 import json
 import time
 from typing import List, Optional
+
 import sympy
 
 from karton.core.__version__ import __version__
@@ -42,13 +43,32 @@ class SystemService(KartonServiceBase):
         self.task_crashed_timeout = self.TASK_CRASHED_TIMEOUT
 
         if config.config.has_section("karton-system"):
-            self.gc_interval = int(sympy.sympify(config["task_timeouts"].get("GC_INTERVAL", self.gc_interval)))
-            self.task_dispatched_timeout = int(sympy.sympify(config["task_timeouts"].get(
-                "TASK_DISPATCHED_TIMEOUT", self.task_dispatched_timeout)))
-            self.task_started_timeout = int(sympy.sympify(config["task_timeouts"].get(
-                "TASK_STARTED_TIMEOUT", self.task_started_timeout)))
-            self.task_crashed_timeout = int(sympy.sympify(config["task_timeouts"].get(
-                "TASK_CRASHED_TIMEOUT", self.task_crashed_timeout)))
+            self.gc_interval = int(
+                sympy.sympify(
+                    config["task_timeouts"].get("GC_INTERVAL", self.gc_interval)
+                )
+            )
+            self.task_dispatched_timeout = int(
+                sympy.sympify(
+                    config["task_timeouts"].get(
+                        "TASK_DISPATCHED_TIMEOUT", self.task_dispatched_timeout
+                    )
+                )
+            )
+            self.task_started_timeout = int(
+                sympy.sympify(
+                    config["task_timeouts"].get(
+                        "TASK_STARTED_TIMEOUT", self.task_started_timeout
+                    )
+                )
+            )
+            self.task_crashed_timeout = int(
+                sympy.sympify(
+                    config["task_timeouts"].get(
+                        "TASK_CRASHED_TIMEOUT", self.task_crashed_timeout
+                    )
+                )
+            )
         super(SystemService, self).__init__(config=config)
         self.last_gc_trigger = time.time()
         self.enable_gc = enable_gc
