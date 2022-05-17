@@ -277,7 +277,7 @@ class SystemService(KartonServiceBase):
         )
         return parser
 
-    def ensure_bucket_exsits(self, create: bool) -> bool:
+    def ensure_bucket_exists(self, create: bool) -> bool:
         bucket_name = self.backend.default_bucket_name
         bucket_exists = self.backend.check_bucket_exists(bucket_name, create=create)
         if not bucket_exists:
@@ -302,7 +302,7 @@ class SystemService(KartonServiceBase):
         enable_router = not args.disable_router
         service = SystemService(config, enable_gc, enable_router, args.gc_interval)
 
-        if not service.ensure_bucket_exsits(args.setup_bucket):
+        if not service.ensure_bucket_exists(args.setup_bucket):
             # If bucket doesn't exist without --setup-bucket: quit
             return
 
