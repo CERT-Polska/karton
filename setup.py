@@ -15,6 +15,8 @@ setup(
     name="karton-core",
     version=version_info["__version__"],
     description="Distributed malware analysis orchestration framework",
+    long_description=open("README.md").read(),
+    long_description_content_type="text/markdown",
     namespace_packages=["karton"],
     packages=["karton.core", "karton.system"],
     package_data={"karton.core": ["py.typed"]},
@@ -25,6 +27,7 @@ setup(
             'karton=karton.core.main:main'
         ],
     },
+    url="https://github.com/CERT-Polska/karton",
     classifiers=[
         "Programming Language :: Python",
         "Operating System :: OS Independent",
