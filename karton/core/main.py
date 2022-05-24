@@ -196,7 +196,7 @@ def main() -> None:
     logs_parser = subparsers.add_parser("logs", help="Start streaming logs")
     logs_parser.add_argument(
         "--filter",
-        help='Service identity filter e.g. "karton.classifier-*"',
+        help='Service identity filter e.g. "karton.classifier"',
         required=False,
     )
 
