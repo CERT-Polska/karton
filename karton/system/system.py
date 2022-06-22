@@ -3,8 +3,6 @@ import json
 import time
 from typing import List, Optional
 
-import sympy
-
 from karton.core.__version__ import __version__
 from karton.core.backend import (
     KARTON_OPERATIONS_QUEUE,
@@ -44,29 +42,21 @@ class SystemService(KartonServiceBase):
 
         if config.config.has_section("karton-system"):
             self.gc_interval = int(
-                sympy.sympify(
-                    config["task_timeouts"].get("GC_INTERVAL", self.gc_interval)
-                )
+                config["task_timeouts"].get("GC_INTERVAL", self.gc_interval)
             )
             self.task_dispatched_timeout = int(
-                sympy.sympify(
-                    config["task_timeouts"].get(
-                        "TASK_DISPATCHED_TIMEOUT", self.task_dispatched_timeout
-                    )
+                config["task_timeouts"].get(
+                    "TASK_DISPATCHED_TIMEOUT", self.task_dispatched_timeout
                 )
             )
             self.task_started_timeout = int(
-                sympy.sympify(
-                    config["task_timeouts"].get(
-                        "TASK_STARTED_TIMEOUT", self.task_started_timeout
-                    )
+                config["task_timeouts"].get(
+                    "TASK_STARTED_TIMEOUT", self.task_started_timeout
                 )
             )
             self.task_crashed_timeout = int(
-                sympy.sympify(
-                    config["task_timeouts"].get(
-                        "TASK_CRASHED_TIMEOUT", self.task_crashed_timeout
-                    )
+                config["task_timeouts"].get(
+                    "TASK_CRASHED_TIMEOUT", self.task_crashed_timeout
                 )
             )
         super(SystemService, self).__init__(config=config)
