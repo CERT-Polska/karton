@@ -99,7 +99,7 @@ That was pretty short! Now for a bit longer consumer:
 
 If we now run the consumer and spawn a few "foobar" tasks we should get a few foobars logs in return:
 
-.. code-block:: none
+.. code-block:: console
 
     [INFO] Service foo-consumer started
     [INFO] Service binds created.
@@ -126,3 +126,53 @@ If we now run the consumer and spawn a few "foobar" tasks we should get a few fo
     5
     Bar
     [INFO] Task done - d3a39940-d64c-4033-a7da-80eae9786631
+
+
+Command-line interface (CLI)
+----------------------------------------
+
+When you install ``karton-core``, a new command called ``karton`` is added to your terminal.
+You can inspect its capabilities by running it:
+
+.. code-block:: console
+
+    (venv) user@computer ~/> karton
+    usage: karton [-h] [--version] [-c CONFIG_FILE] [-v] {list,logs,delete,configure} ...
+
+    Your red pill to the karton-verse
+
+    positional arguments:
+    {list,logs,delete,configure}
+                            sub-command help
+        list                List active karton binds
+        logs                Start streaming logs
+        delete              Delete an unused karton bind
+        configure           Create a new configuration file
+
+    optional arguments:
+    -h, --help            show this help message and exit
+    --version             show program's version number and exit
+    -c CONFIG_FILE, --config-file CONFIG_FILE
+                            Alternative configuration path
+    -v, --verbose         More verbose log output
+
+
+The commands are small, utility scripts that are supposed to make maintaining karton a bit easier.
+
+**list**
+
+List active karton consumers, this can be handy if you don't have a dashboard deployed
+
+**logs [--filter FILTER]**
+
+Subscribe to logs coming in from all services. This is very useful if you're trying to hunt down errors or some funky behavior. 
+You can specify a filter that will limit incoming log messages, for example, to a specific identity - ``--filter "karton.classifier"``.
+
+**delete <identity>**
+
+Delete a persistent queue that's no longer needed.
+
+**configure [--force]**
+
+Create a new ``karton.ini`` configuration file. The config wizard will ask you about various parameters, like the MinIO credentials, Redis host, etc. and then save the information into a config file.
+
