@@ -25,7 +25,7 @@ class KartonBase(abc.ABC):
             self.identity = identity
 
         self.config = config or Config()
-        self.backend = backend or KartonBackend(self.config)
+        self.backend = backend or KartonBackend(self.config, identity=self.identity)
 
         self.log_handler = KartonLogHandler(backend=self.backend, channel=self.identity)
         self.current_task: Optional[Task] = None

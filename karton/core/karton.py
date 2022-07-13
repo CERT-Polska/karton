@@ -293,8 +293,6 @@ class Consumer(KartonServiceBase):
         for task_filter in self.filters:
             self.log.info("Binding on: %s", task_filter)
 
-        self.backend.set_consumer_identity(self.identity)
-
         try:
             while not self.shutdown:
                 if self.backend.get_bind(self.identity) != self._bind:
