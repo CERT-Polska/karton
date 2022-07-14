@@ -49,7 +49,7 @@ class KartonBackend:
             endpoint=config["minio"]["address"],
             access_key=config["minio"]["access_key"],
             secret_key=config["minio"]["secret_key"],
-            secure=config.config.getboolean("minio", "secure", fallback=True),
+            secure=config.getboolean("minio", "secure", fallback=True),
         )
 
     def make_redis(self, config, identity: Optional[str] = None) -> StrictRedis:
@@ -62,8 +62,8 @@ class KartonBackend:
         """
         redis_args = {
             "host": config["redis"]["host"],
-            "port": int(config["redis"].get("port", 6379)),
-            "password": config["redis"].get("password"),
+            "port": config.getint("redis", "port", 6379),
+            "password": config.get("redis", "password"),
             "client_name": identity,
             "decode_responses": True,
         }
@@ -81,7 +81,7 @@ class KartonBackend:
 
     @property
     def default_bucket_name(self) -> str:
-        return self.config.minio_config["bucket"]
+        return self.config["minio"]["bucket"]
 
     @staticmethod
     def get_queue_name(identity: str, priority: TaskPriority) -> str:

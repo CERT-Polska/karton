@@ -28,41 +28,23 @@ class SystemService(KartonServiceBase):
     TASK_STARTED_TIMEOUT = 24 * 3600
     TASK_CRASHED_TIMEOUT = 3 * 24 * 3600
 
-    def __init__(
-        self,
-        config: Optional[Config],
-        enable_gc: bool = True,
-        enable_router: bool = True,
-        gc_interval: int = GC_INTERVAL,
-    ) -> None:
+    def __init__(self, config: Optional[Config]) -> None:
         super(SystemService, self).__init__(config=config)
-        self.gc_interval = gc_interval
-        self.task_dispatched_timeout = self.TASK_DISPATCHED_TIMEOUT
-        self.task_started_timeout = self.TASK_STARTED_TIMEOUT
-        self.task_crashed_timeout = self.TASK_CRASHED_TIMEOUT
 
-        if self.config.config.has_section("karton-system"):
-            self.gc_interval = int(
-                self.config["task_timeouts"].get("GC_INTERVAL", self.gc_interval)
-            )
-            self.task_dispatched_timeout = int(
-                self.config["task_timeouts"].get(
-                    "TASK_DISPATCHED_TIMEOUT", self.task_dispatched_timeout
-                )
-            )
-            self.task_started_timeout = int(
-                self.config["task_timeouts"].get(
-                    "TASK_STARTED_TIMEOUT", self.task_started_timeout
-                )
-            )
-            self.task_crashed_timeout = int(
-                self.config["task_timeouts"].get(
-                    "TASK_CRASHED_TIMEOUT", self.task_crashed_timeout
-                )
-            )
+        self.gc_interval = self.config.getint("system", "gc_interval", self.GC_INTERVAL)
+        self.task_dispatched_timeout = self.config.getint(
+            "system", "task_dispatched_timeout", self.TASK_DISPATCHED_TIMEOUT
+        )
+        self.task_started_timeout = self.config.getint(
+            "system", "task_started_timeout", self.TASK_STARTED_TIMEOUT
+        )
+        self.task_crashed_timeout = self.config.getint(
+            "system", "task_crashed_timeout", self.TASK_CRASHED_TIMEOUT
+        )
+        self.enable_gc = self.config.getboolean("system", "enable_gc", True)
+        self.enable_router = self.config.getboolean("system", "enable_router", True)
+
         self.last_gc_trigger = time.time()
-        self.enable_gc = enable_gc
-        self.enable_router = enable_router
 
     def gc_collect_resources(self) -> None:
         # Collects unreferenced resources left in object storage
@@ -284,12 +266,19 @@ class SystemService(KartonServiceBase):
         parser.add_argument(
             "--setup-bucket", action="store_true", help="Create missing bucket in MinIO"
         )
+        # store_false defaults to True, we intentionally want None there
         parser.add_argument(
-            "--disable-gc", action="store_true", help="Do not run GC in this instance"
+            "--disable-gc",
+            action="store_const",
+            const=False,
+            dest="enable_gc",
+            help="Do not run GC in this instance",
         )
         parser.add_argument(
             "--disable-router",
-            action="store_true",
+            action="store_const",
+            const=False,
+            dest="enable_router",
             help="Do not run task routing in this instance",
         )
         parser.add_argument(
@@ -298,7 +287,36 @@ class SystemService(KartonServiceBase):
             default=cls.GC_INTERVAL,
             help="Garbage collection interval",
         )
+        parser.add_argument(
+            "--task-dispatched-timeout",
+            help="Timeout for non-enqueued tasks stuck in Dispatched state "
+            "(non-graceful shutdown of producer)",
+        )
+        parser.add_argument(
+            "--task-started-timeout",
+            help="Timeout for non-enqueued tasks stuck in Started state "
+            "(non-graceful shutdown of consumer)",
+        )
+        parser.add_argument(
+            "--task-crashed-timeout", help="Timeout for tasks in Crashed state"
+        )
         return parser
+
+    @classmethod
+    def config_from_args(cls, config: Config, args: argparse.Namespace):
+        super().config_from_args(config, args)
+        config.load_from_dict(
+            {
+                "system": {
+                    "enable_gc": args.enable_gc,
+                    "enable_router": args.enable_router,
+                    "gc_interval": args.gc_interval,
+                    "task_dispatched_timeout": args.task_dispatched_timeout,
+                    "task_started_timeout": args.task_started_timeout,
+                    "task_crashed_timeout": args.task_crashed_timeout,
+                }
+            }
+        )
 
     def ensure_bucket_exists(self, create: bool) -> bool:
         bucket_name = self.backend.default_bucket_name
@@ -319,11 +337,7 @@ class SystemService(KartonServiceBase):
     def main(cls) -> None:
         parser = cls.args_parser()
         args = parser.parse_args()
-
-        config = Config(args.config_file)
-        enable_gc = not args.disable_gc
-        enable_router = not args.disable_router
-        service = SystemService(config, enable_gc, enable_router, args.gc_interval)
+        service = cls.karton_from_args(args)
 
         if not service.ensure_bucket_exists(args.setup_bucket):
             # If bucket doesn't exist without --setup-bucket: quit

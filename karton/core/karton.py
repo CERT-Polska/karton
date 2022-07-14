@@ -2,6 +2,7 @@
 Base library for karton subsystems.
 """
 import abc
+import argparse
 import sys
 import time
 import traceback
@@ -123,6 +124,10 @@ class Consumer(KartonServiceBase):
         if self.filters is None:
             raise ValueError("Cannot bind consumer on Empty binds")
 
+        self.persistent = self.config.getboolean(
+            "karton", "persistent", self.persistent
+        )
+
         self.current_task: Optional[Task] = None
         self._pre_hooks: List[Tuple[Optional[str], Callable[[Task], None]]] = []
         self._post_hooks: List[
@@ -212,6 +217,24 @@ class Consumer(KartonServiceBase):
             persistent=self.persistent,
             service_version=self.__class__.version,
         )
+
+    @classmethod
+    def args_parser(cls) -> argparse.ArgumentParser:
+        parser = super().args_parser()
+        # store_false defaults to True, we intentionally want None there
+        parser.add_argument(
+            "--non-persistent",
+            action="store_const",
+            const=False,
+            dest="persistent",
+            help="Run service with non-persistent queue",
+        )
+        return parser
+
+    @classmethod
+    def config_from_args(cls, config: Config, args: argparse.Namespace):
+        super().config_from_args(config, args)
+        config.load_from_dict({"karton": {"persistent": args.persistent}})
 
     def add_pre_hook(
         self, callback: Callable[[Task], None], name: Optional[str] = None
@@ -386,11 +409,10 @@ class Karton(Consumer, Producer):
     ) -> None:
         super(Karton, self).__init__(config=config, identity=identity, backend=backend)
 
-        if self.config.config.has_section("signaling"):
-            if self.config.config.getboolean("signaling", "status", fallback=False):
-                self.log.info("Using status signaling")
-                self.add_pre_hook(self._send_signaling_status_task_begin, "task_begin")
-                self.add_post_hook(self._send_signaling_status_task_end, "task_end")
+        if self.config.getboolean("signaling", "status", fallback=False):
+            self.log.info("Using status signaling")
+            self.add_pre_hook(self._send_signaling_status_task_begin, "task_begin")
+            self.add_post_hook(self._send_signaling_status_task_end, "task_end")
 
     def _send_signaling_status_task_begin(self, task: Task) -> None:
         """Send a begin status signaling task.
