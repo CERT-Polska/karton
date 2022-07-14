@@ -41,7 +41,7 @@ class KartonMetrics(enum.Enum):
 
 
 class KartonBackend:
-    def __init__(self, config, identity=None):
+    def __init__(self, config, identity: Optional[str] = None) -> None:
         self.config = config
         self.identity = identity
         self.redis = self.make_redis(config, identity=identity)
