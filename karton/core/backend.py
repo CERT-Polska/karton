@@ -52,7 +52,7 @@ class KartonBackend:
             secure=config.config.getboolean("minio", "secure", fallback=True),
         )
 
-    def make_redis(self, config, identity=None) -> StrictRedis:
+    def make_redis(self, config, identity: Optional[str] = None) -> StrictRedis:
         """
         Create and test a Redis connection.
 
