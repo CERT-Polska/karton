@@ -12,6 +12,10 @@ from .utils import GracefulKiller
 
 
 class KartonBase(abc.ABC):
+    """
+    Base class for all Karton services
+    """
+
     identity = ""
 
     def __init__(
@@ -27,7 +31,9 @@ class KartonBase(abc.ABC):
         self.config = config or Config()
         self.backend = backend or KartonBackend(self.config, identity=self.identity)
 
-        self.log_handler = KartonLogHandler(backend=self.backend, channel=self.identity)
+        self._log_handler = KartonLogHandler(
+            backend=self.backend, channel=self.identity
+        )
         self.current_task: Optional[Task] = None
 
     def setup_logger(self, level: Optional[Union[str, int]] = None) -> None:
@@ -54,16 +60,36 @@ class KartonBase(abc.ABC):
         if not self.identity:
             raise ValueError("Can't setup logger without identity")
 
-        self.log_handler.setFormatter(logging.Formatter())
+        self._log_handler.setFormatter(logging.Formatter())
 
         logger = logging.getLogger(self.identity)
+
+        if logger.handlers:
+            # If logger already have handlers set: clear them
+            logger.handlers.clear()
+
+        # Turn off propagation to parent loggers to avoid double logging
+        # We set up StreamHandler directly on logger, so it may be needed
+        # in case basicConfig was called at some point.
+        logger.propagate = False
+
         logger.setLevel(log_level)
         stream_handler = logging.StreamHandler()
         stream_handler.setFormatter(
             logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s")
         )
         logger.addHandler(stream_handler)
-        logger.addHandler(self.log_handler)
+        logger.addHandler(self._log_handler)
+
+    @property
+    def log_handler(self) -> KartonLogHandler:
+        """
+        Return KartonLogHandler bound to this Karton service.
+
+        Can be used to setup logging on your own by adding this handler
+        to the chosen loggers.
+        """
+        return self._log_handler
 
     @property
     def log(self) -> logging.Logger:
@@ -87,7 +113,7 @@ class KartonServiceBase(KartonBase):
     """
     Karton base class for looping services.
 
-    You can set a informative version information by setting the ``version`` class
+    You can set an informative version information by setting the ``version`` class
     attribute
 
     :param config: Karton config to use for service configuration
