@@ -1,6 +1,7 @@
 import enum
 import json
 import time
+import warnings
 from collections import defaultdict, namedtuple
 from io import BytesIO
 from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Set, Tuple, Union
@@ -40,9 +41,10 @@ class KartonMetrics(enum.Enum):
 
 
 class KartonBackend:
-    def __init__(self, config):
+    def __init__(self, config, identity: Optional[str] = None) -> None:
         self.config = config
-        self.redis = self.make_redis(config)
+        self.identity = identity
+        self.redis = self.make_redis(config, identity=identity)
         self.minio = Minio(
             endpoint=config["minio"]["address"],
             access_key=config["minio"]["access_key"],
@@ -50,17 +52,19 @@ class KartonBackend:
             secure=config.config.getboolean("minio", "secure", fallback=True),
         )
 
-    def make_redis(self, config) -> StrictRedis:
+    def make_redis(self, config, identity: Optional[str] = None) -> StrictRedis:
         """
         Create and test a Redis connection.
 
         :param config: The karton configuration
-        :return: Redis conection
+        :param identity: Karton service identity
+        :return: Redis connection
         """
         redis_args = {
             "host": config["redis"]["host"],
             "port": int(config["redis"].get("port", 6379)),
             "password": config["redis"].get("password"),
+            "client_name": identity,
             "decode_responses": True,
         }
         try:
@@ -213,11 +217,15 @@ class KartonBackend:
         """
         self.redis.hdel(KARTON_BINDS_HSET, identity)
 
-    def set_consumer_identity(self, identity: str) -> None:
+    def set_consumer_identity(self, _: str) -> None:
         """
         Sets identity for current Redis connection
         """
-        return self.redis.client_setname(identity)
+        warnings.warn(
+            "set_consumer_identity is deprecated and does nothing from v4.5.0. "
+            "Use identity constructor argument instead",
+            DeprecationWarning,
+        )
 
     def get_online_consumers(self) -> Dict[str, List[str]]:
         """
