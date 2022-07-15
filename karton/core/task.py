@@ -1,4 +1,5 @@
 import enum
+import fnmatch
 import json
 import time
 import uuid
@@ -49,7 +50,7 @@ class Task(object):
 
     def __init__(
         self,
-        headers: Dict[str, Any],
+        headers: Dict[str, str],
         payload: Optional[Dict[str, Any]] = None,
         payload_persistent: Optional[Dict[str, Any]] = None,
         priority: Optional[TaskPriority] = None,
@@ -110,7 +111,7 @@ class Task(object):
         )
         return new_task
 
-    def derive_task(self, headers: Dict[str, Any]) -> "Task":
+    def derive_task(self, headers: Dict[str, str]) -> "Task":
         """
         Creates copy of task with different headers,
         useful for proxying resource with added metadata.
@@ -152,7 +153,7 @@ class Task(object):
         )
         return new_task
 
-    def matches_filters(self, filters: List[Dict[str, Any]]) -> bool:
+    def matches_filters(self, filters: List[Dict[str, str]]) -> bool:
         """
         Checks whether provided task headers match filters
 
@@ -161,12 +162,26 @@ class Task(object):
 
         :meta private:
         """
+
+        def value_compare(filter_value: str, header_value: Optional[str]) -> bool:
+            negated = False
+            if filter_value.startswith("!"):
+                negated = True
+                filter_value = filter_value[1:]
+
+            if header_value is None:
+                return negated
+
+            # fnmatch is great for handling simple wildcard patterns (?, *, [abc])
+            # If negated: match result should not be True (XOR)
+            return fnmatch.fnmatchcase(header_value, filter_value) != negated
+
         return any(
             # If any of consumer filters matches the header
             all(
                 # Match: all consumer filter fields match the task header
-                self.headers.get(bind_key) == bind_value
-                for bind_key, bind_value in task_filter.items()
+                value_compare(filter_value, self.headers.get(filter_key))
+                for filter_key, filter_value in task_filter.items()
             )
             for task_filter in filters
         )
