@@ -81,7 +81,10 @@ class KartonBackend:
 
     @property
     def default_bucket_name(self) -> str:
-        return self.config["minio"]["bucket"]
+        bucket_name = self.config.get("minio", "bucket")
+        if not bucket_name:
+            raise RuntimeError("MinIO default bucket is not defined in configuration")
+        return bucket_name
 
     @staticmethod
     def get_queue_name(identity: str, priority: TaskPriority) -> str:

@@ -59,7 +59,9 @@ class Config(object):
             self._config[section_name] = {}
         self._config[section_name][option_name] = value
 
-    def get(self, section_name: str, option_name: str, fallback: Optional[Any] = None) -> Any:
+    def get(
+        self, section_name: str, option_name: str, fallback: Optional[Any] = None
+    ) -> Any:
         """
         Gets value from configuration or returns ``fallback`` (None by default)
         if value was not set.
@@ -67,6 +69,12 @@ class Config(object):
         if not self.has_option(section_name, option_name):
             return fallback
         return self._config[section_name][option_name]
+
+    def has_section(self, section_name: str) -> bool:
+        """
+        Checks if configuration section exists
+        """
+        return section_name in self._config
 
     def has_option(self, section_name: str, option_name: str) -> bool:
         """
