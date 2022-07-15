@@ -13,6 +13,7 @@ class Config(object):
     - ``/etc/karton/karton.ini`` (global)
     - ``~/.config/karton/karton.ini`` (user local)
     - ``./karton.ini`` (subsystem local)
+    - ``<path>`` optional, additional path provided in arguments
 
     It is also possible to pass configuration via environment variables.
     Any variable named KARTON_FOO_BAR is equivalent to setting 'bar' variable
@@ -20,7 +21,7 @@ class Config(object):
 
     Environment variables have higher precedence than those loaded from files.
 
-    :param path: Path to alternative configuration file
+    :param path: Path to additional configuration file
     :param check_sections: Check if sections ``redis`` and ``minio`` are defined
         in the configuration
     """
@@ -39,16 +40,15 @@ class Config(object):
         if path is not None:
             if not os.path.isfile(path):
                 raise IOError("Configuration file not found in " + path)
-            self._load_from_file([path])
-        else:
-            self._load_from_file(self.SEARCH_PATHS)
+            self.SEARCH_PATHS = self.SEARCH_PATHS + [path]
 
+        self._load_from_file(self.SEARCH_PATHS)
         self._load_from_env()
 
         if check_sections:
-            if "minio" not in self._config:
+            if not self.has_section("minio"):
                 raise RuntimeError("Missing MinIO configuration")
-            if "redis" not in self._config:
+            if not self.has_section("redis"):
                 raise RuntimeError("Missing Redis configuration")
 
     def set(self, section_name: str, option_name: str, value: Any) -> None:
