@@ -59,7 +59,7 @@ class Config(object):
             self._config[section_name] = {}
         self._config[section_name][option_name] = value
 
-    def get(self, section_name: str, option_name: str, fallback=None) -> Any:
+    def get(self, section_name: str, option_name: str, fallback: Optional[Any] = None) -> Any:
         """
         Gets value from configuration or returns ``fallback`` (None by default)
         if value was not set.
@@ -128,7 +128,7 @@ class Config(object):
         else:
             raise ValueError(f"{section_name}.{option_name} is not a correct boolean")
 
-    def append_to_list(self, section_name: str, option_name: str, value: Any):
+    def append_to_list(self, section_name: str, option_name: str, value: Any) -> None:
         """
         Appends value to a list in configuration
         """
@@ -144,7 +144,7 @@ class Config(object):
             )
         self._config[section_name][option_name].append(value)
 
-    def load_from_dict(self, data: Dict[str, Dict[str, Any]]):
+    def load_from_dict(self, data: Dict[str, Dict[str, Any]]) -> None:
         """
         Updates configuration values from dictionary compatible with
         ``ConfigParser.read_dict``. Accepts value in native type, so you
@@ -165,7 +165,7 @@ class Config(object):
                     continue
                 self.set(section_name, option_name, value)
 
-    def _load_from_file(self, paths: List[str]):
+    def _load_from_file(self, paths: List[str]) -> None:
         """
         Function used for loading configuration items from karton.ini files
 
@@ -175,7 +175,7 @@ class Config(object):
         config_file.read(paths)
         self.load_from_dict(cast(Dict[str, Dict[str, Any]], config_file))
 
-    def _load_from_env(self):
+    def _load_from_env(self) -> None:
         """
         Function used for loading configuration items from the environment variables
 
@@ -194,6 +194,6 @@ class Config(object):
             key = key.lower()
             self.set(section, key, value)
 
-    def __getitem__(self, section):
+    def __getitem__(self, section) -> Dict[str, Any]:
         """Gets a section named `section` from the config"""
         return self._config[section]

@@ -232,7 +232,7 @@ class Consumer(KartonServiceBase):
         return parser
 
     @classmethod
-    def config_from_args(cls, config: Config, args: argparse.Namespace):
+    def config_from_args(cls, config: Config, args: argparse.Namespace) -> None:
         super().config_from_args(config, args)
         config.load_from_dict({"karton": {"persistent": args.persistent}})
 
