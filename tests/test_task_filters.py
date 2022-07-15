@@ -124,3 +124,31 @@ class TestTaskFilters(unittest.TestCase):
             "kind": "runnable",
         })
         self.assertTrue(task_noplatform.matches_filters(filters))
+
+    def test_non_string_headers(self):
+        # It's not recommended but was allowed by earlier versions
+        filters = [
+            {
+                "block": True,
+                "value": 20
+            }
+        ]
+
+        task_block = Task(headers={
+            "block": True,
+            "value": 20
+        })
+        self.assertTrue(task_block.matches_filters(filters))
+
+        task_non_block = Task(headers={
+            "block": False,
+            "value": 20
+        })
+        self.assertFalse(task_non_block.matches_filters(filters))
+
+        task_different_value = Task(headers={
+            "block": True,
+            "value": 10
+        })
+        self.assertFalse(task_different_value.matches_filters(filters))
+

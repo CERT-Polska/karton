@@ -107,6 +107,13 @@ Filter logic can be used to fulfill specific use-cases:
 ``[{"foo": "!*"}]``                   'foo' header must be not defined.
 ====================================  ==============================================================================
 
+.. warning::
+
+    It's recommended to use only strings in filter and header values
+
+    Although some of non-string types are allowed, they will be converted to string for comparison
+    which may lead to unexpected results.
+
 Task payload
 ------------
 
