@@ -131,9 +131,9 @@ As defined in `karton/core/karton.py`:
 .. code-block:: python
 
     class Karton(Consumer, Producer):
-    """
-    This glues together Consumer and Producer - which is the most common use case
-    """
+        """
+        This glues together Consumer and Producer - which is the most common use case
+        """
 
 Receiving data is done exactly like in Consumer.
 Using producer is no different as well, just use ``self.send_task``.

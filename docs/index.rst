@@ -55,7 +55,7 @@ Task routing and data exchange is achieved with the help of **Karton-System** - 
 
    if __name__ == "__main__":
        # Here comes the main loop
-       GenericUnpacker().loop()
+       GenericUnpacker.main()
 
 
 .. toctree::

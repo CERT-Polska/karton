@@ -3,6 +3,39 @@ Breaking changes
 
 This chapter will describe significant changes introduced in major version releases of Karton. Versions before 4.0.0 were not officially released, so they have value only for internal purposes. Don't worry about it if you are a new user.
 
+What changed in Karton 5.0.0
+----------------------------
+
+Karton-System and core services are still able to communicate with previous versions.
+
+* :class:`karton.core.Config` interface is changed. ``config``, ``minio_config`` and ``redis_config`` attributes are no longer available.
+
+* We noticed lots of issues caused by calling factory method ``main()`` on instance instead of class, which can be misleading (:py:meth:``karton.core.base.KartonBase.main``
+  actually creates own instance of Karton service internally, so the initialization is doubled). To notice these errors more quickly, we prevented ``main()`` call on ``KartonBase`` instance
+
+  .. code-block:: python
+
+    if __name__ == "__main__":
+        MyConsumer.main()  # correct
+
+    if __name__ == "__main__":
+        MyConsumer().main()  # throws TypeError
+
+* ``karton.core.Consumer.process`` no longer accepts no arguments. First argument of this method is incoming task.
+
+.. code-block:: python
+
+    # Correct
+    class MyConsumer(Karton):
+        def process(self, task: Task) -> None:
+            ...
+
+    # Wrong from v5.0.0
+    class MyConsumer(Karton):
+        def process(self) -> None:
+            ...
+
+
 What changed in Karton 4.0.0
 ----------------------------
 
