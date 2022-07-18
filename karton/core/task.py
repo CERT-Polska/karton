@@ -1,4 +1,5 @@
 import enum
+import fnmatch
 import json
 import time
 import uuid
@@ -161,12 +162,30 @@ class Task(object):
 
         :meta private:
         """
+
+        def value_compare(filter_value: Any, header_value: Any) -> bool:
+            # Coerce to string for comparison
+            filter_value_str = str(filter_value)
+            header_value_str = str(header_value)
+
+            negated = False
+            if filter_value_str.startswith("!"):
+                negated = True
+                filter_value_str = filter_value_str[1:]
+
+            if header_value is None:
+                return negated
+
+            # fnmatch is great for handling simple wildcard patterns (?, *, [abc])
+            # If negated: match result should not be True (XOR)
+            return fnmatch.fnmatchcase(header_value_str, filter_value_str) != negated
+
         return any(
             # If any of consumer filters matches the header
             all(
                 # Match: all consumer filter fields match the task header
-                self.headers.get(bind_key) == bind_value
-                for bind_key, bind_value in task_filter.items()
+                value_compare(filter_value, self.headers.get(filter_key))
+                for filter_key, filter_value in task_filter.items()
             )
             for task_filter in filters
         )

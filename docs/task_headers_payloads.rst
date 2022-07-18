@@ -72,6 +72,48 @@ Few headers have special meaning and are added automatically by Karton to incomi
 - :code:`{"origin": "<identity>"}` specifies the identity of task sender. It can be used for listening for tasks incoming only from predefined identity.
 - :code:`{"receiver": "<identity>"}` is added by Karton when task is routed to the consumer queue. On the receiver side, value is always equal to :code:`self.identity`
 
+Filter patterns
+---------------
+
+.. versionadded:: 5.0.0
+
+Filter matching follows two simple rules. If we want task to be routed to the consumer:
+
+- task headers must match **any** of consumer filters
+- task headers match consumer filter if they match **all values** defined in filter
+
+Starting from 5.0.0, consumer filters support basic wildcards and exclusions.
+
+========================  ==============================================================================
+       Pattern                                           Meaning
+------------------------  ------------------------------------------------------------------------------
+``{"foo": "bar"}``        matches 'bar' value of 'foo' header
+``{"foo": "!bar"}``       matches any value other than 'bar' in 'foo' header
+``{"foo": "ba?"}``        matches 'ba' value followed by any character
+``{"foo": "ba*"}``        matches 'ba' value followed by any substring (including empty)
+``{"foo": "ba[rz]"}``     matches 'ba' value followed by 'r' or 'z' character
+``{"foo": "ba[!rz]"}``    matches 'ba' value followed by any character other than 'r' or 'z'
+``{"foo": "!ba[!rz]"}``   matches any value of 'foo' header that doesn't match to the "bar[!rz]" pattern
+========================  ==============================================================================
+
+Filter logic can be used to fulfill specific use-cases:
+
+====================================  ==============================================================================
+   ``filters`` value                                     Meaning
+------------------------------------  ------------------------------------------------------------------------------
+``[]``                                matches no tasks (no headers allowed). Can be used to turn off queue and consume tasks left.
+``[{}]``                              matches any task (no header conditions). Can be used to intercept all tasks incoming to Karton.
+``[{"foo": "bar"}, {"foo": "baz"}]``  'foo' header is required and must have 'bar' or 'baz' value.
+``[{"foo": "!*"}]``                   'foo' header must be not defined.
+====================================  ==============================================================================
+
+.. warning::
+
+    It's recommended to use only strings in filter and header values
+
+    Although some of non-string types are allowed, they will be converted to string for comparison
+    which may lead to unexpected results.
+
 Task payload
 ------------
 
