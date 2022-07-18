@@ -141,7 +141,7 @@ class KartonBase(abc.ABC):
         return parser
 
     @classmethod
-    def config_from_args(cls, config: Config, args: argparse.Namespace):
+    def config_from_args(cls, config: Config, args: argparse.Namespace) -> None:
         """
         Updates configuration with settings from arguments
 
