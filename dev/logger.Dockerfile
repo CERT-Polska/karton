@@ -3,6 +3,7 @@ FROM python:3.7
 COPY requirements.txt /karton/
 COPY setup.py /karton/
 COPY karton/ /karton/karton/
+COPY README.md /karton/
 
 RUN pip install --no-cache-dir /karton
 
