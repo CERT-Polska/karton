@@ -9,7 +9,7 @@ from .backend import KartonBackend
 from .config import Config
 from .logger import KartonLogHandler
 from .task import Task
-from .utils import graceful_killer, HardShutdownInterrupt, StrictClassMethod
+from .utils import HardShutdownInterrupt, StrictClassMethod, graceful_killer
 
 
 class KartonBase(abc.ABC):
