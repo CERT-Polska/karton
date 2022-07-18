@@ -316,18 +316,14 @@ class Consumer(KartonServiceBase):
         for task_filter in self.filters:
             self.log.info("Binding on: %s", task_filter)
 
-        try:
+        with self.graceful_killer():
             while not self.shutdown:
                 if self.backend.get_bind(self.identity) != self._bind:
                     self.log.info("Binds changed, shutting down.")
                     break
-
                 task = self.backend.consume_routed_task(self.identity)
                 if task:
                     self.internal_process(task)
-        except KeyboardInterrupt as e:
-            self.log.info("Hard shutting down!")
-            raise e
 
 
 class LogConsumer(KartonServiceBase):
@@ -376,24 +372,25 @@ class LogConsumer(KartonServiceBase):
         """
         self.log.info("Logger %s started", self.identity)
 
-        for log in self.backend.consume_log(
-            logger_filter=self.logger_filter, level=self.level
-        ):
-            if self.shutdown:
-                # Consumer shutdown has been requested
-                break
-            if not log:
-                # No log record received until timeout, try again.
-                continue
-            try:
-                self.process_log(log)
-            except Exception:
-                """
-                This is log handler exception, so DO NOT USE self.log HERE!
-                """
-                import traceback
+        with self.graceful_killer():
+            for log in self.backend.consume_log(
+                logger_filter=self.logger_filter, level=self.level
+            ):
+                if self.shutdown:
+                    # Consumer shutdown has been requested
+                    break
+                if not log:
+                    # No log record received until timeout, try again.
+                    continue
+                try:
+                    self.process_log(log)
+                except Exception:
+                    """
+                    This is log handler exception, so DO NOT USE self.log HERE!
+                    """
+                    import traceback
 
-                traceback.print_exc()
+                    traceback.print_exc()
 
 
 class Karton(Consumer, Producer):

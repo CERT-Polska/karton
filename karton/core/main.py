@@ -176,7 +176,7 @@ def delete_bind(config: Config, karton_name: str) -> None:
             pass
 
     karton = KartonDummy(config=config, identity=karton_name)
-    karton.shutdown = True
+    karton._shutdown = True
     karton.loop()
 
 
