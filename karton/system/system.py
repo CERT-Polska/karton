@@ -250,15 +250,16 @@ class SystemService(KartonServiceBase):
     def loop(self) -> None:
         self.log.info("Manager %s started", self.identity)
 
-        while not self.shutdown:
-            if self.enable_router:
-                # This will wait for up to 5s, so this is not a busy loop
-                self.process_routing()
-            if self.enable_gc:
-                # This will only do anything once every self.gc_interval seconds
-                self.gc_collect()
-                if not self.enable_router:
-                    time.sleep(1)  # Avoid a busy loop
+        with self.graceful_killer():
+            while not self.shutdown:
+                if self.enable_router:
+                    # This will wait for up to 5s, so this is not a busy loop
+                    self.process_routing()
+                if self.enable_gc:
+                    # This will only do anything once every self.gc_interval seconds
+                    self.gc_collect()
+                    if not self.enable_router:
+                        time.sleep(1)  # Avoid a busy loop
 
     @classmethod
     def args_parser(cls) -> argparse.ArgumentParser:
