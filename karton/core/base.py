@@ -14,9 +14,13 @@ from .utils import GracefulKiller
 class KartonBase(abc.ABC):
     """
     Base class for all Karton services
+
+    You can set an informative version information by setting the ``version`` class
+    attribute.
     """
 
     identity = ""
+    version: Optional[str] = None
 
     def __init__(
         self,
@@ -24,11 +28,16 @@ class KartonBase(abc.ABC):
         identity: Optional[str] = None,
         backend: Optional[KartonBackend] = None,
     ) -> None:
+        self.config = config or Config()
+
         # If not passed via constructor - get it from class
         if identity is not None:
             self.identity = identity
 
-        self.config = config or Config()
+        # If passed via configuration: override
+        if self.config.has_option("karton", "identity"):
+            self.identity = self.config.get("karton", "identity")
+
         self.backend = backend or KartonBackend(self.config, identity=self.identity)
 
         self._log_handler = KartonLogHandler(
@@ -47,10 +56,7 @@ class KartonBase(abc.ABC):
                       (unless different value is set in Karton config)
         """
         if level is None:
-            if self.config.config.has_section("logging"):
-                level = self.config["logging"].get("level", logging.INFO)
-            else:
-                level = logging.INFO
+            level = self.config.get("logging", "level", logging.INFO)
 
         if type(level) is str and cast(str, level).isdigit():
             log_level: Union[str, int] = int(level)
@@ -108,6 +114,62 @@ class KartonBase(abc.ABC):
         """
         return logging.getLogger(self.identity)
 
+    @classmethod
+    def args_description(cls) -> str:
+        """Return short description for argument parser."""
+        if not cls.__doc__:
+            return ""
+        return textwrap.dedent(cls.__doc__).strip().splitlines()[0]
+
+    @classmethod
+    def args_parser(cls) -> argparse.ArgumentParser:
+        """
+        Return ArgumentParser for main() class method.
+
+        This method should be overridden and call super methods
+        if you want to add more arguments.
+        """
+        parser = argparse.ArgumentParser(description=cls.args_description())
+        parser.add_argument(
+            "--version", action="version", version=cast(str, cls.version)
+        )
+        parser.add_argument("--config-file", help="Alternative configuration path")
+        parser.add_argument(
+            "--identity", help="Alternative identity for Karton service"
+        )
+        parser.add_argument("--log-level", help="Logging level of Karton logger")
+        return parser
+
+    @classmethod
+    def config_from_args(cls, config: Config, args: argparse.Namespace) -> None:
+        """
+        Updates configuration with settings from arguments
+
+        This method should be overridden and call super methods
+        if you want to add more arguments.
+        """
+        config.load_from_dict(
+            {
+                "karton": {"identity": args.identity},
+                "logging": {"level": args.log_level},
+            }
+        )
+
+    @classmethod
+    def karton_from_args(cls, args: Optional[argparse.Namespace] = None):
+        """
+        Returns Karton instance configured using configuration files
+        and provided arguments
+
+        Used by :py:meth:`KartonServiceBase.main` method
+        """
+        if args is None:
+            parser = cls.args_parser()
+            args = parser.parse_args()
+        config = Config(path=args.config_file)
+        cls.config_from_args(config, args)
+        return cls(config=config)
+
 
 class KartonServiceBase(KartonBase):
     """
@@ -120,8 +182,6 @@ class KartonServiceBase(KartonBase):
     :param identity: Karton service identity to use
     :param backend: Karton backend to use
     """
-
-    version: Optional[str] = None
 
     def __init__(
         self,
@@ -145,31 +205,7 @@ class KartonServiceBase(KartonBase):
         raise NotImplementedError
 
     @classmethod
-    def args_description(cls) -> str:
-        """Return short description for argument parser."""
-        if not cls.__doc__:
-            return ""
-        return textwrap.dedent(cls.__doc__).strip().splitlines()[0]
-
-    @classmethod
-    def args_parser(cls) -> argparse.ArgumentParser:
-        """
-        Return ArgumentParser for main() class method.
-
-        This method should be overridden if you want to add more arguments.
-        """
-        parser = argparse.ArgumentParser(description=cls.args_description())
-        parser.add_argument(
-            "--version", action="version", version=cast(str, cls.version)
-        )
-        parser.add_argument("--config-file", help="Alternative configuration path")
-        return parser
-
-    @classmethod
     def main(cls) -> None:
         """Main method invoked from CLI."""
-        parser = cls.args_parser()
-        args = parser.parse_args()
-        config = Config(args.config_file)
-        service = cls(config)
+        service = cls.karton_from_args()
         service.loop()
