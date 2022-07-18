@@ -1,7 +1,6 @@
 """
 Test stubs for karton subsystem unit tests
 """
-import configparser
 import hashlib
 import logging
 import unittest
@@ -23,9 +22,7 @@ log = logging.getLogger()
 
 class ConfigMock(Config):
     def __init__(self):
-        self.config = configparser.ConfigParser()
-        self.config.add_section("minio")
-        self.config.add_section("redis")
+        self._config = {"redis": {}, "minio": {}}
 
 
 class BackendMock:
