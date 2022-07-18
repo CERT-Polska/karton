@@ -30,7 +30,7 @@ class GracefulKiller:
 
 class StrictClassMethod:
     """
-    Like classmethod, but allows calling only when got from class.
+    Like classmethod, but allows calling only when retrieved from class.
 
     Created to avoid ``KartonClass().main()`` pattern which leads to
     unexpected errors (correct form is ``KartonClass.main()``)
