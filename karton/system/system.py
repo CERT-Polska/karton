@@ -13,6 +13,7 @@ from karton.core.backend import (
 from karton.core.base import KartonServiceBase
 from karton.core.config import Config
 from karton.core.task import Task, TaskState
+from karton.core.utils import StrictClassMethod
 
 
 class SystemService(KartonServiceBase):
@@ -334,7 +335,7 @@ class SystemService(KartonServiceBase):
                 return False
         return True
 
-    @classmethod
+    @StrictClassMethod
     def main(cls) -> None:
         parser = cls.args_parser()
         args = parser.parse_args()

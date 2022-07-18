@@ -1,3 +1,4 @@
+import functools
 import inspect
 import signal
 from contextlib import contextmanager
@@ -39,3 +40,26 @@ def graceful_killer(handler: Callable[[], None]):
     finally:
         signal.signal(signal.SIGINT, original_sigint_handler)
         signal.signal(signal.SIGTERM, original_sigterm_handler)
+
+
+class StrictClassMethod:
+    """
+    Like classmethod, but allows calling only when retrieved from class.
+
+    Created to avoid ``KartonClass().main()`` pattern which leads to
+    unexpected errors (correct form is ``KartonClass.main()``)
+    """
+
+    def __init__(self, func: Callable):
+        self.func = func
+
+    def __get__(self, instance: Any, owner: Any):
+        @functools.wraps(self.func)
+        def newfunc(*args, **kwargs):
+            if instance is not None:
+                raise TypeError(
+                    "This method can be called only on class, not on an instance"
+                )
+            return self.func(owner, *args, **kwargs)
+
+        return newfunc

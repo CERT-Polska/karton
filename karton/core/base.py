@@ -9,7 +9,7 @@ from .backend import KartonBackend
 from .config import Config
 from .logger import KartonLogHandler
 from .task import Task
-from .utils import HardShutdownInterrupt, graceful_killer
+from .utils import graceful_killer, HardShutdownInterrupt, StrictClassMethod
 
 
 class KartonBase(abc.ABC):
@@ -217,7 +217,7 @@ class KartonServiceBase(KartonBase):
         # Karton service entrypoint
         raise NotImplementedError
 
-    @classmethod
+    @StrictClassMethod
     def main(cls) -> None:
         """Main method invoked from CLI."""
         service = cls.karton_from_args()
