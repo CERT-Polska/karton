@@ -128,7 +128,10 @@ class Consumer(KartonServiceBase):
             "karton", "persistent", self.persistent
         )
         self.task_timeout = self.config.getint("karton", "task_timeout")
-        print(self.task_timeout)
+
+        if self.task_timeout is not None:
+            self.log.info(f"Task timeout is set to {self.task_timeout} seconds")
+
         self.current_task: Optional[Task] = None
         self._pre_hooks: List[Tuple[Optional[str], Callable[[Task], None]]] = []
         self._post_hooks: List[
