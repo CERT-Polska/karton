@@ -36,9 +36,12 @@ def graceful_killer(handler: Callable[[], None]):
     def signal_handler(signum: int, frame: Any) -> None:
         nonlocal first_try
         handler()
-        if not first_try:
-            raise HardShutdownInterrupt()
-        first_try = False
+        if signum == signal.SIGINT:
+            # Sometimes SIGTERM can be prematurely repeated.
+            # Forced but still clean shutdown is implemented only for SIGINT.
+            if not first_try:
+                raise HardShutdownInterrupt()
+            first_try = False
 
     original_sigint_handler = signal.signal(signal.SIGINT, signal_handler)
     original_sigterm_handler = signal.signal(signal.SIGTERM, signal_handler)
