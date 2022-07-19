@@ -3,7 +3,7 @@ import signal
 from contextlib import contextmanager
 from typing import Any, Callable, Iterator, Sequence, TypeVar
 
-from .exceptions import TaskTimeoutError
+from .exceptions import HardShutdownInterrupt, TaskTimeoutError
 
 T = TypeVar("T")
 
@@ -26,18 +26,30 @@ def timeout(wait_for: int):
         signal.signal(signal.SIGALRM, original_handler)
 
 
-class GracefulKiller:
-    def __init__(self, handle_func: Callable) -> None:
-        self.handle_func = handle_func
-        self.original_sigint_handler = signal.signal(
-            signal.SIGINT, self.exit_gracefully
-        )
-        signal.signal(signal.SIGTERM, self.exit_gracefully)
+@contextmanager
+def graceful_killer(handler: Callable[[], None]):
+    """
+    Graceful killer for Karton consumers.
+    """
+    first_try = True
 
-    def exit_gracefully(self, signum: int, frame: Any) -> None:
-        self.handle_func()
+    def signal_handler(signum: int, frame: Any) -> None:
+        nonlocal first_try
+        handler()
         if signum == signal.SIGINT:
-            signal.signal(signal.SIGINT, self.original_sigint_handler)
+            # Sometimes SIGTERM can be prematurely repeated.
+            # Forced but still clean shutdown is implemented only for SIGINT.
+            if not first_try:
+                raise HardShutdownInterrupt()
+            first_try = False
+
+    original_sigint_handler = signal.signal(signal.SIGINT, signal_handler)
+    original_sigterm_handler = signal.signal(signal.SIGTERM, signal_handler)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGINT, original_sigint_handler)
+        signal.signal(signal.SIGTERM, original_sigterm_handler)
 
 
 class StrictClassMethod:
