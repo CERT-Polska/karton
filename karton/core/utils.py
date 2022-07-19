@@ -1,22 +1,29 @@
 import functools
-import inspect
 import signal
 from contextlib import contextmanager
 from typing import Any, Callable, Iterator, Sequence, TypeVar
 
+from .exceptions import HardShutdownInterrupt, TaskTimeoutError
+
 T = TypeVar("T")
-
-
-def get_function_arg_num(fun: Callable) -> int:
-    return len(inspect.signature(fun).parameters)
 
 
 def chunks(seq: Sequence[T], size: int) -> Iterator[Sequence[T]]:
     return (seq[pos : pos + size] for pos in range(0, len(seq), size))
 
 
-class HardShutdownInterrupt(BaseException):
-    pass
+@contextmanager
+def timeout(wait_for: int):
+    def throw_timeout(signum: int, frame: Any) -> None:
+        raise TaskTimeoutError
+
+    original_handler = signal.signal(signal.SIGALRM, throw_timeout)
+    try:
+        signal.alarm(wait_for)
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, original_handler)
 
 
 @contextmanager

@@ -12,7 +12,6 @@ from .backend import KartonBackend, KartonMetrics
 from .config import Config
 from .resource import LocalResource, RemoteResource, ResourceBase
 from .task import Task, TaskState
-from .utils import get_function_arg_num
 
 __all__ = ["KartonTestCase", "mock"]
 
@@ -261,11 +260,7 @@ class KartonTestCase(unittest.TestCase):
         outgoing_task = self._process_task(task)
         self.karton.current_task = outgoing_task
 
-        # `consumer.process` might accept the incoming task as an argument or not
-        if get_function_arg_num(self.karton.process) == 0:
-            self.karton.process()
-        else:
-            self.karton.process(self.karton.current_task)  # type: ignore
+        self.karton.process(self.karton.current_task)
 
         return self.karton.backend.produced_tasks
 
