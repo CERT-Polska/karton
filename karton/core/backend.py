@@ -63,8 +63,12 @@ class KartonBackend:
         redis_args = {
             "host": config["redis"]["host"],
             "port": config.getint("redis", "port", 6379),
+            "db": config.getint("redis", "db", 0),
+            "username": config.get("redis", "username"),
             "password": config.get("redis", "password"),
             "client_name": identity,
+            # set socket_timeout to None if set to 0
+            "socket_timeout": config.getint("redis", "socket_timeout", 30) or None,
             "decode_responses": True,
         }
         try:
