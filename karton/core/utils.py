@@ -3,6 +3,8 @@ import signal
 from contextlib import contextmanager
 from typing import Any, Callable, Iterator, Sequence, TypeVar
 
+from .exceptions import TaskTimeoutError
+
 T = TypeVar("T")
 
 
@@ -10,14 +12,10 @@ def chunks(seq: Sequence[T], size: int) -> Iterator[Sequence[T]]:
     return (seq[pos : pos + size] for pos in range(0, len(seq), size))
 
 
-class TimeoutError(Exception):
-    pass
-
-
 @contextmanager
 def timeout(wait_for: int):
     def throw_timeout(signum: int, frame: Any) -> None:
-        raise TimeoutError
+        raise TaskTimeoutError
 
     original_handler = signal.signal(signal.SIGALRM, throw_timeout)
     try:
