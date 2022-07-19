@@ -1,0 +1,2 @@
+class TaskTimeoutError(Exception):
+    pass
