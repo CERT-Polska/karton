@@ -4,12 +4,25 @@ import time
 import warnings
 from collections import defaultdict, namedtuple
 from io import BytesIO
-from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Set, Tuple, Union
+from typing import (
+    Any,
+    BinaryIO,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 from minio import Minio
 from minio.deleteobjects import DeleteError, DeleteObject
 from redis import AuthenticationError, StrictRedis
 from redis.client import Pipeline
+from urllib3.exceptions import IncompleteRead, ProtocolError, TimeoutError
 from urllib3.response import HTTPResponse
 
 from .task import Task, TaskPriority, TaskState
@@ -22,6 +35,7 @@ KARTON_BINDS_HSET = "karton.binds"
 KARTON_TASK_NAMESPACE = "karton.task"
 KARTON_OUTPUTS_NAMESPACE = "karton.outputs"
 
+T = TypeVar("T")
 
 KartonBind = namedtuple(
     "KartonBind",
@@ -51,6 +65,33 @@ class KartonBackend:
             secret_key=config["minio"]["secret_key"],
             secure=config.getboolean("minio", "secure", fallback=True),
         )
+        self.max_retries = self.config.getint("minio", "max_retries", 3)
+        self.retry_backoff = self.config.getint("minio", "retry_backoff", 5)
+
+    def do_retry(self, operation: Callable[[], T]) -> T:
+        """
+        Run HTTP operation and retry in case of errors
+        which may arise from temporary networking problems,
+        especially during download/upload operations.
+
+        minio-py handles only S3 errors and HTTP 502-504
+        (after completed response), so we need to retry whole
+        operation on our own when it fails in the middle of
+        transmission
+        """
+        tries_left = self.max_retries
+        while True:
+            try:
+                return operation()
+            except (ProtocolError, TimeoutError, IncompleteRead) as e:
+                if not tries_left:
+                    raise
+                tries_left -= 1
+                warnings.warn(
+                    f"Operation failed with {str(e)}. "
+                    f"Retrying after {self.retry_backoff} seconds..."
+                )
+                time.sleep(self.retry_backoff)
 
     def make_redis(self, config, identity: Optional[str] = None) -> StrictRedis:
         """
@@ -576,7 +617,11 @@ class KartonBackend:
         if isinstance(content, bytes):
             length = len(content)
             content = BytesIO(content)
-        self.minio.put_object(bucket, object_uid, content, length)
+
+        def do_upload():
+            self.minio.put_object(bucket, object_uid, content, length)
+
+        self.do_retry(do_upload)
 
     def upload_object_from_file(self, bucket: str, object_uid: str, path: str) -> None:
         """
@@ -586,7 +631,11 @@ class KartonBackend:
         :param object_uid: Object identifier
         :param path: Path to the object content
         """
-        self.minio.fput_object(bucket, object_uid, path)
+
+        def do_upload():
+            self.minio.fput_object(bucket, object_uid, path)
+
+        self.do_retry(do_upload)
 
     def get_object(self, bucket: str, object_uid: str) -> HTTPResponse:
         """
@@ -610,12 +659,16 @@ class KartonBackend:
         :param object_uid: Object identifier
         :return: Content bytes
         """
-        reader = self.minio.get_object(bucket, object_uid)
-        try:
-            return reader.read()
-        finally:
-            reader.release_conn()
-            reader.close()
+
+        def do_download() -> bytes:
+            reader = self.minio.get_object(bucket, object_uid)
+            try:
+                return reader.read()
+            finally:
+                reader.release_conn()
+                reader.close()
+
+        return self.do_retry(do_download)
 
     def download_object_to_file(self, bucket: str, object_uid: str, path: str) -> None:
         """
@@ -625,7 +678,11 @@ class KartonBackend:
         :param object_uid: Object identifier
         :param path: Target file path
         """
-        self.minio.fget_object(bucket, object_uid, path)
+
+        def do_download():
+            self.minio.fget_object(bucket, object_uid, path)
+
+        self.do_retry(do_download)
 
     def list_objects(self, bucket: str) -> List[str]:
         """
