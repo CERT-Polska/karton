@@ -7,6 +7,7 @@ import warnings
 from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple, Union
 
 from .resource import RemoteResource, ResourceBase
+from .utils import recursive_iter, recursive_iter_with_keys, recursive_map
 
 if TYPE_CHECKING:
     from .backend import KartonBackend  # noqa
@@ -41,8 +42,9 @@ class Task(object):
                      propagated from initial task like `payload_persistent`
     :param parent_uid: Id of a routed task that has created this task by a karton with \
                        :py:meth:`.send_task`
-    :param root_uid: Id of a unrouted task that is the root of this tasks analysis tree
-    :param orig_uid: Id of a unrouted (or crashed routed) task that was forked to \
+    :param root_uid: Id of an unrouted task that is the root of this \
+        task's analysis tree
+    :param orig_uid: Id of an unrouted (or crashed routed) task that was forked to \
                      create this task
     :param uid: This tasks unique identifier
     :param error: Traceback of a exception that happened while performing this task
@@ -261,17 +263,42 @@ class Task(object):
             for key, value in payload_bag.items():
                 yield payload_bag, key, value
 
-    def iterate_resources(self) -> Iterator[Tuple[str, ResourceBase]]:
+    def walk_payload_values(self) -> Iterator[Tuple[str, Any]]:
+        """
+        Iterate over all payload values
+
+        Generates tuples (path, value).
+
+        :return: An iterator over all task payload values
+        """
+        yield from recursive_iter_with_keys(self.payload, "payload")
+        yield from recursive_iter_with_keys(
+            self.payload_persistent, "payload_persistent"
+        )
+
+    def transform_payload_bags(self, func):
+        """
+        Recursively transform contents of all payload bags and payloads
+        contained in them
+
+        :meta private:
+        """
+        self.payload, self.payload_persistent = recursive_map(
+            func, [self.payload, self.payload_persistent]
+        )
+
+    def iterate_resources(self) -> Iterator[ResourceBase]:
         """
         Get list of resource objects bound to Task
 
-        Generates tuples (key, value)
+        .. versionchanged: 5.0.0
+            Returns Resource values instead of tuples (key, value)
 
         :return: An iterator over all task resources
         """
-        for _, key, value in self.walk_payload_bags():
-            if isinstance(value, ResourceBase):
-                yield key, value
+        for element in recursive_iter([self.payload, self.payload_persistent]):
+            if isinstance(element, ResourceBase):
+                yield element
 
     def unserialize_resources(self, backend: Optional["KartonBackend"]) -> None:
         """
@@ -282,11 +309,12 @@ class Task(object):
 
         :meta private:
         """
-        for payload_bag, key, value in self.walk_payload_bags():
+
+        def resource_decoder(value):
             if isinstance(value, dict) and "__karton_resource__" in value:
-                payload_bag[key] = RemoteResource.from_dict(
-                    value["__karton_resource__"], backend
-                )
+                return RemoteResource.from_dict(value["__karton_resource__"], backend)
+
+        self.transform_payload_bags(resource_decoder)
 
     @staticmethod
     def unserialize(

@@ -1,7 +1,7 @@
 import functools
 import signal
 from contextlib import contextmanager
-from typing import Any, Callable, Iterator, Sequence, TypeVar
+from typing import Any, Callable, Iterator, Sequence, Tuple, TypeVar
 
 from .exceptions import HardShutdownInterrupt, TaskTimeoutError
 
@@ -10,6 +10,55 @@ T = TypeVar("T")
 
 def chunks(seq: Sequence[T], size: int) -> Iterator[Sequence[T]]:
     return (seq[pos : pos + size] for pos in range(0, len(seq), size))
+
+
+def recursive_iter(obj) -> Iterator[Any]:
+    """
+    Yields all values recursively from nested list/dict structures
+
+    :param obj: Object to iterate over
+    """
+    if isinstance(obj, (list, tuple)):
+        for elem in obj:
+            yield from recursive_iter(elem)
+    elif isinstance(obj, dict):
+        for elem in obj.values():
+            yield from recursive_iter(elem)
+    else:
+        yield obj
+
+
+def recursive_iter_with_keys(obj, name="") -> Iterator[Tuple[str, Any]]:
+    """
+    Yields (path, value) tuples recursively from nested list/dict structures
+
+    :param obj: Object to iterate over
+    :param name: Object name
+    """
+    if isinstance(obj, (list, tuple)):
+        for idx, elem in enumerate(obj):
+            yield from recursive_iter_with_keys(elem, name=f"{name}.{idx}")
+    elif isinstance(obj, dict):
+        for key, elem in obj.items():
+            yield from recursive_iter_with_keys(elem, name=f"{name}.{key}")
+    else:
+        yield name, obj
+
+
+def recursive_map(func: Callable[[Any], Any], obj: Any) -> Any:
+    """
+    Returns copy of collection with recursively mapped elements
+
+    :param func: Mapping function
+    :param obj: Object to iterate over
+    """
+    mapped_obj = func(obj)
+    if isinstance(mapped_obj, (list, tuple)):
+        return [recursive_map(func, elem) for elem in mapped_obj]
+    elif isinstance(mapped_obj, dict):
+        return {key: recursive_map(func, elem) for key, elem in mapped_obj.items()}
+    else:
+        return mapped_obj
 
 
 @contextmanager

@@ -55,7 +55,7 @@ class SystemService(KartonServiceBase):
         # Task is created before resource upload to lock the reference to the resource.
         tasks = self.backend.get_all_tasks()
         for task in tasks:
-            for _, resource in task.iterate_resources():
+            for resource in task.iterate_resources():
                 # If resource is referenced by task: remove it from set
                 if (
                     resource.bucket == karton_bucket

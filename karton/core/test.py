@@ -169,45 +169,37 @@ class KartonTestCase(unittest.TestCase):
             "Resource content mismatch in {}".format(resource_name),
         )
 
-    def assertPayloadBagEqual(
-        self, payload: Dict[str, Any], expected: Dict[str, Any], payload_bag_name: str
-    ) -> None:
-        """
-        Assert that two payload bags are equal
-
-        :param payload: Result payload bag
-        :param expected: Expected payload bag
-        :param payload_bag_name: Bag name
-        """
-        self.assertSetEqual(
-            set(payload.keys()),
-            set(expected.keys()),
-            "Incorrect fields set in {}".format(payload_bag_name),
-        )
-        for key, value in payload.items():
-            other_value = expected[key]
-            path = "{}.{}".format(payload_bag_name, key)
-            if not isinstance(value, ResourceBase):
-                self.assertEqual(
-                    value,
-                    other_value,
-                    "Incorrect value of {}".format(path),
-                )
-            else:
-                self.assertResourceEqual(value, other_value, path)
-
     def assertTaskEqual(self, task: Task, expected: Task) -> None:
         """
-        Assert that two tasks objects are equal
+        Assert that two task objects are equal
 
         :param task: Result task
         :param expected: Expected task
         """
         self.assertDictEqual(task.headers, expected.headers, "Headers mismatch")
-        self.assertPayloadBagEqual(task.payload, expected.payload, "payload")
-        self.assertPayloadBagEqual(
-            task.payload_persistent, expected.payload_persistent, "payload_persistent"
+        # Get paths and values sorted by path
+        task_payload_values = sorted(task.walk_payload_values(), key=lambda el: el[0])
+        expected_payload_values = sorted(
+            expected.walk_payload_values(), key=lambda el: el[0]
         )
+        self.assertSetEqual(
+            set(path for path, _ in task_payload_values),
+            set(path for path, _ in expected_payload_values),
+        )
+        for task_payload, expected_payload in zip(
+            task_payload_values, expected_payload_values
+        ):
+            task_key, task_value = task_payload
+            expected_key, expected_value = expected_payload
+            assert (
+                task_key == expected_key
+            )  # If not true, there is something wrong with this test routine
+            if not isinstance(task_value, ResourceBase):
+                self.assertEqual(
+                    task_value, expected_value, "Incorrect value of {}".format(task_key)
+                )
+            else:
+                self.assertResourceEqual(task_value, expected_value, task_key)
 
     def assertTasksEqual(self, tasks: List[Task], expected: List[Task]) -> None:
         """
@@ -228,15 +220,17 @@ class KartonTestCase(unittest.TestCase):
         task = incoming_task.fork_task()
         task.status = TaskState.STARTED
         task.headers.update({"receiver": self.karton.identity})
-        for payload_bag, key, resource in task.walk_payload_bags():
-            if not isinstance(resource, ResourceBase):
-                continue
-            if not isinstance(resource, LocalResource):
+
+        def local_resource_to_remote(obj):
+            if not isinstance(obj, ResourceBase):
+                return obj
+            if not isinstance(obj, LocalResource):
                 raise ValueError("Test task must contain only LocalResource objects")
             backend = cast(KartonBackend, self.backend)
+            resource = cast(LocalResource, obj)
             resource.bucket = backend.default_bucket_name
             resource.upload(backend)
-            remote_resource = RemoteResource(
+            return RemoteResource(
                 name=resource.name,
                 bucket=resource.bucket,
                 metadata=resource.metadata,
@@ -246,7 +240,8 @@ class KartonTestCase(unittest.TestCase):
                 sha256=resource.sha256,
                 _flags=resource._flags,
             )
-            payload_bag[key] = remote_resource
+
+        task.transform_payload_bags(local_resource_to_remote)
         return task
 
     def run_task(self, task: Task) -> List[Task]:
