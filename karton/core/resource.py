@@ -6,17 +6,7 @@ import tempfile
 import uuid
 import zipfile
 from io import BytesIO
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    BinaryIO,
-    Dict,
-    Iterator,
-    List,
-    Optional,
-    Union,
-    cast,
-)
+from typing import IO, TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Union, cast
 
 if TYPE_CHECKING:
     from .backend import KartonBackend
@@ -35,9 +25,9 @@ class ResourceBase(object):
     :param bucket: Alternative MinIO bucket for resource
     :param metadata: Resource metadata
     :param sha256: Resource sha256 hash
+    :param size: Resource content length (optional)
     :param _uid: Alternative MinIO resource id
-    :param _fd: File descriptor
-    :param _flag: Resource flags
+    :param _flags: Resource flags
     """
 
     DIRECTORY_FLAG = "Directory"
@@ -50,8 +40,8 @@ class ResourceBase(object):
         bucket: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
         sha256: Optional[str] = None,
+        size: Optional[int] = None,
         _uid: Optional[str] = None,
-        _size: Optional[int] = None,
         _flags: Optional[List[str]] = None,
     ) -> None:
         self.name = name
@@ -92,7 +82,7 @@ class ResourceBase(object):
 
         self._uid = _uid or str(uuid.uuid4())
         self._path = path
-        self._size = _size
+        self._size = size
         # Flags needed by 3.x.x Karton services
         self._flags = _flags or []
 
@@ -173,8 +163,10 @@ class LocalResource(ResourceBase):
     :param metadata: Resource metadata
     :param uid: Alternative MinIO resource id
     :param sha256: Resource sha256 hash
-    :param _fd: File descriptor
-    :param _flag: Resource flags
+    :param fd: File descriptor
+    :param size: File content length (if file descriptor was provided)
+    :param _flags: Resource flags
+    :param _close_fd: Close file descriptor after upload (default: False)
     """
 
     def __init__(
@@ -186,11 +178,16 @@ class LocalResource(ResourceBase):
         metadata: Optional[Dict[str, Any]] = None,
         uid: Optional[str] = None,
         sha256: Optional[str] = None,
-        _fd: Optional[BinaryIO] = None,
+        fd: Optional[IO[bytes]] = None,
+        size: Optional[int] = None,
         _flags: Optional[List[str]] = None,
+        _close_fd: bool = False,
     ) -> None:
-        if path is None and content is None:
-            raise ValueError("You must provide a path or content (but not both)")
+        if len(list(filter(lambda v: v is not None, [path, content, fd]))) != 1:
+            raise ValueError("You must exclusively provide a path, content or fd")
+
+        if fd is not None and size is None:
+            raise ValueError("Size must be provided when resource comes from fd")
 
         super(LocalResource, self).__init__(
             name,
@@ -199,10 +196,12 @@ class LocalResource(ResourceBase):
             bucket=bucket,
             metadata=metadata,
             sha256=sha256,
+            size=size,
             _uid=uid,
             _flags=_flags,
         )
-        self._fd = _fd
+        self.fd = fd
+        self._close_fd = _close_fd
 
     @property
     def content(self) -> bytes:
@@ -212,10 +211,12 @@ class LocalResource(ResourceBase):
         :return: Content bytes
         """
         if self._content is None:
-            assert self._path is not None
-            with open(self._path, "rb") as local_file:
-                self._content = local_file.read()
-        return self._content
+            if self._path is not None:
+                with open(self._path, "rb") as local_file:
+                    self._content = local_file.read()
+            elif self.fd is not None:
+                self._content = self.fd.read()
+        return cast(bytes, self._content)
 
     @classmethod
     def from_directory(
@@ -249,7 +250,9 @@ class LocalResource(ResourceBase):
         :param uid: Alternative MinIO resource id
         :return: :class:`LocalResource` instance with zipped contents
         """
-        out_stream = BytesIO() if in_memory else tempfile.NamedTemporaryFile()
+        out_stream: IO[bytes] = (
+            BytesIO() if in_memory else tempfile.NamedTemporaryFile()
+        )
 
         # Recursively zips all files in directory_path keeping relative paths
         # File is zipped into provided out_stream
@@ -259,6 +262,7 @@ class LocalResource(ResourceBase):
                     abs_path = os.path.join(root, filename)
                     zipf.write(abs_path, os.path.relpath(abs_path, directory_path))
 
+        size = out_stream.tell()
         # Flag is required by Karton 3.x.x services to recognize that resource
         # as DirectoryResource
         flags = [ResourceBase.DIRECTORY_FLAG]
@@ -279,8 +283,10 @@ class LocalResource(ResourceBase):
                 bucket=bucket,
                 metadata=metadata,
                 uid=uid,
-                _fd=cast(BinaryIO, out_stream),
+                fd=out_stream,
+                size=size,
                 _flags=flags,
+                _close_fd=True,
             )
 
     def _upload(self, backend: "KartonBackend") -> None:
@@ -302,14 +308,15 @@ class LocalResource(ResourceBase):
         if self._content:
             # Upload contents
             backend.upload_object(self.bucket, self.uid, self._content)
-        else:
+        elif self.fd:
+            # Upload contents from fd
+            backend.upload_object(self.bucket, self.uid, self.fd, self._size)
+            # If file descriptor is managed by Resource, close it after upload
+            if self._close_fd:
+                self.fd.close()
+        elif self._path:
             # Upload file provided by path
-            backend.upload_object_from_file(
-                self.bucket, self.uid, cast(str, self._path)
-            )
-        # If file descriptor is managed by Resource, close it after upload
-        if self._fd:
-            self._fd.close()
+            backend.upload_object_from_file(self.bucket, self.uid, self._path)
 
     def upload(self, backend: "KartonBackend") -> None:
         """Internal function for uploading resources
@@ -341,7 +348,7 @@ class RemoteResource(ResourceBase):
     :param size: Resource size
     :param backend: :py:meth:`KartonBackend` to bind to this resource
     :param sha256: Resource sha256 hash
-    :param _flag: Resource flags
+    :param _flags: Resource flags
     """
 
     def __init__(
@@ -360,8 +367,8 @@ class RemoteResource(ResourceBase):
             bucket=bucket,
             metadata=metadata,
             sha256=sha256,
+            size=size,
             _uid=uid,
-            _size=size,
             _flags=_flags,
         )
         self.backend = backend
@@ -497,7 +504,7 @@ class RemoteResource(ResourceBase):
         self.backend.download_object_to_file(self.bucket, self.uid, path)
 
     @contextlib.contextmanager
-    def download_temporary_file(self, suffix=None) -> Iterator[BinaryIO]:
+    def download_temporary_file(self, suffix=None) -> Iterator[IO[bytes]]:
         """
         Downloads remote resource into named temporary file.
 

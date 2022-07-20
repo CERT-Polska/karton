@@ -4,7 +4,7 @@ import time
 import warnings
 from collections import defaultdict, namedtuple
 from io import BytesIO
-from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Set, Tuple, Union
+from typing import IO, Any, Dict, Iterator, List, Optional, Set, Tuple, Union
 
 from minio import Minio
 from minio.deleteobjects import DeleteError, DeleteObject
@@ -562,7 +562,7 @@ class KartonBackend:
         self,
         bucket: str,
         object_uid: str,
-        content: Union[bytes, BinaryIO],
+        content: Union[bytes, IO[bytes]],
         length: int = None,
     ) -> None:
         """
@@ -576,6 +576,8 @@ class KartonBackend:
         if isinstance(content, bytes):
             length = len(content)
             content = BytesIO(content)
+        elif length is None:
+            raise ValueError("Length can't be None when file-like object is provided")
         self.minio.put_object(bucket, object_uid, content, length)
 
     def upload_object_from_file(self, bucket: str, object_uid: str, path: str) -> None:
