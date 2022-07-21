@@ -236,7 +236,9 @@ class KartonTestCase(unittest.TestCase):
                 if not isinstance(resource, ResourceBase):
                     continue
                 if not isinstance(resource, LocalResource):
-                    raise ValueError("Test task must contain only LocalResource objects")
+                    raise ValueError(
+                        "Test task must contain only LocalResource objects"
+                    )
                 backend = cast(KartonBackend, self.backend)
                 resource.bucket = backend.default_bucket_name
                 resource.upload(backend)
@@ -248,7 +250,7 @@ class KartonTestCase(unittest.TestCase):
                     size=resource.size,
                     backend=backend,
                     sha256=resource.sha256,
-                   _flags=resource._flags,
+                    _flags=resource._flags,
                 )
                 payload_bag[key] = remote_resource
         return task

@@ -18,13 +18,13 @@ def walk_resources(obj: Any) -> Iterator[Tuple[str, ResourceBase]]:
     while q:
         last_name, obj = q.pop()
         if isinstance(obj, ResourceBase):
-              yield last_name, obj
+            yield last_name, obj
 
         elif isinstance(obj, (list, tuple, set)):
-              q += [ (last_name, o) for o in obj]
+            q += [(last_name, o) for o in obj]
 
         elif isinstance(obj, dict):
-              q += [ (k, v ) for k, v in obj.items() ]
+            q += [(k, v) for k, v in obj.items()]
 
 
 @contextmanager

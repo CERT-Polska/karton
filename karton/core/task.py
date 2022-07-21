@@ -250,7 +250,6 @@ class Task(object):
             sort_keys=True,
         )
 
-
     def iterate_resources(self) -> Iterator[Tuple[str, ResourceBase]]:
         """
         Get list of resource objects bound to Task
@@ -275,9 +274,10 @@ class Task(object):
 
         :meta private:
         """
+
         def unserialize_resources(value):
             if isinstance(value, dict) and "__karton_resource__" in value:
-               return RemoteResource.from_dict(value["__karton_resource__"], backend)
+                return RemoteResource.from_dict(value["__karton_resource__"], backend)
             return value
 
         if not isinstance(data, str):
