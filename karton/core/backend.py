@@ -627,7 +627,7 @@ class KartonBackend:
         :param object_uid: Object identifier
         :param path: Target file path
         """
-        self.s3.dowload_file(Bucket=bucket, Key=object_uid, Filename=path)
+        self.s3.download_file(Bucket=bucket, Key=object_uid, Filename=path)
 
     def list_objects(self, bucket: str) -> List[str]:
         """
