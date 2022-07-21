@@ -47,7 +47,7 @@ class Config(object):
 
         if check_sections:
             if not self.has_section("s3"):
-                raise RuntimeError("Missing MinIO configuration")
+                raise RuntimeError("Missing S3 configuration")
             if not self.has_section("redis"):
                 raise RuntimeError("Missing Redis configuration")
 

@@ -263,7 +263,7 @@ class SystemService(KartonServiceBase):
     def args_parser(cls) -> argparse.ArgumentParser:
         parser = super().args_parser()
         parser.add_argument(
-            "--setup-bucket", action="store_true", help="Create missing bucket in MinIO"
+            "--setup-bucket", action="store_true", help="Create missing bucket in S3"
         )
         # store_false defaults to True, we intentionally want None there
         parser.add_argument(
