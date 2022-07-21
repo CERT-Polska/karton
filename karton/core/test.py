@@ -12,6 +12,7 @@ from .backend import KartonBackend, KartonMetrics
 from .config import Config
 from .resource import LocalResource, RemoteResource, ResourceBase
 from .task import Task, TaskState
+from .utils import walk_resources
 
 __all__ = ["KartonTestCase", "mock"]
 
@@ -228,25 +229,28 @@ class KartonTestCase(unittest.TestCase):
         task = incoming_task.fork_task()
         task.status = TaskState.STARTED
         task.headers.update({"receiver": self.karton.identity})
-        for payload_bag, key, resource in task.walk_payload_bags():
-            if not isinstance(resource, ResourceBase):
-                continue
-            if not isinstance(resource, LocalResource):
-                raise ValueError("Test task must contain only LocalResource objects")
-            backend = cast(KartonBackend, self.backend)
-            resource.bucket = backend.default_bucket_name
-            resource.upload(backend)
-            remote_resource = RemoteResource(
-                name=resource.name,
-                bucket=resource.bucket,
-                metadata=resource.metadata,
-                uid=resource.uid,
-                size=resource.size,
-                backend=backend,
-                sha256=resource.sha256,
-                _flags=resource._flags,
-            )
-            payload_bag[key] = remote_resource
+
+        for payload_bag in [task.payload, task.payload_persistent]:
+            for key, resource in walk_resources(payload_bag):
+
+                if not isinstance(resource, ResourceBase):
+                    continue
+                if not isinstance(resource, LocalResource):
+                    raise ValueError("Test task must contain only LocalResource objects")
+                backend = cast(KartonBackend, self.backend)
+                resource.bucket = backend.default_bucket_name
+                resource.upload(backend)
+                remote_resource = RemoteResource(
+                    name=resource.name,
+                    bucket=resource.bucket,
+                    metadata=resource.metadata,
+                    uid=resource.uid,
+                    size=resource.size,
+                    backend=backend,
+                    sha256=resource.sha256,
+                   _flags=resource._flags,
+                )
+                payload_bag[key] = remote_resource
         return task
 
     def run_task(self, task: Task) -> List[Task]:
