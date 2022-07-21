@@ -625,7 +625,7 @@ class KartonBackend:
         :param bucket: Bucket name
         :return: List of object identifiers
         """
-        return [object['Key'] for object in self.s3.list_objects(Bucket=bucket)['Contents']]
+        return [object['Key'] for object in self.s3.list_objects(Bucket=bucket).get('Contents',[])]
 
     def remove_object(self, bucket: str, object_uid: str) -> None:
         """
