@@ -15,8 +15,7 @@ host=localhost
 @patch('karton.core.Config', autospec=True)
 class TestConfig(unittest.TestCase):
     MOCK_ENV = {
-        "KARTON_MINIO_ACCESS_KEY": "xd",
-        "KARTON_MINIO_SECURE": "1",
+        "KARTON_S3_ACCESS_KEY": "xd",
         "KARTON_REDIS_HOST": "testhost",
         "KARTON_REDIS_PORT": "2137",
 
@@ -30,7 +29,7 @@ class TestConfig(unittest.TestCase):
         cfg = Config()
         assert cfg["redis"]["host"] == self.MOCK_ENV["KARTON_REDIS_HOST"]
         assert cfg["redis"]["port"] == self.MOCK_ENV["KARTON_REDIS_PORT"]
-        assert cfg["minio"]["access_key"] == self.MOCK_ENV["KARTON_MINIO_ACCESS_KEY"]
+        assert cfg["s3"]["access_key"] == self.MOCK_ENV["KARTON_S3_ACCESS_KEY"]
         assert cfg["foo"]["bar"] == self.MOCK_ENV["KARTON_FOO_BAR"]
         assert cfg["foo"]["baz"] == self.MOCK_ENV["KARTON_FOO_BAZ"]
 
