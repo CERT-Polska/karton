@@ -47,25 +47,22 @@ def configuration_wizard(config_filename: str) -> None:
         s3_secret_key = get_user_option(
             "Enter the S3 secret key", default=s3_secret_key
         )
-        s3_address = get_user_option(
-            "Enter the S3 address", default=s3_address
-        )
-        s3_bucket = get_user_option(
-            "Enter the S3 bucket to use", default=s3_bucket
-        )
+        s3_address = get_user_option("Enter the S3 address", default=s3_address)
+        s3_bucket = get_user_option("Enter the S3 bucket to use", default=s3_bucket)
 
         log.info("Testing S3 connection...")
-        s3 = s3.client('s3',
+        s3_client = boto3.client(
+            "s3",
             endpoint_url=s3_address,
             aws_access_key_id=s3_access_key,
             aws_secret_access_key=s3_secret_key,
         )
         bucket_exists = False
         try:
-            bucket_exists = bool(s3.head_bucket(Bucket=s3_bucket))
+            bucket_exists = bool(s3_client.head_bucket(Bucket=s3_bucket))
 
-        except self.s3.exceptions.ClientError as e:
-            if e.response['Error']['Code'] != '404':
+        except s3_client.exceptions.ClientError as e:
+            if e.response["Error"]["Code"] != "404":
                 raise e
 
         except Exception as e:

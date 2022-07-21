@@ -3,8 +3,18 @@ import json
 import time
 import warnings
 from collections import defaultdict, namedtuple
-from io import BytesIO
-from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Set, Tuple, Union
+from typing import (
+    Any,
+    BinaryIO,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 
 import boto3
 from redis import AuthenticationError, StrictRedis
@@ -44,10 +54,11 @@ class KartonBackend:
         self.config = config
         self.identity = identity
         self.redis = self.make_redis(config, identity=identity)
-        self.s3 = boto3.client('s3',
-           endpoint_url=config["s3"]["address"],
-           aws_access_key_id=config["s3"]["access_key"],
-           aws_secret_access_key=config["s3"]["secret_key"]
+        self.s3 = boto3.client(
+            "s3",
+            endpoint_url=config["s3"]["address"],
+            aws_access_key_id=config["s3"]["access_key"],
+            aws_secret_access_key=config["s3"]["secret_key"],
         )
 
     def make_redis(self, config, identity: Optional[str] = None) -> StrictRedis:
@@ -333,7 +344,7 @@ class KartonBackend:
         """
         self.redis.delete(f"{KARTON_TASK_NAMESPACE}:{task.uid}")
 
-    def delete_tasks(self, tasks: List[Task], chunk_size: int = 1000) -> None:
+    def delete_tasks(self, tasks: Iterable[Task], chunk_size: int = 1000) -> None:
         """
         Remove multiple tasks from Redis
 
@@ -579,7 +590,7 @@ class KartonBackend:
         :param object_uid: Object identifier
         :param path: Path to the object content
         """
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             self.s3.put_object(Bucket=bucket, Key=object_uid, Body=f)
 
     def get_object(self, bucket: str, object_uid: str) -> HTTPResponse:
@@ -594,7 +605,7 @@ class KartonBackend:
         :param object_uid: Object identifier
         :return: Response object with content
         """
-        return self.s3.get_object(Bucket=bucket, Key=object_uid)['Body']
+        return self.s3.get_object(Bucket=bucket, Key=object_uid)["Body"]
 
     def download_object(self, bucket: str, object_uid: str) -> bytes:
         """
@@ -604,7 +615,7 @@ class KartonBackend:
         :param object_uid: Object identifier
         :return: Content bytes
         """
-        with self.s3.get_object(Bucket=bucket, Key=object_uid)['Body'] as f:
+        with self.s3.get_object(Bucket=bucket, Key=object_uid)["Body"] as f:
             ret = f.read()
         return ret
 
@@ -625,7 +636,10 @@ class KartonBackend:
         :param bucket: Bucket name
         :return: List of object identifiers
         """
-        return [object['Key'] for object in self.s3.list_objects(Bucket=bucket).get('Contents',[])]
+        return [
+            object["Key"]
+            for object in self.s3.list_objects(Bucket=bucket).get("Contents", [])
+        ]
 
     def remove_object(self, bucket: str, object_uid: str) -> None:
         """
@@ -636,15 +650,15 @@ class KartonBackend:
         """
         self.s3.delete_object(Bucket=bucket, Key=object_uid)
 
-    def remove_objects(self, bucket: str, object_uids: List[str]) -> None:
+    def remove_objects(self, bucket: str, object_uids: Iterable[str]) -> None:
         """
         Bulk remove resource objects from object storage
 
         :param bucket: Bucket name
         :param object_uids: Object identifiers
         """
-        delete_objects = [{'Key':uid} for uid in object_uids]
-        self.s3.delete_objects(Bucket=bucket, Delete={'Objects':delete_objects})
+        delete_objects = [{"Key": uid} for uid in object_uids]
+        self.s3.delete_objects(Bucket=bucket, Delete={"Objects": delete_objects})
 
     def check_bucket_exists(self, bucket: str, create: bool = False) -> bool:
         """
@@ -658,7 +672,7 @@ class KartonBackend:
             self.s3.head_bucket(Bucket=bucket)
             return True
         except self.s3.exceptions.ClientError as e:
-            if e.response['Error']['Code'] == '404':
+            if e.response["Error"]["Code"] == "404":
                 if create:
                     self.s3.create_bucket(Bucket=bucket)
             else:
