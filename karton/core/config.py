@@ -1,6 +1,7 @@
 import configparser
 import os
 import re
+import warnings
 from typing import Any, Dict, List, Optional, cast, overload
 
 
@@ -46,6 +47,12 @@ class Config(object):
         self._load_from_env()
 
         if check_sections:
+            if self.has_section("minio") and not self.has_section("s3"):
+                warnings.warn(
+                    "[minio] section in configuration is deprecated, replace it with [s3]",
+                    DeprecationWarning,
+                )
+                self._config["s3"] = self._config["minio"]
             if not self.has_section("s3"):
                 raise RuntimeError("Missing S3 configuration")
             if not self.has_section("redis"):
