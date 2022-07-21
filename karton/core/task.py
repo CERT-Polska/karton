@@ -7,7 +7,7 @@ import warnings
 from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple, Union
 
 from .resource import RemoteResource, ResourceBase
-
+from .utils import walk_resources
 if TYPE_CHECKING:
     from .backend import KartonBackend  # noqa
 
@@ -249,17 +249,6 @@ class Task(object):
             sort_keys=True,
         )
 
-    def walk_payload_bags(self) -> Iterator[Tuple[Dict[str, Any], str, Any]]:
-        """
-        Iterate over all payload bags and payloads contained in them
-
-        Generates tuples (payload_bag, key, value)
-
-        :return: An iterator over all task payload bags
-        """
-        for payload_bag in [self.payload, self.payload_persistent]:
-            for key, value in payload_bag.items():
-                yield payload_bag, key, value
 
     def iterate_resources(self) -> Iterator[Tuple[str, ResourceBase]]:
         """
@@ -269,24 +258,8 @@ class Task(object):
 
         :return: An iterator over all task resources
         """
-        for _, key, value in self.walk_payload_bags():
-            if isinstance(value, ResourceBase):
-                yield key, value
-
-    def unserialize_resources(self, backend: Optional["KartonBackend"]) -> None:
-        """
-        Transforms __karton_resource__ serialized entries into
-        RemoteResource object instances
-
-        :param backend: KartonBackend to use while unserializing resources
-
-        :meta private:
-        """
-        for payload_bag, key, value in self.walk_payload_bags():
-            if isinstance(value, dict) and "__karton_resource__" in value:
-                payload_bag[key] = RemoteResource.from_dict(
-                    value["__karton_resource__"], backend
-                )
+        for payload_bag in [self.payload, self.payload_persistent]:
+            yield from walk_resources(payload_bag)
 
     @staticmethod
     def unserialize(
@@ -301,10 +274,15 @@ class Task(object):
 
         :meta private:
         """
+        def unserialize_resources(value):
+            if isinstance(value, dict) and "__karton_resource__" in value:
+               return RemoteResource.from_dict(value["__karton_resource__"], backend)
+            return value
+
         if not isinstance(data, str):
             data = data.decode("utf8")
 
-        task_data = json.loads(data)
+        task_data = json.loads(data, object_hook=unserialize_resources)
 
         task = Task(task_data["headers"])
         task.uid = task_data["uid"]
@@ -324,7 +302,6 @@ class Task(object):
         task.last_update = task_data.get("last_update", None)
         task.payload = task_data["payload"]
         task.payload_persistent = task_data["payload_persistent"]
-        task.unserialize_resources(backend)
         return task
 
     def __repr__(self) -> str:

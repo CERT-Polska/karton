@@ -1,7 +1,7 @@
 import functools
 import signal
 from contextlib import contextmanager
-from typing import Any, Callable, Iterator, Sequence, TypeVar
+from typing import Any, Callable, Iterator, Sequence, TypeVar, Tuple
 
 from .exceptions import HardShutdownInterrupt, TaskTimeoutError
 
@@ -10,6 +10,20 @@ T = TypeVar("T")
 
 def chunks(seq: Sequence[T], size: int) -> Iterator[Sequence[T]]:
     return (seq[pos : pos + size] for pos in range(0, len(seq), size))
+
+
+def walk_resources(obj: Any) -> Iterator[Tuple[str, "ResourceBase"]]:
+    q = [(None, obj)]
+    while q:
+        last_name, obj = q.pop()
+        if isinstance(obj, ResourceBase):
+              yield last_name, obj
+
+        elif isinstance(obj, (list, tuple, set)):
+              q += [ (last_name, o) for o in obj]
+
+        elif isinstance(obj, dict):
+              q += [ (k, v ) for k, v in obj.items() ]
 
 
 @contextmanager
