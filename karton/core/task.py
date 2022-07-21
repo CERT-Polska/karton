@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple, Un
 
 from .resource import RemoteResource, ResourceBase
 from .utils import walk_resources
+
 if TYPE_CHECKING:
     from .backend import KartonBackend  # noqa
 

@@ -1,9 +1,10 @@
 import functools
 import signal
 from contextlib import contextmanager
-from typing import Any, Callable, Iterator, Sequence, TypeVar, Tuple
-from .resource import ResourceBase
+from typing import Any, Callable, Iterator, Sequence, Tuple, TypeVar
+
 from .exceptions import HardShutdownInterrupt, TaskTimeoutError
+from .resource import ResourceBase
 
 T = TypeVar("T")
 
