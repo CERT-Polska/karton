@@ -4,7 +4,7 @@ from unittest.mock import patch, mock_open
 from karton.core import Config, Task
 
 MOCK_CONFIG = """
-[minio]
+[s3]
 access_key=xd
 
 [redis]

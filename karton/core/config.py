@@ -22,7 +22,7 @@ class Config(object):
     Environment variables have higher precedence than those loaded from files.
 
     :param path: Path to additional configuration file
-    :param check_sections: Check if sections ``redis`` and ``minio`` are defined
+    :param check_sections: Check if sections ``redis`` and ``s3`` are defined
         in the configuration
     """
 
@@ -46,7 +46,7 @@ class Config(object):
         self._load_from_env()
 
         if check_sections:
-            if not self.has_section("minio"):
+            if not self.has_section("s3"):
                 raise RuntimeError("Missing MinIO configuration")
             if not self.has_section("redis"):
                 raise RuntimeError("Missing Redis configuration")
