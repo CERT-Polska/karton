@@ -3,11 +3,20 @@ import json
 import time
 import warnings
 from collections import defaultdict, namedtuple
-from io import BytesIO
-from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Set, Tuple, Union
+from typing import (
+    Any,
+    BinaryIO,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 
-from minio import Minio
-from minio.deleteobjects import DeleteError, DeleteObject
+import boto3
 from redis import AuthenticationError, StrictRedis
 from redis.client import Pipeline
 from urllib3.response import HTTPResponse
@@ -45,11 +54,11 @@ class KartonBackend:
         self.config = config
         self.identity = identity
         self.redis = self.make_redis(config, identity=identity)
-        self.minio = Minio(
-            endpoint=config["minio"]["address"],
-            access_key=config["minio"]["access_key"],
-            secret_key=config["minio"]["secret_key"],
-            secure=config.getboolean("minio", "secure", fallback=True),
+        self.s3 = boto3.client(
+            "s3",
+            endpoint_url=config["s3"]["address"],
+            aws_access_key_id=config["s3"]["access_key"],
+            aws_secret_access_key=config["s3"]["secret_key"],
         )
 
     def make_redis(self, config, identity: Optional[str] = None) -> StrictRedis:
@@ -63,8 +72,12 @@ class KartonBackend:
         redis_args = {
             "host": config["redis"]["host"],
             "port": config.getint("redis", "port", 6379),
+            "db": config.getint("redis", "db", 0),
+            "username": config.get("redis", "username"),
             "password": config.get("redis", "password"),
             "client_name": identity,
+            # set socket_timeout to None if set to 0
+            "socket_timeout": config.getint("redis", "socket_timeout", 30) or None,
             "decode_responses": True,
         }
         try:
@@ -81,9 +94,9 @@ class KartonBackend:
 
     @property
     def default_bucket_name(self) -> str:
-        bucket_name = self.config.get("minio", "bucket")
+        bucket_name = self.config.get("s3", "bucket")
         if not bucket_name:
-            raise RuntimeError("MinIO default bucket is not defined in configuration")
+            raise RuntimeError("S3 default bucket is not defined in configuration")
         return bucket_name
 
     @staticmethod
@@ -331,7 +344,7 @@ class KartonBackend:
         """
         self.redis.delete(f"{KARTON_TASK_NAMESPACE}:{task.uid}")
 
-    def delete_tasks(self, tasks: List[Task], chunk_size: int = 1000) -> None:
+    def delete_tasks(self, tasks: Iterable[Task], chunk_size: int = 1000) -> None:
         """
         Remove multiple tasks from Redis
 
@@ -559,20 +572,15 @@ class KartonBackend:
         bucket: str,
         object_uid: str,
         content: Union[bytes, BinaryIO],
-        length: int = None,
     ) -> None:
         """
-        Upload resource object to underlying object storage (Minio)
+        Upload resource object to underlying object storage (S3)
 
         :param bucket: Bucket name
         :param object_uid: Object identifier
         :param content: Object content as bytes or file-like stream
-        :param length: Object content length (if file-like object provided)
         """
-        if isinstance(content, bytes):
-            length = len(content)
-            content = BytesIO(content)
-        self.minio.put_object(bucket, object_uid, content, length)
+        self.s3.put_object(Bucket=bucket, Key=object_uid, Body=content)
 
     def upload_object_from_file(self, bucket: str, object_uid: str, path: str) -> None:
         """
@@ -582,7 +590,8 @@ class KartonBackend:
         :param object_uid: Object identifier
         :param path: Path to the object content
         """
-        self.minio.fput_object(bucket, object_uid, path)
+        with open(path, "rb") as f:
+            self.s3.put_object(Bucket=bucket, Key=object_uid, Body=f)
 
     def get_object(self, bucket: str, object_uid: str) -> HTTPResponse:
         """
@@ -596,7 +605,7 @@ class KartonBackend:
         :param object_uid: Object identifier
         :return: Response object with content
         """
-        return self.minio.get_object(bucket, object_uid)
+        return self.s3.get_object(Bucket=bucket, Key=object_uid)["Body"]
 
     def download_object(self, bucket: str, object_uid: str) -> bytes:
         """
@@ -606,12 +615,9 @@ class KartonBackend:
         :param object_uid: Object identifier
         :return: Content bytes
         """
-        reader = self.minio.get_object(bucket, object_uid)
-        try:
-            return reader.read()
-        finally:
-            reader.release_conn()
-            reader.close()
+        with self.s3.get_object(Bucket=bucket, Key=object_uid)["Body"] as f:
+            ret = f.read()
+        return ret
 
     def download_object_to_file(self, bucket: str, object_uid: str, path: str) -> None:
         """
@@ -621,7 +627,7 @@ class KartonBackend:
         :param object_uid: Object identifier
         :param path: Target file path
         """
-        self.minio.fget_object(bucket, object_uid, path)
+        self.s3.download_file(Bucket=bucket, Key=object_uid, Filename=path)
 
     def list_objects(self, bucket: str) -> List[str]:
         """
@@ -630,7 +636,10 @@ class KartonBackend:
         :param bucket: Bucket name
         :return: List of object identifiers
         """
-        return [object.object_name for object in self.minio.list_objects(bucket)]
+        return [
+            object["Key"]
+            for object in self.s3.list_objects(Bucket=bucket).get("Contents", [])
+        ]
 
     def remove_object(self, bucket: str, object_uid: str) -> None:
         """
@@ -639,19 +648,17 @@ class KartonBackend:
         :param bucket: Bucket name
         :param object_uid: Object identifier
         """
-        self.minio.remove_object(bucket, object_uid)
+        self.s3.delete_object(Bucket=bucket, Key=object_uid)
 
-    def remove_objects(
-        self, bucket: str, object_uids: List[str]
-    ) -> Iterator[DeleteError]:
+    def remove_objects(self, bucket: str, object_uids: Iterable[str]) -> None:
         """
         Bulk remove resource objects from object storage
 
         :param bucket: Bucket name
         :param object_uids: Object identifiers
         """
-        delete_objects = [DeleteObject(uid) for uid in object_uids]
-        yield from self.minio.remove_objects(bucket, delete_objects)
+        delete_objects = [{"Key": uid} for uid in object_uids]
+        self.s3.delete_objects(Bucket=bucket, Delete={"Objects": delete_objects})
 
     def check_bucket_exists(self, bucket: str, create: bool = False) -> bool:
         """
@@ -661,10 +668,15 @@ class KartonBackend:
         :param create: Create bucket if doesn't exist
         :return: True if bucket exists yet
         """
-        if self.minio.bucket_exists(bucket):
+        try:
+            self.s3.head_bucket(Bucket=bucket)
             return True
-        if create:
-            self.minio.make_bucket(bucket)
+        except self.s3.exceptions.ClientError as e:
+            if e.response["Error"]["Code"] == "404":
+                if create:
+                    self.s3.create_bucket(Bucket=bucket)
+            else:
+                raise e
         return False
 
     def log_identity_output(self, identity: str, headers: Dict[str, Any]) -> None:

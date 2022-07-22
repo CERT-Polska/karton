@@ -4,7 +4,7 @@ import os.path
 from configparser import ConfigParser
 from typing import Any, Dict, List
 
-from minio import Minio
+import boto3
 from redis import StrictRedis
 
 from .__version__ import __version__
@@ -35,41 +35,40 @@ def get_user_option(prompt: str, default: str) -> str:
 def configuration_wizard(config_filename: str) -> None:
     config = ConfigParser()
 
-    log.info("Configuring MinIO")
-    minio_access_key = "minioadmin"
-    minio_secret_key = "minioadmin"
-    minio_address = "localhost:9000"
-    minio_bucket = "karton"
-    minio_secure = "0"
+    log.info("Configuring s3")
+    s3_access_key = "minioadmin"
+    s3_secret_key = "minioadmin"
+    s3_address = "http://localhost:9000"
+    s3_bucket = "karton"
     while True:
-        minio_access_key = get_user_option(
-            "Enter the MinIO access key", default=minio_access_key
+        s3_access_key = get_user_option(
+            "Enter the S3 access key", default=s3_access_key
         )
-        minio_secret_key = get_user_option(
-            "Enter the MinIO secret key", default=minio_secret_key
+        s3_secret_key = get_user_option(
+            "Enter the S3 secret key", default=s3_secret_key
         )
-        minio_address = get_user_option(
-            "Enter the MinIO address", default=minio_address
-        )
-        minio_bucket = get_user_option(
-            "Enter the MinIO bucket to use", default=minio_bucket
-        )
-        minio_secure = get_user_option('Use SSL ("0", "1")?', default=minio_secure)
+        s3_address = get_user_option("Enter the S3 address", default=s3_address)
+        s3_bucket = get_user_option("Enter the S3 bucket to use", default=s3_bucket)
 
-        log.info("Testing MinIO connection...")
-        minio = Minio(
-            endpoint=minio_address,
-            access_key=minio_access_key,
-            secret_key=minio_secret_key,
-            secure=bool(int(minio_secure)),
+        log.info("Testing S3 connection...")
+        s3_client = boto3.client(
+            "s3",
+            endpoint_url=s3_address,
+            aws_access_key_id=s3_access_key,
+            aws_secret_access_key=s3_secret_key,
         )
         bucket_exists = False
         try:
-            bucket_exists = minio.bucket_exists(minio_bucket)
+            bucket_exists = bool(s3_client.head_bucket(Bucket=s3_bucket))
+
+        except s3_client.exceptions.ClientError as e:
+            if e.response["Error"]["Code"] != "404":
+                raise e
+
         except Exception as e:
-            log.info("Error while connecting to MinIO: %s", e, exc_info=True)
+            log.info("Error while connecting to S3: %s", e, exc_info=True)
             retry = get_user_option(
-                'Do you want to try with different MinIO settings ("yes", "no")?',
+                'Do you want to try with different S3 settings ("yes", "no")?',
                 default="yes",
             )
             if retry != "yes":
@@ -78,23 +77,22 @@ def configuration_wizard(config_filename: str) -> None:
             else:
                 continue
 
-        log.info("Connected to MinIO successfully")
+        log.info("Connected to S3 successfully")
         if not bucket_exists:
             log.info(
                 (
                     "The required bucket %s does not exist. To create it automatically,"
                     " start karton-system with --setup-bucket flag"
                 ),
-                minio_bucket,
+                s3_bucket,
             )
         break
 
-    config["minio"] = {
-        "access_key": minio_access_key,
-        "secret_key": minio_secret_key,
-        "address": minio_address,
-        "bucket": minio_bucket,
-        "secure": minio_secure,
+    config["s3"] = {
+        "access_key": s3_access_key,
+        "secret_key": s3_secret_key,
+        "address": s3_address,
+        "bucket": s3_bucket,
     }
 
     log.info("Configuring Redis")
@@ -176,7 +174,7 @@ def delete_bind(config: Config, karton_name: str) -> None:
             pass
 
     karton = KartonDummy(config=config, identity=karton_name)
-    karton.shutdown = True
+    karton._shutdown = True
     karton.loop()
 
 

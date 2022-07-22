@@ -2,13 +2,14 @@ import abc
 import argparse
 import logging
 import textwrap
+from contextlib import contextmanager
 from typing import Optional, Union, cast
 
 from .backend import KartonBackend
 from .config import Config
 from .logger import KartonLogHandler
 from .task import Task
-from .utils import GracefulKiller, StrictClassMethod
+from .utils import HardShutdownInterrupt, StrictClassMethod, graceful_killer
 
 
 class KartonBase(abc.ABC):
@@ -191,12 +192,24 @@ class KartonServiceBase(KartonBase):
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
         self.setup_logger()
-        self.shutdown = False
-        self.killer = GracefulKiller(self.graceful_shutdown)
+        self._shutdown = False
 
-    def graceful_shutdown(self) -> None:
-        self.log.info("Gracefully shutting down!")
-        self.shutdown = True
+    def _do_shutdown(self) -> None:
+        self.log.info("Got signal, shutting down...")
+        self._shutdown = True
+
+    @property
+    def shutdown(self):
+        return self._shutdown
+
+    @contextmanager
+    def graceful_killer(self):
+        try:
+            with graceful_killer(self._do_shutdown):
+                yield
+        except HardShutdownInterrupt:
+            self.log.info("Hard shutting down!")
+            raise
 
     # Base class for Karton services
     @abc.abstractmethod

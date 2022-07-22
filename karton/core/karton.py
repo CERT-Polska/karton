@@ -14,7 +14,7 @@ from .base import KartonBase, KartonServiceBase
 from .config import Config
 from .resource import LocalResource
 from .task import Task, TaskState
-from .utils import get_function_arg_num
+from .utils import timeout
 
 
 class Producer(KartonBase):
@@ -127,7 +127,7 @@ class Consumer(KartonServiceBase):
         self.persistent = self.config.getboolean(
             "karton", "persistent", self.persistent
         )
-
+        self.task_timeout = self.config.getint("karton", "task_timeout")
         self.current_task: Optional[Task] = None
         self._pre_hooks: List[Tuple[Optional[str], Callable[[Task], None]]] = []
         self._post_hooks: List[
@@ -135,7 +135,7 @@ class Consumer(KartonServiceBase):
         ] = []
 
     @abc.abstractmethod
-    def process(self, *args) -> None:
+    def process(self, task: Task) -> None:
         """
         Task processing method.
 
@@ -176,9 +176,9 @@ class Consumer(KartonServiceBase):
 
             saved_exception = None
             try:
-                # check if the process function expects the current task or not
-                if get_function_arg_num(self.process) == 0:
-                    self.process()
+                if self.task_timeout:
+                    with timeout(self.task_timeout):
+                        self.process(self.current_task)
                 else:
                     self.process(self.current_task)
             except Exception as exc:
@@ -229,12 +229,24 @@ class Consumer(KartonServiceBase):
             dest="persistent",
             help="Run service with non-persistent queue",
         )
+        parser.add_argument(
+            "--task-timeout",
+            type=int,
+            help="Limit task execution time",
+        )
         return parser
 
     @classmethod
     def config_from_args(cls, config: Config, args: argparse.Namespace) -> None:
         super().config_from_args(config, args)
-        config.load_from_dict({"karton": {"persistent": args.persistent}})
+        config.load_from_dict(
+            {
+                "karton": {
+                    "persistent": args.persistent,
+                    "task_timeout": args.task_timeout,
+                }
+            }
+        )
 
     def add_pre_hook(
         self, callback: Callable[[Task], None], name: Optional[str] = None
@@ -305,6 +317,9 @@ class Consumer(KartonServiceBase):
         """
         self.log.info("Service %s started", self.identity)
 
+        if self.task_timeout is not None:
+            self.log.info(f"Task timeout is set to {self.task_timeout} seconds")
+
         # Get the old binds and set the new ones atomically
         old_bind = self.backend.register_bind(self._bind)
 
@@ -316,18 +331,14 @@ class Consumer(KartonServiceBase):
         for task_filter in self.filters:
             self.log.info("Binding on: %s", task_filter)
 
-        try:
+        with self.graceful_killer():
             while not self.shutdown:
                 if self.backend.get_bind(self.identity) != self._bind:
                     self.log.info("Binds changed, shutting down.")
                     break
-
                 task = self.backend.consume_routed_task(self.identity)
                 if task:
                     self.internal_process(task)
-        except KeyboardInterrupt as e:
-            self.log.info("Hard shutting down!")
-            raise e
 
 
 class LogConsumer(KartonServiceBase):
@@ -376,24 +387,25 @@ class LogConsumer(KartonServiceBase):
         """
         self.log.info("Logger %s started", self.identity)
 
-        for log in self.backend.consume_log(
-            logger_filter=self.logger_filter, level=self.level
-        ):
-            if self.shutdown:
-                # Consumer shutdown has been requested
-                break
-            if not log:
-                # No log record received until timeout, try again.
-                continue
-            try:
-                self.process_log(log)
-            except Exception:
-                """
-                This is log handler exception, so DO NOT USE self.log HERE!
-                """
-                import traceback
+        with self.graceful_killer():
+            for log in self.backend.consume_log(
+                logger_filter=self.logger_filter, level=self.level
+            ):
+                if self.shutdown:
+                    # Consumer shutdown has been requested
+                    break
+                if not log:
+                    # No log record received until timeout, try again.
+                    continue
+                try:
+                    self.process_log(log)
+                except Exception:
+                    """
+                    This is log handler exception, so DO NOT USE self.log HERE!
+                    """
+                    import traceback
 
-                traceback.print_exc()
+                    traceback.print_exc()
 
 
 class Karton(Consumer, Producer):

@@ -64,10 +64,7 @@ class SystemService(KartonServiceBase):
                     resources_to_remove.remove(resource.uid)
         # Remove unreferenced resources
         if resources_to_remove:
-            for err in self.backend.remove_objects(
-                karton_bucket, list(resources_to_remove)
-            ):
-                self.log.error(err)
+            self.backend.remove_objects(karton_bucket, resources_to_remove)
 
     def gc_collect_abandoned_queues(self):
         online_consumers = self.backend.get_online_consumers()
@@ -251,21 +248,22 @@ class SystemService(KartonServiceBase):
     def loop(self) -> None:
         self.log.info("Manager %s started", self.identity)
 
-        while not self.shutdown:
-            if self.enable_router:
-                # This will wait for up to 5s, so this is not a busy loop
-                self.process_routing()
-            if self.enable_gc:
-                # This will only do anything once every self.gc_interval seconds
-                self.gc_collect()
-                if not self.enable_router:
-                    time.sleep(1)  # Avoid a busy loop
+        with self.graceful_killer():
+            while not self.shutdown:
+                if self.enable_router:
+                    # This will wait for up to 5s, so this is not a busy loop
+                    self.process_routing()
+                if self.enable_gc:
+                    # This will only do anything once every self.gc_interval seconds
+                    self.gc_collect()
+                    if not self.enable_router:
+                        time.sleep(1)  # Avoid a busy loop
 
     @classmethod
     def args_parser(cls) -> argparse.ArgumentParser:
         parser = super().args_parser()
         parser.add_argument(
-            "--setup-bucket", action="store_true", help="Create missing bucket in MinIO"
+            "--setup-bucket", action="store_true", help="Create missing bucket in S3"
         )
         # store_false defaults to True, we intentionally want None there
         parser.add_argument(
