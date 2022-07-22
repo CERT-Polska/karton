@@ -32,10 +32,10 @@ class ResourceBase(object):
     :param name: Name of the resource (e.g. name of file)
     :param content: Resource content
     :param path: Path of file with resource content
-    :param bucket: Alternative MinIO bucket for resource
+    :param bucket: Alternative S3 bucket for resource
     :param metadata: Resource metadata
     :param sha256: Resource sha256 hash
-    :param _uid: Alternative MinIO resource id
+    :param _uid: Alternative S3 resource id
     :param _fd: File descriptor
     :param _flag: Resource flags
     """
@@ -154,7 +154,7 @@ class LocalResource(ResourceBase):
     """
     Represents local resource with arbitrary binary data e.g. file contents.
 
-    Local resources will be uploaded to object hub (MinIO) during
+    Local resources will be uploaded to object hub (S3) during
     task dispatching.
 
     .. code-block:: python
@@ -169,9 +169,9 @@ class LocalResource(ResourceBase):
     :param name: Name of the resource (e.g. name of file)
     :param content: Resource content
     :param path: Path of file with resource content
-    :param bucket: Alternative MinIO bucket for resource
+    :param bucket: Alternative S3 bucket for resource
     :param metadata: Resource metadata
-    :param uid: Alternative MinIO resource id
+    :param uid: Alternative S3 resource id
     :param sha256: Resource sha256 hash
     :param _fd: File descriptor
     :param _flag: Resource flags
@@ -244,9 +244,9 @@ class LocalResource(ResourceBase):
         :param compression: Compression level (default is zipfile.ZIP_DEFLATED)
         :param in_memory: Don't create temporary file and make in-memory zip file \
                           (default: False)
-        :param bucket: Alternative MinIO bucket for resource
+        :param bucket: Alternative S3 bucket for resource
         :param metadata: Resource metadata
-        :param uid: Alternative MinIO resource id
+        :param uid: Alternative S3 resource id
         :return: :class:`LocalResource` instance with zipped contents
         """
         out_stream = BytesIO() if in_memory else tempfile.NamedTemporaryFile()
@@ -329,15 +329,15 @@ Resource = LocalResource
 class RemoteResource(ResourceBase):
     """
     Keeps reference to remote resource object shared between subsystems
-    via object storage (MinIO)
+    via object storage (S3)
 
     Should never be instantiated directly by subsystem, but can be directly passed to
     outgoing payload.
 
     :param name: Name of the resource (e.g. name of file)
-    :param bucket: Alternative MinIO bucket for resource
+    :param bucket: Alternative S3 bucket for resource
     :param metadata: Resource metadata
-    :param uid: Alternative MinIO resource id
+    :param uid: Alternative S3 resource id
     :param size: Resource size
     :param backend: :py:meth:`KartonBackend` to bind to this resource
     :param sha256: Resource sha256 hash
