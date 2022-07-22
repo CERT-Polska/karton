@@ -300,22 +300,6 @@ class Task(object):
             if isinstance(element, ResourceBase):
                 yield element
 
-    def unserialize_resources(self, backend: Optional["KartonBackend"]) -> None:
-        """
-        Transforms __karton_resource__ serialized entries into
-        RemoteResource object instances
-
-        :param backend: KartonBackend to use while unserializing resources
-
-        :meta private:
-        """
-
-        def resource_decoder(value):
-            if isinstance(value, dict) and "__karton_resource__" in value:
-                return RemoteResource.from_dict(value["__karton_resource__"], backend)
-
-        self.transform_payload_bags(resource_decoder)
-
     @staticmethod
     def unserialize(
         data: Union[str, bytes], backend: Optional["KartonBackend"] = None
@@ -329,10 +313,20 @@ class Task(object):
 
         :meta private:
         """
+
+        def unserialize_resources(value):
+            """
+            Transforms __karton_resource__ serialized entries into
+            RemoteResource object instances
+            """
+            if isinstance(value, dict) and "__karton_resource__" in value:
+                return RemoteResource.from_dict(value["__karton_resource__"], backend)
+            return value
+
         if not isinstance(data, str):
             data = data.decode("utf8")
 
-        task_data = json.loads(data)
+        task_data = json.loads(data, object_hook=unserialize_resources)
 
         task = Task(task_data["headers"])
         task.uid = task_data["uid"]
@@ -352,7 +346,6 @@ class Task(object):
         task.last_update = task_data.get("last_update", None)
         task.payload = task_data["payload"]
         task.payload_persistent = task_data["payload_persistent"]
-        task.unserialize_resources(backend)
         return task
 
     def __repr__(self) -> str:
