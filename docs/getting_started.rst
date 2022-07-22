@@ -12,7 +12,7 @@ You can get the karton framework from pip:
 
 Or, if you're feeling adventurous, download the sources using git and install them manually.
 
-In addition to karton, you'll also need to setup `MinIO <https://docs.min.io/docs/minio-quickstart-guide.html>`_ and `Redis-server <https://redis.io/topics/quickstart>`_.
+In addition to Karton core library, you'll also need to setup `MinIO <https://docs.min.io/docs/minio-quickstart-guide.html>`_ and `Redis-server <https://redis.io/topics/quickstart>`_.
 
 
 Configuration
@@ -95,7 +95,7 @@ That was pretty short! Now for a bit longer consumer:
                 print("Bar")
 
     if __name__ == "__main__":
-        FooBarConsumer().loop()
+        FooBarConsumer.main()
 
 If we now run the consumer and spawn a few "foobar" tasks we should get a few foobars logs in return:
 
