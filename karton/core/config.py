@@ -48,15 +48,32 @@ class Config(object):
 
         if check_sections:
             if self.has_section("minio") and not self.has_section("s3"):
-                warnings.warn(
-                    "[minio] section in configuration is deprecated, replace it with [s3]",
-                    DeprecationWarning,
-                )
-                self._config["s3"] = self._config["minio"]
+                self._map_minio_to_s3()
             if not self.has_section("s3"):
                 raise RuntimeError("Missing S3 configuration")
             if not self.has_section("redis"):
                 raise RuntimeError("Missing Redis configuration")
+
+    def _map_minio_to_s3(self):
+        """
+        Configuration backwards compatibility. Before 5.x.x [minio] section was used.
+        """
+        warnings.warn(
+            "[minio] section in configuration is deprecated, replace it with [s3]"
+        )
+        self._config["s3"] = dict(self._config["minio"])
+        if not (
+            self._config["s3"]["address"].startswith("http://")
+            or self._config["s3"]["address"].startswith("https://")
+        ):
+            if self.getboolean("minio", "secure", True):
+                self._config["s3"]["address"] = (
+                    "https://" + self._config["s3"]["address"]
+                )
+            else:
+                self._config["s3"]["address"] = (
+                    "http://" + self._config["s3"]["address"]
+                )
 
     def set(self, section_name: str, option_name: str, value: Any) -> None:
         """
