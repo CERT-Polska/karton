@@ -21,13 +21,13 @@ log = logging.getLogger()
 
 class ConfigMock(Config):
     def __init__(self):
-        self._config = {"redis": {}, "minio": {}}
+        self._config = {"redis": {}, "s3": {}}
 
 
 class BackendMock:
     def __init__(self) -> None:
         self.produced_tasks: List[Task] = []
-        # A custom MinIO system mock
+        # A custom S3 system mock
         self.buckets: Dict[str, Dict[str, bytes]] = defaultdict(dict)
 
     @property
