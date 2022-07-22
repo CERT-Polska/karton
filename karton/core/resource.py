@@ -22,11 +22,10 @@ class ResourceBase(object):
     :param name: Name of the resource (e.g. name of file)
     :param content: Resource content
     :param path: Path of file with resource content
-    :param bucket: Alternative MinIO bucket for resource
+    :param bucket: Alternative S3 bucket for resource
     :param metadata: Resource metadata
     :param sha256: Resource sha256 hash
-    :param size: Resource content length (optional)
-    :param _uid: Alternative MinIO resource id
+    :param _uid: Alternative S3 resource id
     :param _flags: Resource flags
     """
 
@@ -40,8 +39,8 @@ class ResourceBase(object):
         bucket: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
         sha256: Optional[str] = None,
-        size: Optional[int] = None,
         _uid: Optional[str] = None,
+        _size: Optional[int] = None,
         _flags: Optional[List[str]] = None,
     ) -> None:
         self.name = name
@@ -82,7 +81,7 @@ class ResourceBase(object):
 
         self._uid = _uid or str(uuid.uuid4())
         self._path = path
-        self._size = size
+        self._size = _size
         # Flags needed by 3.x.x Karton services
         self._flags = _flags or []
 
@@ -144,7 +143,7 @@ class LocalResource(ResourceBase):
     """
     Represents local resource with arbitrary binary data e.g. file contents.
 
-    Local resources will be uploaded to object hub (MinIO) during
+    Local resources will be uploaded to object hub (S3) during
     task dispatching.
 
     .. code-block:: python
@@ -159,12 +158,11 @@ class LocalResource(ResourceBase):
     :param name: Name of the resource (e.g. name of file)
     :param content: Resource content
     :param path: Path of file with resource content
-    :param bucket: Alternative MinIO bucket for resource
+    :param bucket: Alternative S3 bucket for resource
     :param metadata: Resource metadata
-    :param uid: Alternative MinIO resource id
+    :param uid: Alternative S3 resource id
     :param sha256: Resource sha256 hash
     :param fd: File descriptor
-    :param size: File content length (if file descriptor was provided)
     :param _flags: Resource flags
     :param _close_fd: Close file descriptor after upload (default: False)
     """
@@ -179,15 +177,11 @@ class LocalResource(ResourceBase):
         uid: Optional[str] = None,
         sha256: Optional[str] = None,
         fd: Optional[IO[bytes]] = None,
-        size: Optional[int] = None,
         _flags: Optional[List[str]] = None,
         _close_fd: bool = False,
     ) -> None:
         if len(list(filter(lambda v: v is not None, [path, content, fd]))) != 1:
             raise ValueError("You must exclusively provide a path, content or fd")
-
-        if fd is not None and size is None:
-            raise ValueError("Size must be provided when resource comes from fd")
 
         super(LocalResource, self).__init__(
             name,
@@ -196,7 +190,6 @@ class LocalResource(ResourceBase):
             bucket=bucket,
             metadata=metadata,
             sha256=sha256,
-            size=size,
             _uid=uid,
             _flags=_flags,
         )
@@ -245,9 +238,9 @@ class LocalResource(ResourceBase):
         :param compression: Compression level (default is zipfile.ZIP_DEFLATED)
         :param in_memory: Don't create temporary file and make in-memory zip file \
                           (default: False)
-        :param bucket: Alternative MinIO bucket for resource
+        :param bucket: Alternative S3 bucket for resource
         :param metadata: Resource metadata
-        :param uid: Alternative MinIO resource id
+        :param uid: Alternative S3 resource id
         :return: :class:`LocalResource` instance with zipped contents
         """
         out_stream: IO[bytes] = (
@@ -262,7 +255,6 @@ class LocalResource(ResourceBase):
                     abs_path = os.path.join(root, filename)
                     zipf.write(abs_path, os.path.relpath(abs_path, directory_path))
 
-        size = out_stream.tell()
         # Flag is required by Karton 3.x.x services to recognize that resource
         # as DirectoryResource
         flags = [ResourceBase.DIRECTORY_FLAG]
@@ -284,7 +276,6 @@ class LocalResource(ResourceBase):
                 metadata=metadata,
                 uid=uid,
                 fd=out_stream,
-                size=size,
                 _flags=flags,
                 _close_fd=True,
             )
@@ -310,7 +301,7 @@ class LocalResource(ResourceBase):
             backend.upload_object(self.bucket, self.uid, self._content)
         elif self.fd:
             # Upload contents from fd
-            backend.upload_object(self.bucket, self.uid, self.fd, self._size)
+            backend.upload_object(self.bucket, self.uid, self.fd)
             # If file descriptor is managed by Resource, close it after upload
             if self._close_fd:
                 self.fd.close()
@@ -336,15 +327,15 @@ Resource = LocalResource
 class RemoteResource(ResourceBase):
     """
     Keeps reference to remote resource object shared between subsystems
-    via object storage (MinIO)
+    via object storage (S3)
 
     Should never be instantiated directly by subsystem, but can be directly passed to
     outgoing payload.
 
     :param name: Name of the resource (e.g. name of file)
-    :param bucket: Alternative MinIO bucket for resource
+    :param bucket: Alternative S3 bucket for resource
     :param metadata: Resource metadata
-    :param uid: Alternative MinIO resource id
+    :param uid: Alternative S3 resource id
     :param size: Resource size
     :param backend: :py:meth:`KartonBackend` to bind to this resource
     :param sha256: Resource sha256 hash
@@ -367,8 +358,8 @@ class RemoteResource(ResourceBase):
             bucket=bucket,
             metadata=metadata,
             sha256=sha256,
-            size=size,
             _uid=uid,
+            _size=size,
             _flags=_flags,
         )
         self.backend = backend
