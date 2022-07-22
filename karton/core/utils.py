@@ -18,7 +18,7 @@ def recursive_iter(obj) -> Iterator[Any]:
 
     :param obj: Object to iterate over
     """
-    if isinstance(obj, (list, tuple)):
+    if isinstance(obj, (list, tuple, set)):
         for elem in obj:
             yield from recursive_iter(elem)
     elif isinstance(obj, dict):
@@ -35,7 +35,7 @@ def recursive_iter_with_keys(obj, name="") -> Iterator[Tuple[str, Any]]:
     :param obj: Object to iterate over
     :param name: Object name
     """
-    if isinstance(obj, (list, tuple)):
+    if isinstance(obj, (list, tuple, set)):
         for idx, elem in enumerate(obj):
             yield from recursive_iter_with_keys(elem, name=f"{name}.{idx}")
     elif isinstance(obj, dict):
@@ -53,7 +53,7 @@ def recursive_map(func: Callable[[Any], Any], obj: Any) -> Any:
     :param obj: Object to iterate over
     """
     mapped_obj = func(obj)
-    if isinstance(mapped_obj, (list, tuple)):
+    if isinstance(mapped_obj, (list, tuple, set)):
         return [recursive_map(func, elem) for elem in mapped_obj]
     elif isinstance(mapped_obj, dict):
         return {key: recursive_map(func, elem) for key, elem in mapped_obj.items()}
