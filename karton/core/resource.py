@@ -162,7 +162,7 @@ class LocalResource(ResourceBase):
     :param metadata: Resource metadata
     :param uid: Alternative S3 resource id
     :param sha256: Resource sha256 hash
-    :param fd: File descriptor
+    :param fd: Seekable file descriptor
     :param _flags: Resource flags
     :param _close_fd: Close file descriptor after upload (default: False)
     """
@@ -211,6 +211,20 @@ class LocalResource(ResourceBase):
                 self._content = self.fd.read()
         return cast(bytes, self._content)
 
+    @property
+    def size(self) -> int:
+        """
+        Resource size
+
+        :return: Resource size
+        """
+        if self._size is None and self.fd is not None:
+            current_pos = self.fd.tell()
+            self.fd.seek(0, os.SEEK_END)
+            self._size = self.fd.tell()
+            self.fd.seek(current_pos, os.SEEK_SET)
+        return super().size
+
     @classmethod
     def from_directory(
         cls,
@@ -243,9 +257,7 @@ class LocalResource(ResourceBase):
         :param uid: Alternative S3 resource id
         :return: :class:`LocalResource` instance with zipped contents
         """
-        out_stream: IO[bytes] = (
-            BytesIO() if in_memory else tempfile.NamedTemporaryFile()
-        )
+        out_stream: IO[bytes] = BytesIO() if in_memory else tempfile.TemporaryFile()
 
         # Recursively zips all files in directory_path keeping relative paths
         # File is zipped into provided out_stream
@@ -254,7 +266,9 @@ class LocalResource(ResourceBase):
                 for filename in files:
                     abs_path = os.path.join(root, filename)
                     zipf.write(abs_path, os.path.relpath(abs_path, directory_path))
-
+        # Ensure out_stream is not closed and seeked to the first byte
+        assert not out_stream.closed
+        out_stream.seek(0, os.SEEK_SET)
         # Flag is required by Karton 3.x.x services to recognize that resource
         # as DirectoryResource
         flags = [ResourceBase.DIRECTORY_FLAG]
@@ -271,11 +285,10 @@ class LocalResource(ResourceBase):
         else:
             return cls(
                 name,
-                path=out_stream.name,
+                fd=out_stream,
                 bucket=bucket,
                 metadata=metadata,
                 uid=uid,
-                fd=out_stream,
                 _flags=flags,
                 _close_fd=True,
             )
@@ -300,6 +313,12 @@ class LocalResource(ResourceBase):
             # Upload contents
             backend.upload_object(self.bucket, self.uid, self._content)
         elif self.fd:
+            if self.fd.tell() != 0:
+                raise RuntimeError(
+                    f"Resource object can't be uploaded: "
+                    f"file descriptor must point at first byte "
+                    f"(fd.tell = {self.fd.tell()})"
+                )
             # Upload contents from fd
             backend.upload_object(self.bucket, self.uid, self.fd)
             # If file descriptor is managed by Resource, close it after upload
@@ -316,7 +335,7 @@ class LocalResource(ResourceBase):
 
         :meta private:
         """
-        if not self._content and not self._path:
+        if not self._content and not self._path and not self.fd:
             raise RuntimeError("Can't upload resource without content")
         self._upload(backend)
 
