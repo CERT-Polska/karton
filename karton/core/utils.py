@@ -28,7 +28,7 @@ def recursive_iter(obj) -> Iterator[Any]:
         yield obj
 
 
-def recursive_iter_with_keys(obj, name="") -> Iterator[Tuple[str, Any]]:
+def recursive_iter_with_keys(obj: Any, name: str = "") -> Iterator[Tuple[str, Any]]:
     """
     Yields (path, value) tuples recursively from nested list/dict structures
 
