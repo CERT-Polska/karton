@@ -3,18 +3,7 @@ import json
 import time
 import warnings
 from collections import defaultdict, namedtuple
-from typing import (
-    Any,
-    BinaryIO,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    Optional,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import IO, Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
 
 import boto3
 from redis import AuthenticationError, StrictRedis
@@ -571,7 +560,7 @@ class KartonBackend:
         self,
         bucket: str,
         object_uid: str,
-        content: Union[bytes, BinaryIO],
+        content: Union[bytes, IO[bytes]],
     ) -> None:
         """
         Upload resource object to underlying object storage (S3)
