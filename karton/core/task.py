@@ -4,7 +4,17 @@ import json
 import time
 import uuid
 import warnings
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
 
 from .resource import RemoteResource, ResourceBase
 from .utils import recursive_iter, recursive_iter_with_keys, recursive_map
@@ -276,7 +286,7 @@ class Task(object):
             self.payload_persistent, "payload_persistent"
         )
 
-    def transform_payload_bags(self, func):
+    def transform_payload_bags(self, func: Callable[[Any], Any]) -> None:
         """
         Recursively transform contents of all payload bags and payloads
         contained in them
@@ -314,7 +324,7 @@ class Task(object):
         :meta private:
         """
 
-        def unserialize_resources(value):
+        def unserialize_resources(value: Any) -> Any:
             """
             Transforms __karton_resource__ serialized entries into
             RemoteResource object instances
