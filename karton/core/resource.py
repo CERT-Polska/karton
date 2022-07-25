@@ -180,7 +180,7 @@ class LocalResource(ResourceBase):
         _flags: Optional[List[str]] = None,
         _close_fd: bool = False,
     ) -> None:
-        if len(list(filter(lambda v: v is not None, [path, content, fd]))) != 1:
+        if len(list(filter(None, [path, content, fd]))) != 1:
             raise ValueError("You must exclusively provide a path, content or fd")
 
         super(LocalResource, self).__init__(
