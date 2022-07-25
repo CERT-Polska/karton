@@ -178,9 +178,9 @@ class KartonTestCase(unittest.TestCase):
         """
         self.assertDictEqual(task.headers, expected.headers, "Headers mismatch")
         # Get paths and values sorted by path
-        task_payload_values = sorted(task.walk_payload_values(), key=lambda el: el[0])
+        task_payload_values = sorted(task.walk_payload_items(), key=lambda el: el[0])
         expected_payload_values = sorted(
-            expected.walk_payload_values(), key=lambda el: el[0]
+            expected.walk_payload_items(), key=lambda el: el[0]
         )
         self.assertSetEqual(
             set(path for path, _ in task_payload_values),

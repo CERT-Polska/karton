@@ -253,7 +253,7 @@ class Task(object):
 
     def walk_payload_bags(self) -> Iterator[Tuple[Dict[str, Any], str, Any]]:
         """
-        Iterate over all payload bags and payloads contained in them
+        Iterate over all payload bags and direct payloads contained in them
 
         Generates tuples (payload_bag, key, value)
 
@@ -263,9 +263,9 @@ class Task(object):
             for key, value in payload_bag.items():
                 yield payload_bag, key, value
 
-    def walk_payload_values(self) -> Iterator[Tuple[str, Any]]:
+    def walk_payload_items(self) -> Iterator[Tuple[str, Any]]:
         """
-        Iterate over all payload values
+        Iterate recursively over all payload items
 
         Generates tuples (path, value).
 
