@@ -12,7 +12,7 @@ def chunks(seq: Sequence[T], size: int) -> Iterator[Sequence[T]]:
     return (seq[pos : pos + size] for pos in range(0, len(seq), size))
 
 
-def recursive_iter(obj) -> Iterator[Any]:
+def recursive_iter(obj: Any) -> Iterator[Any]:
     """
     Yields all values recursively from nested list/dict structures
 
