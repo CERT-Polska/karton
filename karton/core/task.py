@@ -4,9 +4,20 @@ import json
 import time
 import uuid
 import warnings
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
 
 from .resource import RemoteResource, ResourceBase
+from .utils import recursive_iter, recursive_iter_with_keys, recursive_map
 
 if TYPE_CHECKING:
     from .backend import KartonBackend  # noqa
@@ -41,8 +52,9 @@ class Task(object):
                      propagated from initial task like `payload_persistent`
     :param parent_uid: Id of a routed task that has created this task by a karton with \
                        :py:meth:`.send_task`
-    :param root_uid: Id of a unrouted task that is the root of this tasks analysis tree
-    :param orig_uid: Id of a unrouted (or crashed routed) task that was forked to \
+    :param root_uid: Id of an unrouted task that is the root of this \
+        task's analysis tree
+    :param orig_uid: Id of an unrouted (or crashed routed) task that was forked to \
                      create this task
     :param uid: This tasks unique identifier
     :param error: Traceback of a exception that happened while performing this task
@@ -251,7 +263,7 @@ class Task(object):
 
     def walk_payload_bags(self) -> Iterator[Tuple[Dict[str, Any], str, Any]]:
         """
-        Iterate over all payload bags and payloads contained in them
+        Iterate over all payload bags and direct payloads contained in them
 
         Generates tuples (payload_bag, key, value)
 
@@ -261,32 +273,42 @@ class Task(object):
             for key, value in payload_bag.items():
                 yield payload_bag, key, value
 
-    def iterate_resources(self) -> Iterator[Tuple[str, ResourceBase]]:
+    def walk_payload_items(self) -> Iterator[Tuple[str, Any]]:
         """
-        Get list of resource objects bound to Task
+        Iterate recursively over all payload items
 
-        Generates tuples (key, value)
+        Generates tuples (path, value).
 
-        :return: An iterator over all task resources
+        :return: An iterator over all task payload values
         """
-        for _, key, value in self.walk_payload_bags():
-            if isinstance(value, ResourceBase):
-                yield key, value
+        yield from recursive_iter_with_keys(self.payload, "payload")
+        yield from recursive_iter_with_keys(
+            self.payload_persistent, "payload_persistent"
+        )
 
-    def unserialize_resources(self, backend: Optional["KartonBackend"]) -> None:
+    def transform_payload_bags(self, func: Callable[[Any], Any]) -> None:
         """
-        Transforms __karton_resource__ serialized entries into
-        RemoteResource object instances
-
-        :param backend: KartonBackend to use while unserializing resources
+        Recursively transform contents of all payload bags and payloads
+        contained in them
 
         :meta private:
         """
-        for payload_bag, key, value in self.walk_payload_bags():
-            if isinstance(value, dict) and "__karton_resource__" in value:
-                payload_bag[key] = RemoteResource.from_dict(
-                    value["__karton_resource__"], backend
-                )
+        self.payload, self.payload_persistent = recursive_map(
+            func, [self.payload, self.payload_persistent]
+        )
+
+    def iterate_resources(self) -> Iterator[ResourceBase]:
+        """
+        Get list of resource objects bound to Task
+
+        .. versionchanged: 5.0.0
+            Returns Resource values instead of tuples (key, value)
+
+        :return: An iterator over all task resources
+        """
+        for element in recursive_iter([self.payload, self.payload_persistent]):
+            if isinstance(element, ResourceBase):
+                yield element
 
     @staticmethod
     def unserialize(
@@ -301,10 +323,20 @@ class Task(object):
 
         :meta private:
         """
+
+        def unserialize_resources(value: Any) -> Any:
+            """
+            Transforms __karton_resource__ serialized entries into
+            RemoteResource object instances
+            """
+            if isinstance(value, dict) and "__karton_resource__" in value:
+                return RemoteResource.from_dict(value["__karton_resource__"], backend)
+            return value
+
         if not isinstance(data, str):
             data = data.decode("utf8")
 
-        task_data = json.loads(data)
+        task_data = json.loads(data, object_hook=unserialize_resources)
 
         task = Task(task_data["headers"])
         task.uid = task_data["uid"]
@@ -324,7 +356,6 @@ class Task(object):
         task.last_update = task_data.get("last_update", None)
         task.payload = task_data["payload"]
         task.payload_persistent = task_data["payload_persistent"]
-        task.unserialize_resources(backend)
         return task
 
     def __repr__(self) -> str:

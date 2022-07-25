@@ -79,7 +79,7 @@ class Producer(KartonBase):
         task.headers.update({"origin": self.identity})
 
         # Ensure all local resources have good buckets
-        for _, resource in task.iterate_resources():
+        for resource in task.iterate_resources():
             if isinstance(resource, LocalResource) and not resource.bucket:
                 resource.bucket = self.backend.default_bucket_name
 
@@ -87,7 +87,7 @@ class Producer(KartonBase):
         self.backend.register_task(task)
 
         # Upload local resources
-        for _, resource in task.iterate_resources():
+        for resource in task.iterate_resources():
             if isinstance(resource, LocalResource):
                 resource.upload(self.backend)
 
