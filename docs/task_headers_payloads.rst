@@ -228,6 +228,28 @@ Each resource has its own metadata store where we can provide additional informa
                         "sha256": hashlib.sha256(sample_content).hexdigest()
                       })
 
+
+Starting from v5.0.0, resources can be nested in other objects like lists or dictionaries.
+
+.. code-block:: python
+
+    task = Task(
+        headers={
+            "type": "analysis",
+            "kind": "artifacts"
+        },
+        payload={
+            "artifacts": [
+                Resource("file1", content=file1),
+                Resource("file2", content=file2),
+                Resource("file3", content=file3)
+            ]
+            "parent": sample  # Reference to original (packed) sample
+        }
+    )
+    self.send_task(task)
+
+
 More information about resources can be found in API documentation.
 
 Directory resource objects
