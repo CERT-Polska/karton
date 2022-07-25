@@ -14,7 +14,7 @@ Karton ecosystem consists of:
 
 - `Redis <https://www.redis.io/>`_ - store used for message exchange between Karton subsystems
 
-- Temporary object storage compatible with Amazon S3 API, holds all the heavy objects (aka Resources) like samples, analyses or dumps.
+- Temporary object storage compatible with Amazon S3 API, holds all the heavy objects (aka Resources) like samples, analyses or memory dumps.
   The recommended one is `MinIO <https://github.com/minio/minio>`_.
 
 

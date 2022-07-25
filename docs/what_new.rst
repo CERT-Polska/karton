@@ -8,9 +8,9 @@ What changed in Karton 5.0.0
 
 Karton-System and core services are still able to communicate with previous versions.
 
-* Changed ``karton.ini`` section name containing S3 client configuration from ``[minio]`` to ``[s3]``.
+* Changed name of ``karton.ini`` section that contains S3 client configuration from ``[minio]`` to ``[s3]``.
 
-  In addition to this, you need to add URI scheme to the ``address`` field and remove the ``secure`` field.
+  In addition to this, you need to add a URI scheme to the ``address`` field and remove the ``secure`` field.
   If ``secure`` was 0, correct scheme is ``http://``. If ``secure`` was 1, use ``https://``.
 
   .. code-block:: diff
@@ -28,7 +28,7 @@ Karton-System and core services are still able to communicate with previous vers
   is considered deprecated and can be removed in further major release.
 
 * Karton library uses `Boto3 <https://github.com/boto/boto3>`_ library as a S3 client instead of `Minio-Py <https://github.com/minio/minio-py>`_ underneath.
-  It may be important to check if your code relies on exceptions thrown by previous S3 client.
+  You may want to check if your code relies on exceptions thrown by previous S3 client.
 
 * :class:`karton.core.Config` interface is changed. ``config``, ``minio_config`` and ``redis_config`` attributes are no longer available.
 
