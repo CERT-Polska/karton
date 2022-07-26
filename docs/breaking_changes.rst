@@ -3,8 +3,8 @@ Breaking changes
 
 This chapter will describe significant changes introduced in major version releases of Karton. Versions before 4.0.0 were not officially released, so they have value only for internal purposes. Don't worry about it if you are a new user.
 
-What changed in Karton 5.0.0
-----------------------------
+What is changed in Karton 5.0.0
+-------------------------------
 
 Karton-System and core services are still able to communicate with previous versions.
 
@@ -58,8 +58,8 @@ Karton-System and core services are still able to communicate with previous vers
             ...
 
 
-What changed in Karton 4.0.0
-----------------------------
+What is changed in Karton 4.0.0
+-------------------------------
 
 Karton-System and core services are still compatible with both 3.x and 2.x versions.
 
@@ -76,8 +76,8 @@ Karton-System and core services are still compatible with both 3.x and 2.x versi
 
 * All crashed tasks are preserved in ``Crashed`` state until they are removed by Karton-System (default is 72 hours) or retried by user. Keep in mind that they hold all the referenced resources, so keep an eye on that queue.
 
-What changed in Karton 3.0.0
-----------------------------
+What is changed in Karton 3.0.0
+-------------------------------
 
 Karton-System and other core services in 3.x are compatible with 2.x. But if you want to use 3.x in Karton service code, all core services need to be upgraded first.
 

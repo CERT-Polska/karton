@@ -1,8 +1,8 @@
-Examples
-==================================
+Karton service examples
+=======================
 Here are few examples of common Karton system patterns.
 
-Producer
+Producer services
 -------------------
 
 .. code-block:: python
@@ -30,7 +30,7 @@ Producer
 
    
 
-Consumer
+Consumer services
 -------------------
 
 Consumer has to define ``identity``, a name used for identification and binding in RMQ and ``filters`` - a list of dicts determining what types of tasks the service wants to process.
@@ -122,8 +122,8 @@ Finally, we need to run our module, we get this done with `loop` method, which b
         c.loop()
 
 
-Karton
--------------------
+Karton services (Producer + Consumer)
+-------------------------------------
 Karton class is simply Producer and Consumer bundled together.
 
 As defined in `karton/core/karton.py`:
@@ -172,38 +172,6 @@ Full-blown example below.
             t = Task({"type": "sample"})
             t.add_resource("sample", Resource(filename, content))
             self.send_task(task)
-
-
-.. _example-overriding-config:
-
-Overriding Config
------------------
-Popular use case is to have another custom configuration in addition to the one needed for karton to work.
-
-This can be easily done by overriding `Config` class and using that for `Karton` initialization.
-
-.. code-block:: python
-
-    import mwdblib
-
-    class MWDBConfig(Config):
-        def __init__(self, path=None) -> None:
-            super().__init__(path)
-            self.mwdb_config = dict(self.config.items("mwdb"))
-
-        def mwdb(self) -> mwdblib.MWDB:
-            api_key=self.mwdb_config.get("api_key")
-            api_url=self.mwdb_config.get("api_url", mwdblib.api.API_URL)
-
-            mwdb = mwdblib.MWDB(api_key=api_key, api_url=api_url)
-            if not api_key:
-                mwdb.login(
-                    self.mwdb_config["username"],
-                    self.mwdb_config["password"])
-            return mwdb
-
-
-.. _example-consuming-logs:
 
 Log consumer
 ------------

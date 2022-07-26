@@ -63,10 +63,11 @@ Task routing and data exchange is achieved with the help of **Karton-System** - 
    :maxdepth: 2
    :caption: Karton reference:
 
-   what_new
+   breaking_changes
    getting_started
-   examples
+   service_examples
    task_headers_payloads
+   service_configuration
    advanced_concepts
    unit_tests
    karton_api
