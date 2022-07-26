@@ -51,3 +51,4 @@ karton.core.Config
 ------------------
 
 .. autoclass:: karton.core.config.Config
+   :members:

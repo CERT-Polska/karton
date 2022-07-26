@@ -4,7 +4,7 @@ Getting started
 Installation
 ------------
 
-You can get the karton framework from pip:
+You can get the Karton framework from pip:
 
 .. code-block:: console
 
@@ -12,7 +12,7 @@ You can get the karton framework from pip:
 
 Or, if you're feeling adventurous, download the sources using git and install them manually.
 
-In addition to karton, you'll also need to setup `MinIO <https://docs.min.io/docs/minio-quickstart-guide.html>`_ and `Redis-server <https://redis.io/topics/quickstart>`_.
+In addition to Karton core library, you'll also need to setup `MinIO <https://docs.min.io/docs/minio-quickstart-guide.html>`_ and `Redis server <https://redis.io/topics/quickstart>`_.
 
 
 Configuration
@@ -20,18 +20,17 @@ Configuration
 
 Each Karton subsystem needs a ``karton.ini`` file that contains the connection parameters for Redis and MinIO.
 
-You can also use this file to store custom fields and use them e.g. by :ref:`example-overriding-config`.
+You can also use this file to store custom fields and use them e.g. by :ref:`extending-config`.
 
-By default, the config class will look for the config file in several places, but let's start by placing one in the root of our new karton subsystem.
+By default, the config class will look for the config file in several places, but let's start by placing one in the root of our new Karton subsystem.
 
 .. code-block:: ini
 
-    [minio]
+    [s3]
     secret_key = minioadmin
     access_key = minioadmin
-    address = localhost:9000
+    address = http://localhost:9000
     bucket = karton
-    secure = 0
 
     [redis]
     host=localhost
@@ -40,10 +39,13 @@ By default, the config class will look for the config file in several places, bu
 If everything was configured correctly, you should now be able to run the ``karton-system`` broker and get ``"Manager karton.system started"`` signaling that it was able to connect to Redis and MinIO correctly.
 
 
-Docker-compose development setup
+Docker Compose development setup
 --------------------------------
 
-If you're just trying Karton out or you want a quick & easy development environment setup check out the ``dev`` folder in the karton root directory.
+Check out repository called `Karton playground <github.com/CERT-Polska/karton-playground/>`_ that provides similar setup coupled with MWDB Core
+and few open-source Karton services.
+
+If you're just trying Karton out or you want a mimimal, quick & easy development environment setup, check out the ``dev`` folder in the Karton root directory.
 
 It contains a small docker-compose setup that will setup the minimal development environment for you.
 
@@ -53,8 +55,11 @@ All you have to do is run
 
     docker-compose up --build
 
-And then connect additional karton systems using the ``karton.ini.dev`` config file.
+And then connect additional Karton systems using the ``karton.ini.dev`` config file.
 
+.. code-block:: console
+
+   karton-classifier --config-file dev/karton.ini.dev
 
 Writing your first Producer and Consumer
 ----------------------------------------
@@ -95,7 +100,7 @@ That was pretty short! Now for a bit longer consumer:
                 print("Bar")
 
     if __name__ == "__main__":
-        FooBarConsumer().loop()
+        FooBarConsumer.main()
 
 If we now run the consumer and spawn a few "foobar" tasks we should get a few foobars logs in return:
 
@@ -127,6 +132,7 @@ If we now run the consumer and spawn a few "foobar" tasks we should get a few fo
     Bar
     [INFO] Task done - d3a39940-d64c-4033-a7da-80eae9786631
 
+Check :ref:`service-examples` for more details.
 
 Command-line interface (CLI)
 ----------------------------------------

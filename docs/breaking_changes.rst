@@ -3,8 +3,63 @@ Breaking changes
 
 This chapter will describe significant changes introduced in major version releases of Karton. Versions before 4.0.0 were not officially released, so they have value only for internal purposes. Don't worry about it if you are a new user.
 
-What changed in Karton 4.0.0
-----------------------------
+What is changed in Karton 5.0.0
+-------------------------------
+
+Karton-System and core services are still able to communicate with previous versions.
+
+* Changed name of ``karton.ini`` section that contains S3 client configuration from ``[minio]`` to ``[s3]``.
+
+  In addition to this, you need to add a URI scheme to the ``address`` field and remove the ``secure`` field.
+  If ``secure`` was 0, correct scheme is ``http://``. If ``secure`` was 1, use ``https://``.
+
+  .. code-block:: diff
+
+    - [minio]
+    + [s3]
+      access_key = karton-test-access
+      secret_key = karton-test-key
+    - address = localhost:9000
+    + address = http://localhost:9000
+      bucket = karton
+    - secure = 0
+
+  v5.0.0 maps ``[minio]`` configuration to correct ``[s3]`` configuration internally, but ``[minio]`` scheme
+  is considered deprecated and can be removed in further major release.
+
+* Karton library uses `Boto3 <https://github.com/boto/boto3>`_ library as a S3 client instead of `Minio-Py <https://github.com/minio/minio-py>`_ underneath.
+  You may want to check if your code relies on exceptions thrown by previous S3 client.
+
+* :class:`karton.core.Config` interface is changed. ``config``, ``minio_config`` and ``redis_config`` attributes are no longer available.
+
+* We noticed lots of issues caused by calling factory method ``main()`` on instance instead of class, which can be misleading (:py:meth:``karton.core.base.KartonBase.main``
+  actually creates own instance of Karton service internally, so the initialization is doubled). To notice these errors more quickly, we prevented ``main()`` call on ``KartonBase`` instance
+
+  .. code-block:: python
+
+    if __name__ == "__main__":
+        MyConsumer.main()  # correct
+
+    if __name__ == "__main__":
+        MyConsumer().main()  # throws TypeError
+
+* ``karton.core.Consumer.process`` no longer accepts no arguments. First argument of this method is the incoming task.
+
+.. code-block:: python
+
+    # Correct
+    class MyConsumer(Karton):
+        def process(self, task: Task) -> None:
+            ...
+
+    # Wrong from v5.0.0
+    class MyConsumer(Karton):
+        def process(self) -> None:
+            ...
+
+
+What is changed in Karton 4.0.0
+-------------------------------
 
 Karton-System and core services are still compatible with both 3.x and 2.x versions.
 
@@ -21,8 +76,8 @@ Karton-System and core services are still compatible with both 3.x and 2.x versi
 
 * All crashed tasks are preserved in ``Crashed`` state until they are removed by Karton-System (default is 72 hours) or retried by user. Keep in mind that they hold all the referenced resources, so keep an eye on that queue.
 
-What changed in Karton 3.0.0
-----------------------------
+What is changed in Karton 3.0.0
+-------------------------------
 
 Karton-System and other core services in 3.x are compatible with 2.x. But if you want to use 3.x in Karton service code, all core services need to be upgraded first.
 

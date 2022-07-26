@@ -1,9 +1,8 @@
-[minio]
+[s3]
 access_key = karton-test-access
 secret_key = karton-test-key
-address = localhost:9000
+address = http://localhost:9000
 bucket = karton
-secure = 0
 
 [redis]
 host=localhost
