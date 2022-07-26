@@ -102,6 +102,8 @@ All settings can be set using command-line.
       --task-crashed-timeout TASK_CRASHED_TIMEOUT
                             Timeout for tasks in Crashed state
 
+.. _extending-config:
+
 Extending configuration
 -----------------------
 

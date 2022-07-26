@@ -1,3 +1,5 @@
+.. _service-examples:
+
 Karton service examples
 =======================
 Here are few examples of common Karton system patterns.
@@ -172,6 +174,9 @@ Full-blown example below.
             t = Task({"type": "sample"})
             t.add_resource("sample", Resource(filename, content))
             self.send_task(task)
+
+
+.. _example-consuming-logs:
 
 Log consumer
 ------------

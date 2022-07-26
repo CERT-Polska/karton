@@ -20,7 +20,7 @@ Configuration
 
 Each Karton subsystem needs a ``karton.ini`` file that contains the connection parameters for Redis and MinIO.
 
-You can also use this file to store custom fields and use them e.g. by :ref:`example-overriding-config`.
+You can also use this file to store custom fields and use them e.g. by :ref:`extending-config`.
 
 By default, the config class will look for the config file in several places, but let's start by placing one in the root of our new Karton subsystem.
 
@@ -132,7 +132,7 @@ If we now run the consumer and spawn a few "foobar" tasks we should get a few fo
     Bar
     [INFO] Task done - d3a39940-d64c-4033-a7da-80eae9786631
 
-Check :ref:`Karton service examples` for more details.
+Check :ref:`service-examples` for more details.
 
 Command-line interface (CLI)
 ----------------------------------------
