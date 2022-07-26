@@ -43,7 +43,7 @@ Karton-System and core services are still able to communicate with previous vers
     if __name__ == "__main__":
         MyConsumer().main()  # throws TypeError
 
-* ``karton.core.Consumer.process`` no longer accepts no arguments. First argument of this method is incoming the task.
+* ``karton.core.Consumer.process`` no longer accepts no arguments. First argument of this method is the incoming task.
 
 .. code-block:: python
 
