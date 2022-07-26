@@ -145,8 +145,9 @@ class Config(object):
         Gets value from configuration or returns ``fallback`` (None by default)
         if value was not set. Value is coerced to bool type.
 
-        See also:
-        https://docs.python.org/3/library/configparser.html#configparser.ConfigParser.getboolean
+        .. seealso::
+
+           https://docs.python.org/3/library/configparser.html#configparser.ConfigParser.getboolean
         """
         value = self.get(section_name, option_name, fallback)
         if value is None:
@@ -184,12 +185,14 @@ class Config(object):
 
         None values are treated like missing value and are not added.
 
-        .. code-block::
-        {
-           "section-name": {
-               "option-name": "value"
-           }
-        }
+        .. code-block:: json
+
+            {
+               "section-name": {
+                   "option-name": "value"
+               }
+            }
+
         """
         for section_name, section in data.items():
             for option_name, value in section.items():

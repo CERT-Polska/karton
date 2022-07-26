@@ -26,8 +26,7 @@ Configuration values are read from various sources using the following precedenc
 - ``~/.config/karton/karton.ini`` file (user local)
 - ``./karton.ini`` file (subsystem local)
 - ``--config-path <path>`` optional, additional path provided in arguments
-- ``KARTON_SECTION_OPTION`` values from environment variables e.g. (``secret_key`` option in ``[s3] section can be
-overridden using ``KARTON_S3_SECRET_KEY`` variable)
+- ``KARTON_SECTION_OPTION`` values from environment variables e.g. (``secret_key`` option in ``[s3]`` section can be overridden using ``KARTON_S3_SECRET_KEY`` variable)
 - Command-line arguments (if ``Karton.main()`` method is used as entrypoint)
 
 You can build your configuration hierarchically e.g. by providing common settings in ``/etc/karton/karton.ini``, service-specific settings in local ``./karton.ini`` and secrets in env vars.
@@ -36,7 +35,7 @@ Common Karton configuration fields are listed below:
 
 ============   ===============   =======================================================================================================================================
  Section        Option                                    Description
-============   ================  =======================================================================================================================================
+============   ===============   =======================================================================================================================================
  [s3]           address           S3 API address
  [s3]           access_key        S3 API access key (username)
  [s3]           secret_key        S3 API secret key (password)
@@ -52,7 +51,7 @@ Common Karton configuration fields are listed below:
  [karton]       task_timeout      Karton service task execution timeout in seconds. If your service sometimes hangs, Karton will schedule SIGALRM if this value is set.
  [logging]      level             Logging level for Karton service logger (default: INFO)
  [signaling]    status            Turns on producing of 'karton.signaling.status' tasks, signalling the task start and finish events by Karton service (default: 0, off)
-=============  ================  ========================================================================================================================================
+============   ===============   =======================================================================================================================================
 
 
 Karton System configuration
@@ -71,6 +70,7 @@ Good example is Karton System:
  [system]       task_crashed_timeout         Timeout for removal of crashed tasks. Default is 3 days.
  [system]       enable_gc                    Enable garbage collection. GC can be turned off if you want to scale up routing via few Karton System instances.
  [system]       enable_router                Enable task routing. Routing can be turned off if you want to use dedicated Karton System instance for GC.
+============   =========================   =======================================================================================================================================
 
 All settings can be set using command-line.
 
