@@ -47,8 +47,8 @@ Common Karton configuration fields are listed below:
  [redis]        password          Redis server AUTH password (default: None)
  [redis]        socket_timeout    Socket timeout for Redis operations in seconds (default: 30, use 0 to turn off if timeout doesn't work properly)
  [karton]       identity          Karton service identity override (overrides the name provided in class / constructor arguments)
- [karton]       persistent        Karton service persistency override
- [karton]       task_timeout      Karton service task execution timeout in seconds. If your service sometimes hangs, Karton will schedule SIGALRM if this value is set.
+ [karton]       persistent        Karton service queue persistency override
+ [karton]       task_timeout      Karton service task execution timeout in seconds. Useful if your service sometimes hangs. Karton will schedule SIGALRM if this value is set.
  [logging]      level             Logging level for Karton service logger (default: INFO)
  [signaling]    status            Turns on producing of 'karton.signaling.status' tasks, signalling the task start and finish events by Karton service (default: 0, off)
 ============   ===============   =======================================================================================================================================
@@ -57,7 +57,7 @@ Common Karton configuration fields are listed below:
 Karton System configuration
 ---------------------------
 
-Most core services can be tuned up depending on your needs. Custom service configuration is handled the same way as general Karton configuration.
+Most core services can be tuned depending on your needs. Custom service configuration is handled the same way as general Karton configuration.
 
 Good example is Karton System:
 
@@ -68,7 +68,7 @@ Good example is Karton System:
  [system]       task_dispatched_timeout      Timeout for tasks that are stuck in DISPATCHED state (e.g. Producer crashed during upload of resources). Default is 24 hours.
  [system]       task_started_timeout         Timeout for tasks that are stuck in STARTED state (e.g. non-graceful crash of Consumer during task processing). Default is 24 hours.
  [system]       task_crashed_timeout         Timeout for removal of crashed tasks. Default is 3 days.
- [system]       enable_gc                    Enable garbage collection. GC can be turned off if you want to scale up routing via few Karton System instances.
+ [system]       enable_gc                    Enable garbage collection. GC can be turned off if you want to scale up routing using several Karton System instances.
  [system]       enable_router                Enable task routing. Routing can be turned off if you want to use dedicated Karton System instance for GC.
 ============   =========================   =======================================================================================================================================
 
@@ -107,11 +107,11 @@ Extending configuration
 
 During development of your own Karton services you may want to provide your own configuration fields.
 
-All configuration set in ``karton.ini`` files and ``KARTON_`` envs is available in ``self.config`` object and doesn't
+All configuration values set in ``karton.ini`` files and ``KARTON_`` envs are available in ``self.config`` object and don't
 require additional definition.
 
 The only thing that needs to be extended is argument parser if you want to use command-line arguments. Fortunately,
-Karton classes expose dedicated methods for that purpose.
+Karton classes expose dedicated methods for this purpose.
 
 .. code-block:: python
 
@@ -167,7 +167,7 @@ That mechanism allows you to define your own arguments and include these values 
 Customizing ready-made Karton services
 --------------------------------------
 
-Ready-made Karton services like ``karton-mwdb-reporter`` are coming with predefined set of filters and emitted headers.
+Ready-made Karton services like ``karton-mwdb-reporter`` are coming with a predefined set of filters and emitted headers.
 If you want to extend them or override them without forking the whole project, you can simply extend the Karton class
 and override things you need.
 
