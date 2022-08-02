@@ -150,12 +150,11 @@ and provide additional section in `karton.ini` file:
 
 .. code-block::
 
-   [minio]
+   [s3]
    secret_key = <redacted>
    access_key = <redacted>
-   address = 127.0.0.1:9000
+   address = http://127.0.0.1:9000
    bucket = karton
-   secure = 0
 
    [redis]
    host = 127.0.0.1
@@ -181,12 +180,11 @@ Contents of :code:`/etc/karton/karton.ini`:
 
 .. code-block::
 
-   [minio]
+   [s3]
    secret_key = <redacted>
    access_key = <redacted>
-   address = 127.0.0.1:9000
+   address = http://127.0.0.1:9000
    bucket = karton
-   secure = 0
 
    [redis]
    host = 127.0.0.1

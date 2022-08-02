@@ -7,7 +7,7 @@ services:
       - "127.0.0.1:6379:6379"
   minio:
     image: minio/minio
-    command: server /data
+    command: "server --address 0.0.0.0:9000 --console-address :9001 /data"
     volumes:
       - /tmp/minio:/data
     ports:

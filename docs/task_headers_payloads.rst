@@ -150,7 +150,7 @@ If task operates on binary blob or complex structure, which is probably the most
 Resource objects
 ----------------
 
-Resources are part of a payload that represent a reference to the file or other binary large object. All objects of that kind are stored in `MinIO <https://github.com/minio/minio>`_, which is used as shared object storage between Karton subsystems.
+Resources are part of a payload that represent a reference to the file or other binary large object. All objects of that kind are stored in S3-compatible storage, which is used as shared object storage between Karton subsystems.
 
 .. code-block:: python
 
@@ -161,7 +161,7 @@ Resources are part of a payload that represent a reference to the file or other 
         }
     )
 
-Resource objects created by producer (:class:`LocalResource`) are uploaded to MinIO and transformed to :class:`RemoteResource` objects.
+Resource objects created by producer (:class:`LocalResource`) are uploaded to S3 and transformed to :class:`RemoteResource` objects.
 RemoteResource is lazy object that allows to download the object contents via :py:attr:`RemoteResource.content` property.
 
 
@@ -285,7 +285,7 @@ Directory resources are deserialized to the usual :class:`RemoteResource` object
             with dumps.extract_temporary() as dumps_path:
                 ...
 
-If we don't want to extract all files, we can work directly with :class:`zipfile.ZipFile` object, which will be internally downloaded from MinIO to the temporary file using :py:meth:`RemoteResource.download_temporary_file` method.
+If we don't want to extract all files, we can work directly with :class:`zipfile.ZipFile` object, which will be internally downloaded from S3 to the temporary file using :py:meth:`RemoteResource.download_temporary_file` method.
 
 .. code-block:: python
 
