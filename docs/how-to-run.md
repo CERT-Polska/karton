@@ -20,7 +20,7 @@ You can quickly configure this pipeline with a docker-compose from [karton-playg
 
 ### The blue pill
 
-Sadly, it's not possible to run a Karton service without Redis, Minio and
+Sadly, it's not possible to run a Karton service without Redis, S3 storage and
 `karton-system` manager. We encourage you to try Karton, but we understand
 that not everyone wants to do all of this just to test a random piece of code.
 

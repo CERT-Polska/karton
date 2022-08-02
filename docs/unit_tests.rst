@@ -8,7 +8,7 @@ So you want to test your karton systems, that's great! The karton core actually 
 
 The building block of all karton tests is :py:meth:`karton.core.test.KartonTestCase`.
 It's a nifty class that wraps around your karton system and allows you to run tasks on it without needing to create a producer.
-What's more important however, is that it runs without any Redis or MinIO interaction and thus creates no side effects.
+What's more important however, is that it runs without any Redis or S3 interaction and thus creates no side effects.
 
 .. code-block:: python
 

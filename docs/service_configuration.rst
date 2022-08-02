@@ -90,7 +90,7 @@ All settings can be set using command-line.
       --identity IDENTITY   Alternative identity for Karton service
       --log-level LOG_LEVEL
                             Logging level of Karton logger
-      --setup-bucket        Create missing bucket in MinIO
+      --setup-bucket        Create missing bucket in S3 storage
       --disable-gc          Do not run GC in this instance
       --disable-router      Do not run task routing in this instance
       --gc-interval GC_INTERVAL

@@ -12,13 +12,13 @@ You can get the Karton framework from pip:
 
 Or, if you're feeling adventurous, download the sources using git and install them manually.
 
-In addition to Karton core library, you'll also need to setup `MinIO <https://docs.min.io/docs/minio-quickstart-guide.html>`_ and `Redis server <https://redis.io/topics/quickstart>`_.
+In addition to Karton core library, you'll also need to setup S3-compatible storage like `MinIO <https://docs.min.io/docs/minio-quickstart-guide.html>`_ and `Redis server <https://redis.io/topics/quickstart>`_.
 
 
 Configuration
 -------------
 
-Each Karton subsystem needs a ``karton.ini`` file that contains the connection parameters for Redis and MinIO.
+Each Karton subsystem needs a ``karton.ini`` file that contains the connection parameters for Redis and S3.
 
 You can also use this file to store custom fields and use them e.g. by :ref:`extending-config`.
 
@@ -36,7 +36,7 @@ By default, the config class will look for the config file in several places, bu
     host=localhost
     port=6379
 
-If everything was configured correctly, you should now be able to run the ``karton-system`` broker and get ``"Manager karton.system started"`` signaling that it was able to connect to Redis and MinIO correctly.
+If everything was configured correctly, you should now be able to run the ``karton-system`` broker and get ``"Manager karton.system started"`` signaling that it was able to connect to Redis and S3 correctly.
 
 
 Docker Compose development setup
@@ -180,5 +180,5 @@ Delete a persistent queue that's no longer needed.
 
 **configure [--force]**
 
-Create a new ``karton.ini`` configuration file. The config wizard will ask you about various parameters, like the MinIO credentials, Redis host, etc. and then save the information into a config file.
+Create a new ``karton.ini`` configuration file. The config wizard will ask you about various parameters, like the S3 credentials, Redis host, etc. and then save the information into a config file.
 

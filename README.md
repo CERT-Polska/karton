@@ -1,6 +1,6 @@
 # Karton <img src="img/logo.svg" width="64">
 
-Distributed malware processing framework based on Python, Redis and MinIO.
+Distributed malware processing framework based on Python, Redis and S3.
 
 ## The idea
 
@@ -23,7 +23,7 @@ Installation is as easy as a single `pip install` command:
 pip3 install karton-core
 ```
 
-In order to setup the whole backend environment you will also need MinIO and Redis, see the [docs](https://karton-core.readthedocs.io/en/latest/getting_started.html#installation) for details.
+In order to setup the whole backend environment you will also need S3-compatible storage and Redis, see the [docs](https://karton-core.readthedocs.io/en/latest/getting_started.html#installation) for details.
 
 ## Example usage
 To use karton you have to provide class that inherits from Karton.
