@@ -286,7 +286,7 @@ class KartonBackend:
         tasks = self.redis.keys(f"{KARTON_TASK_NAMESPACE}:*")
 
         for chunk in chunks(tasks, chunk_size):
-            yield list(map(Task.unserialize, filter(None, self.redis.mget(chunk))))
+            yield map(Task.unserialize, filter(None, self.redis.mget(chunk)))
 
     def register_task(self, task: Task, pipe: Optional[Pipeline] = None) -> None:
         """
