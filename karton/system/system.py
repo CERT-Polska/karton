@@ -145,9 +145,9 @@ class SystemService(KartonServiceBase):
                     running_root_tasks.add(task.root_uid)
 
             if to_delete:
-                to_increment = Counter([
-                    task.headers.get("receiver", "unknown") for task in to_delete
-                ])
+                to_increment = Counter(
+                    [task.headers.get("receiver", "unknown") for task in to_delete]
+                )
                 self.backend.delete_tasks(to_delete)
                 self.backend.increment_metrics_list(
                     KartonMetrics.TASK_GARBAGE_COLLECTED, to_increment
