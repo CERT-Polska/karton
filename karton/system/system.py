@@ -1,6 +1,7 @@
 import argparse
 import json
 import time
+from collections import Counter
 from typing import List, Optional
 
 from karton.core.__version__ import __version__
@@ -53,15 +54,15 @@ class SystemService(KartonServiceBase):
         resources_to_remove = set(self.backend.list_objects(karton_bucket))
         # Note: it is important to get list of resources before getting list of tasks!
         # Task is created before resource upload to lock the reference to the resource.
-        tasks = self.backend.get_all_tasks()
-        for task in tasks:
-            for resource in task.iterate_resources():
-                # If resource is referenced by task: remove it from set
-                if (
-                    resource.bucket == karton_bucket
-                    and resource.uid in resources_to_remove
-                ):
-                    resources_to_remove.remove(resource.uid)
+        for task_slice in self.backend.get_all_tasks():
+            for task in task_slice:
+                for resource in task.iterate_resources():
+                    # If resource is referenced by task: remove it from set
+                    if (
+                        resource.bucket == karton_bucket
+                        and resource.uid in resources_to_remove
+                    ):
+                        resources_to_remove.remove(resource.uid)
         # Remove unreferenced resources
         if resources_to_remove:
             self.backend.remove_objects(karton_bucket, resources_to_remove)
@@ -88,68 +89,69 @@ class SystemService(KartonServiceBase):
         # Collects finished tasks
         root_tasks = set()
         running_root_tasks = set()
-        tasks = self.backend.get_all_tasks()
+
         enqueued_task_uids = self.backend.get_task_ids_from_queue(KARTON_TASKS_QUEUE)
 
         current_time = time.time()
-        to_delete = []
 
-        for task in tasks:
-            root_tasks.add(task.root_uid)
-            if (
-                task.status == TaskState.DECLARED
-                and task.uid not in enqueued_task_uids
-                and task.last_update is not None
-                and current_time > task.last_update + self.task_dispatched_timeout
-            ):
-                to_delete.append(task)
-                self.log.warning(
-                    "Task %s is in Dispatched state more than %d seconds. "
-                    "Killed. (origin: %s)",
-                    task.uid,
-                    self.task_dispatched_timeout,
-                    task.headers.get("origin", "<unknown>"),
-                )
-            elif (
-                task.status == TaskState.STARTED
-                and task.last_update is not None
-                and current_time > task.last_update + self.task_started_timeout
-            ):
-                to_delete.append(task)
-                self.log.warning(
-                    "Task %s is in Started state more than %d seconds. "
-                    "Killed. (receiver: %s)",
-                    task.uid,
-                    self.task_started_timeout,
-                    task.headers.get("receiver", "<unknown>"),
-                )
-            elif task.status == TaskState.FINISHED:
-                to_delete.append(task)
-                self.log.debug("GC: Finished task %s", task.uid)
-            elif (
-                task.status == TaskState.CRASHED
-                and task.last_update is not None
-                and current_time > task.last_update + self.task_crashed_timeout
-            ):
-                to_delete.append(task)
-                self.log.debug(
-                    "GC: Task %s is in Crashed state more than %d seconds. "
-                    "Killed. (receiver: %s)",
-                    task.uid,
-                    self.task_crashed_timeout,
-                    task.headers.get("receiver", "<unknown>"),
-                )
-            else:
-                running_root_tasks.add(task.root_uid)
+        for tasks_slice in self.backend.get_all_tasks():
+            to_delete = []
+            for task in tasks_slice:
+                root_tasks.add(task.root_uid)
+                if (
+                    task.status == TaskState.DECLARED
+                    and task.uid not in enqueued_task_uids
+                    and task.last_update is not None
+                    and current_time > task.last_update + self.task_dispatched_timeout
+                ):
+                    to_delete.append(task)
+                    self.log.warning(
+                        "Task %s is in Dispatched state more than %d seconds. "
+                        "Killed. (origin: %s)",
+                        task.uid,
+                        self.task_dispatched_timeout,
+                        task.headers.get("origin", "<unknown>"),
+                    )
+                elif (
+                    task.status == TaskState.STARTED
+                    and task.last_update is not None
+                    and current_time > task.last_update + self.task_started_timeout
+                ):
+                    to_delete.append(task)
+                    self.log.warning(
+                        "Task %s is in Started state more than %d seconds. "
+                        "Killed. (receiver: %s)",
+                        task.uid,
+                        self.task_started_timeout,
+                        task.headers.get("receiver", "<unknown>"),
+                    )
+                elif task.status == TaskState.FINISHED:
+                    to_delete.append(task)
+                    self.log.debug("GC: Finished task %s", task.uid)
+                elif (
+                    task.status == TaskState.CRASHED
+                    and task.last_update is not None
+                    and current_time > task.last_update + self.task_crashed_timeout
+                ):
+                    to_delete.append(task)
+                    self.log.debug(
+                        "GC: Task %s is in Crashed state more than %d seconds. "
+                        "Killed. (receiver: %s)",
+                        task.uid,
+                        self.task_crashed_timeout,
+                        task.headers.get("receiver", "<unknown>"),
+                    )
+                else:
+                    running_root_tasks.add(task.root_uid)
 
-        if to_delete:
-            to_increment = [
-                task.headers.get("receiver", "unknown") for task in to_delete
-            ]
-            self.backend.delete_tasks(to_delete)
-            self.backend.increment_metrics_list(
-                KartonMetrics.TASK_GARBAGE_COLLECTED, to_increment
-            )
+            if to_delete:
+                to_increment = Counter([
+                    task.headers.get("receiver", "unknown") for task in to_delete
+                ])
+                self.backend.delete_tasks(to_delete)
+                self.backend.increment_metrics_list(
+                    KartonMetrics.TASK_GARBAGE_COLLECTED, to_increment
+                )
 
         for finished_root_task in root_tasks.difference(running_root_tasks):
             # TODO: Notification needed
@@ -250,14 +252,16 @@ class SystemService(KartonServiceBase):
 
         with self.graceful_killer():
             while not self.shutdown:
-                if self.enable_router:
-                    # This will wait for up to 5s, so this is not a busy loop
-                    self.process_routing()
-                if self.enable_gc:
-                    # This will only do anything once every self.gc_interval seconds
-                    self.gc_collect()
-                    if not self.enable_router:
-                        time.sleep(1)  # Avoid a busy loop
+                try:
+                    if self.enable_router:
+                        # This will wait for up to 5s, so this is not a busy loop
+                        self.process_routing()
+                finally:
+                    if self.enable_gc:
+                        # This will only do anything once every self.gc_interval seconds
+                        self.gc_collect()
+                        if not self.enable_router:
+                            time.sleep(1)  # Avoid a busy loop
 
     @classmethod
     def args_parser(cls) -> argparse.ArgumentParser:

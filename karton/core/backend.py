@@ -274,20 +274,19 @@ class KartonBackend:
             if task_data is not None
         ]
 
-    def get_all_tasks(self, chunk_size: int = 1000) -> List[Task]:
+    def get_all_tasks(self, chunk_size: int = 1000) -> Iterator[Iterable[Task]]:
         """
-        Get all tasks registered in Redis
+        Get all tasks registered in Redis generator
+
+        Yielding slice of data to reduce RAM usage and prevent DoS
 
         :param chunk_size: Size of chunks passed to the Redis MGET command
-        :return: List with Task objects
+        :return: Generator with Iterable[Task objects] of chunk_size length
         """
         tasks = self.redis.keys(f"{KARTON_TASK_NAMESPACE}:*")
-        return [
-            Task.unserialize(task_data)
-            for chunk in chunks(tasks, chunk_size)
-            for task_data in self.redis.mget(chunk)
-            if task_data is not None
-        ]
+
+        for chunk in chunks(tasks, chunk_size):
+            yield list(map(Task.unserialize, filter(None, self.redis.mget(chunk))))
 
     def register_task(self, task: Task, pipe: Optional[Pipeline] = None) -> None:
         """
@@ -535,17 +534,17 @@ class KartonBackend:
         rs.hincrby(metric.value, identity, 1)
 
     def increment_metrics_list(
-        self, metric: KartonMetrics, identities: List[str]
+        self, metric: KartonMetrics, identities: Dict[str, int]
     ) -> None:
         """
         Increments metrics for multiple identities via single pipeline
 
         :param metric: Operation metric type
-        :param identities: List of Karton service identities
+        :param identities: Dict of Karton service identities mapped to their count
         """
         p = self.redis.pipeline()
-        for identity in identities:
-            p.hincrby(metric.value, identity, 1)
+        for identity, increment in identities.items():
+            p.hincrby(metric.value, identity, increment)
         p.execute()
 
     def get_metrics(self, metric: KartonMetrics) -> Dict[str, int]:
