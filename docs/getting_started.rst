@@ -42,8 +42,8 @@ If everything was configured correctly, you should now be able to run the ``kart
 Docker Compose development setup
 --------------------------------
 
-Check out repository called `Karton playground <github.com/CERT-Polska/karton-playground/>`_ that provides similar setup coupled with MWDB Core
-and few open-source Karton services.
+Check out the repository called `Karton playground <https://github.com/CERT-Polska/karton-playground/>`_ that provides similar setup coupled with MWDB 
+Core and a few open-source Karton services.
 
 If you're just trying Karton out or you want a mimimal, quick & easy development environment setup, check out the ``dev`` folder in the Karton root directory.
 
