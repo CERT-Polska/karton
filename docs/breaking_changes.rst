@@ -57,6 +57,23 @@ Karton-System and core services are still able to communicate with previous vers
         def process(self) -> None:
             ...
 
+* You can no longer use spaces for `identity` parameter in `Producer`:
+
+.. code-block:: python
+
+    # Correct
+    producer = Producer(config, identity="github_enricher")
+    task = Task({"xml-file": True}, priority=TaskPriority.LOW)
+    task.add_payload("repo-link", repo_link)
+    producer.send_task(task)
+
+    # Wrong from v5.0.0
+    producer = Producer(config, identity="github enricher")
+    task = Task({"xml-file": True}, priority=TaskPriority.LOW)
+    task.add_payload("repo-link", repo_link)
+    producer.send_task(task)
+
+
 
 What is changed in Karton 4.0.0
 -------------------------------
