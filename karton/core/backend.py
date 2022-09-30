@@ -625,10 +625,12 @@ class KartonBackend:
         :param bucket: Bucket name
         :return: List of object identifiers
         """
-        return [
-            object["Key"]
-            for object in self.s3.list_objects(Bucket=bucket).get("Contents", [])
-        ]
+        objs = list()
+        paginator = self.s3.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=bucket):
+            for obj in page.get('Contents', list()):
+                objs.append(obj['Key'])
+        return objs
 
     def remove_object(self, bucket: str, object_uid: str) -> None:
         """
@@ -646,8 +648,8 @@ class KartonBackend:
         :param bucket: Bucket name
         :param object_uids: Object identifiers
         """
-        delete_objects = [{"Key": uid} for uid in object_uids]
-        self.s3.delete_objects(Bucket=bucket, Delete={"Objects": delete_objects})
+        for delete_objects in chunk([{"Key": uid} for uid in object_uids], 1000):
+            self.s3.delete_objects(Bucket=bucket, Delete={"Objects": delete_objects})
 
     def check_bucket_exists(self, bucket: str, create: bool = False) -> bool:
         """
