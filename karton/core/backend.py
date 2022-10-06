@@ -648,7 +648,7 @@ class KartonBackend:
         :param bucket: Bucket name
         :param object_uids: Object identifiers
         """
-        for delete_objects in chunk([{"Key": uid} for uid in object_uids], 1000):
+        for delete_objects in chunks([{"Key": uid} for uid in object_uids], 1000):
             self.s3.delete_objects(Bucket=bucket, Delete={"Objects": delete_objects})
 
     def check_bucket_exists(self, bucket: str, create: bool = False) -> bool:
