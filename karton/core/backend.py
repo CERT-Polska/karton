@@ -626,10 +626,10 @@ class KartonBackend:
         :return: List of object identifiers
         """
         objs = list()
-        paginator = self.s3.get_paginator('list_objects_v2')
+        paginator = self.s3.get_paginator("list_objects_v2")
         for page in paginator.paginate(Bucket=bucket):
-            for obj in page.get('Contents', list()):
-                objs.append(obj['Key'])
+            for obj in page.get("Contents", list()):
+                objs.append(obj["Key"])
         return objs
 
     def remove_object(self, bucket: str, object_uid: str) -> None:
