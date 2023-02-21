@@ -46,14 +46,13 @@ class KartonServiceInfo:
     Extended Karton service information.
 
     Instances of this dataclass are meant to be aggregated to count service replicas
-    in Karton Dashboard. They're considered equal if identity, versions and extra_info
-    strings are the same.
+    in Karton Dashboard. They're considered equal if identity and versions strings
+    are the same.
     """
+
     identity: str = dataclasses.field(metadata={"serializable": False})
     karton_version: str
     service_version: Optional[str] = None
-    # Extra information about execution parameters etc.
-    extra_info: Optional[str] = None
     # Extra information about Redis client
     redis_client_info: Optional[Dict[str, str]] = dataclasses.field(
         default=None, hash=False, compare=False, metadata={"serializable": False}
@@ -76,8 +75,20 @@ class KartonServiceInfo:
     def parse_client_name(
         cls, client_name: str, redis_client_info: Optional[Dict[str, str]] = None
     ) -> "KartonServiceInfo":
+        included_keys = [
+            field.name
+            for field in dataclasses.fields(cls)
+            if field.metadata.get("serializable", True)
+        ]
         identity, params_string = client_name.split("?")
-        params = dict(urllib.parse.parse_qsl(params_string))
+        # Filter out unknown params to not get crashed by future extensions
+        params = dict(
+            [
+                (key, value)
+                for key, value in urllib.parse.parse_qsl(params_string)
+                if key in included_keys
+            ]
+        )
         return KartonServiceInfo(
             identity, redis_client_info=redis_client_info, **params
         )

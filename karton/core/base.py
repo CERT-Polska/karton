@@ -21,15 +21,17 @@ class KartonBase(abc.ABC):
     attribute.
     """
 
-    identity = ""
+    #: Karton service identity
+    identity: str = ""
+    #: Karton service version
     version: Optional[str] = None
+    #: Include extended service information for non-consumer services
     with_service_info: bool = False
 
     def __init__(
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        service_extra_info: Optional[str] = None,
         backend: Optional[KartonBackend] = None,
     ) -> None:
         self.config = config or Config()
@@ -48,7 +50,6 @@ class KartonBase(abc.ABC):
                 identity=self.identity,
                 karton_version=__version__,
                 service_version=self.version,
-                extra_info=service_extra_info,
             )
 
         self.backend = backend or KartonBackend(
@@ -195,10 +196,6 @@ class KartonServiceBase(KartonBase):
 
     :param config: Karton config to use for service configuration
     :param identity: Karton service identity to use
-    :param with_service_info: Include extended service information
-    :param service_extra_info: |
-        If with_service_info is enabled, includes extra information
-        to be displayed in Karton Dashboard
     :param backend: Karton backend to use
     """
 
@@ -206,13 +203,11 @@ class KartonServiceBase(KartonBase):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        service_extra_info: Optional[str] = None,
         backend: Optional[KartonBackend] = None,
     ) -> None:
         super().__init__(
             config=config,
             identity=identity,
-            service_extra_info=service_extra_info,
             backend=backend,
         )
         self.setup_logger()

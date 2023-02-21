@@ -362,9 +362,7 @@ class LogConsumer(KartonServiceBase):
         identity: Optional[str] = None,
         backend: Optional[KartonBackend] = None,
     ) -> None:
-        super().__init__(
-            config=config, identity=identity, backend=backend
-        )
+        super().__init__(config=config, identity=identity, backend=backend)
 
     @abc.abstractmethod
     def process_log(self, event: Dict[str, Any]) -> None:
