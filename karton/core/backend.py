@@ -3,7 +3,19 @@ import json
 import time
 import warnings
 from collections import defaultdict, namedtuple
-from typing import IO, Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
+from typing import (
+    IO,
+    Any,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 
 import boto3
 from redis import AuthenticationError, StrictRedis
@@ -243,28 +255,30 @@ class KartonBackend:
             bound_identities[client["name"]].append(client)
         return bound_identities
 
-    def get_task(self, task_uid: str) -> Optional[Task]:
+    def get_task(self, task_fquid: str) -> Optional[Task]:
         """
         Get task object with given identifier
 
-        :param task_uid: Task identifier
+        :param task_fquid: Task fully-qualified identifier
         :return: Task object
         """
-        task_data = self.redis.get(f"{KARTON_TASK_NAMESPACE}:{task_uid}")
+        task_data = self.redis.get(f"{KARTON_TASK_NAMESPACE}:{task_fquid}")
         if not task_data:
             return None
         return Task.unserialize(task_data, backend=self)
 
-    def get_tasks(self, task_uid_list: List[str], chunk_size: int = 1000) -> List[Task]:
+    def get_tasks(
+        self, task_fquid_list: List[str], chunk_size: int = 1000
+    ) -> List[Task]:
         """
         Get multiple tasks for given identifier list
 
-        :param task_uid_list: List of task identifiers
+        :param task_fquid_list: List of task fully-qualified identifiers
         :param chunk_size: Size of chunks passed to the Redis MGET command
         :return: List of task objects
         """
         keys = chunks(
-            [f"{KARTON_TASK_NAMESPACE}:{task_uid}" for task_uid in task_uid_list],
+            [f"{KARTON_TASK_NAMESPACE}:{task_fquid}" for task_fquid in task_fquid_list],
             chunk_size,
         )
         return [
@@ -274,20 +288,70 @@ class KartonBackend:
             if task_data is not None
         ]
 
+    def _iter_tasks(
+        self, task_key_list: Sequence[str], chunk_size: int = 1000
+    ) -> Iterator[Task]:
+        for chunk in chunks(task_key_list, chunk_size):
+            yield from [
+                Task.unserialize(task_data, backend=self)
+                for task_data in self.redis.mget(chunk)
+                if task_data is not None
+            ]
+
+    def iter_tasks(
+        self, task_fquid_list: Sequence[str], chunk_size: int = 1000
+    ) -> Iterator[Task]:
+        """
+        Iterate multiple tasks for given identifier list
+
+        :param task_fquid_list: List of task fully-qualified identifiers
+        :param chunk_size: Size of chunks passed to the Redis MGET command
+        :return: Iterator with task objects
+        """
+        return self._iter_tasks(
+            [f"{KARTON_TASK_NAMESPACE}:{task_fquid}" for task_fquid in task_fquid_list],
+            chunk_size,
+        )
+
+    def get_task_tree(self, root_uid: str, chunk_size: int = 1000) -> Iterator[Task]:
+        """
+        Iterate all tasks that belong to the same analysis task tree and have the same root_uid
+
+        :param root_uid: Root identifier of task tree
+        :param chunk_size: Size of chunks passed to the Redis MGET command
+        :return: Iterator with task objects
+
+        .. note::
+            This method processes only these tasks that are stored under karton.task:<root_uid>:<task_uid>
+            key format which is fully-qualified identifier introduced in Karton 5.1.0
+
+            Requires karton-system to be upgraded to Karton 5.1.0
+            Unrouted tasks produced by older Karton versions won't be returned.
+        """
+        task_keys = self.redis.keys(f"{KARTON_TASK_NAMESPACE}:{root_uid}:*")
+        return self._iter_tasks(task_keys, chunk_size)
+
+    def iter_all_tasks(self, chunk_size: int = 1000) -> Iterator[Task]:
+        """
+        Iterates all tasks registered in Redis
+
+        :param chunk_size: Size of chunks passed to the Redis MGET command
+        :return: Iterator with Task objects
+        """
+        task_keys = self.redis.keys(f"{KARTON_TASK_NAMESPACE}:*")
+        return self._iter_tasks(task_keys, chunk_size)
+
     def get_all_tasks(self, chunk_size: int = 1000) -> List[Task]:
         """
         Get all tasks registered in Redis
 
+        .. deprecated:: 5.1.0
+            Use :py:meth:`iter_all_tasks` instead
+
         :param chunk_size: Size of chunks passed to the Redis MGET command
         :return: List with Task objects
         """
-        tasks = self.redis.keys(f"{KARTON_TASK_NAMESPACE}:*")
-        return [
-            Task.unserialize(task_data)
-            for chunk in chunks(tasks, chunk_size)
-            for task_data in self.redis.mget(chunk)
-            if task_data is not None
-        ]
+        return list(self.iter_all_tasks(chunk_size))
 
     def register_task(self, task: Task, pipe: Optional[Pipeline] = None) -> None:
         """
@@ -297,7 +361,7 @@ class KartonBackend:
         :param pipe: Optional pipeline object if operation is a part of pipeline
         """
         rs = pipe or self.redis
-        rs.set(f"{KARTON_TASK_NAMESPACE}:{task.uid}", task.serialize())
+        rs.set(f"{KARTON_TASK_NAMESPACE}:{task.fquid}", task.serialize())
 
     def register_tasks(self, tasks: List[Task]) -> None:
         """
@@ -305,7 +369,7 @@ class KartonBackend:
         :param tasks: List of task objects
         """
         taskmap = {
-            f"{KARTON_TASK_NAMESPACE}:{task.uid}": task.serialize() for task in tasks
+            f"{KARTON_TASK_NAMESPACE}:{task.fquid}": task.serialize() for task in tasks
         }
         self.redis.mset(taskmap)
 
@@ -331,7 +395,7 @@ class KartonBackend:
 
         :param task: Task object
         """
-        self.redis.delete(f"{KARTON_TASK_NAMESPACE}:{task.uid}")
+        self.redis.delete(f"{KARTON_TASK_NAMESPACE}:{task.fquid}")
 
     def delete_tasks(self, tasks: Iterable[Task], chunk_size: int = 1000) -> None:
         """
@@ -340,7 +404,7 @@ class KartonBackend:
         :param tasks: List of Task objects
         :param chunk_size: Size of chunks passed to the Redis DELETE command
         """
-        keys = [f"{KARTON_TASK_NAMESPACE}:{task.uid}" for task in tasks]
+        keys = [f"{KARTON_TASK_NAMESPACE}:{task.fquid}" for task in tasks]
         for chunk in chunks(keys, chunk_size):
             self.redis.delete(*chunk)
 
@@ -351,8 +415,8 @@ class KartonBackend:
         :param queue: Queue name
         :return: List with Task objects contained in queue
         """
-        task_uids = self.redis.lrange(queue, 0, -1)
-        return self.get_tasks(task_uids)
+        task_fquids = self.redis.lrange(queue, 0, -1)
+        return self.get_tasks(task_fquids)
 
     def get_task_ids_from_queue(self, queue: str) -> List[str]:
         """
@@ -383,7 +447,7 @@ class KartonBackend:
 
         :param task: Task object
         """
-        self.redis.rpush(KARTON_TASKS_QUEUE, task.uid)
+        self.redis.rpush(KARTON_TASKS_QUEUE, task.fquid)
 
     def produce_routed_task(
         self, identity: str, task: Task, pipe: Optional[Pipeline] = None
@@ -398,7 +462,7 @@ class KartonBackend:
         :param pipe: Optional pipeline object if operation is a part of pipeline
         """
         rs = pipe or self.redis
-        rs.rpush(self.get_queue_name(identity, task.priority), task.uid)
+        rs.rpush(self.get_queue_name(identity, task.priority), task.fquid)
 
     def consume_queues(
         self, queues: Union[str, List[str]], timeout: int = 0

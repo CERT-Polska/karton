@@ -102,6 +102,15 @@ class Task(object):
         self.payload = dict(payload)
         self.payload_persistent = dict(payload_persistent)
 
+    @property
+    def fquid(self) -> str:
+        """
+        Fully-qualified task uid in form <root_uid>:<task_uid>.
+
+        Used as a primary task identifier for storage in Redis since Karton 5.1.
+        """
+        return f"{self.root_uid}:{self.uid}"
+
     def fork_task(self) -> "Task":
         """
         Fork task to transfer single task to many queues (but use different UID).
