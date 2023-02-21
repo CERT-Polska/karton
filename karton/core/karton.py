@@ -55,9 +55,7 @@ class Producer(KartonBase):
         identity: Optional[str] = None,
         backend: Optional[KartonBackend] = None,
     ) -> None:
-        super(Producer, self).__init__(
-            config=config, identity=identity, backend=backend
-        )
+        super().__init__(config=config, identity=identity, backend=backend)
 
     def send_task(self, task: Task) -> bool:
         """
@@ -117,9 +115,7 @@ class Consumer(KartonServiceBase):
         identity: Optional[str] = None,
         backend: Optional[KartonBackend] = None,
     ) -> None:
-        super(Consumer, self).__init__(
-            config=config, identity=identity, backend=backend
-        )
+        super().__init__(config=config, identity=identity, backend=backend)
 
         if self.filters is None:
             raise ValueError("Cannot bind consumer on Empty binds")
@@ -358,6 +354,7 @@ class LogConsumer(KartonServiceBase):
 
     logger_filter: Optional[str] = None
     level: Optional[str] = None
+    with_service_info = True
 
     def __init__(
         self,
@@ -365,7 +362,7 @@ class LogConsumer(KartonServiceBase):
         identity: Optional[str] = None,
         backend: Optional[KartonBackend] = None,
     ) -> None:
-        super(LogConsumer, self).__init__(
+        super().__init__(
             config=config, identity=identity, backend=backend
         )
 
@@ -419,7 +416,7 @@ class Karton(Consumer, Producer):
         identity: Optional[str] = None,
         backend: Optional[KartonBackend] = None,
     ) -> None:
-        super(Karton, self).__init__(config=config, identity=identity, backend=backend)
+        super().__init__(config=config, identity=identity, backend=backend)
 
         if self.config.getboolean("signaling", "status", fallback=False):
             self.log.info("Using status signaling")

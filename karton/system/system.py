@@ -23,6 +23,7 @@ class SystemService(KartonServiceBase):
 
     identity = "karton.system"
     version = __version__
+    with_service_info = True
 
     GC_INTERVAL = 3 * 60
     TASK_DISPATCHED_TIMEOUT = 24 * 3600
@@ -30,8 +31,7 @@ class SystemService(KartonServiceBase):
     TASK_CRASHED_TIMEOUT = 3 * 24 * 3600
 
     def __init__(self, config: Optional[Config]) -> None:
-        super(SystemService, self).__init__(config=config)
-
+        self.config = config or Config()
         self.gc_interval = self.config.getint("system", "gc_interval", self.GC_INTERVAL)
         self.task_dispatched_timeout = self.config.getint(
             "system", "task_dispatched_timeout", self.TASK_DISPATCHED_TIMEOUT
@@ -46,6 +46,9 @@ class SystemService(KartonServiceBase):
         self.enable_router = self.config.getboolean("system", "enable_router", True)
 
         self.last_gc_trigger = time.time()
+
+        service_extra_info = f"GC enabled: {self.enable_gc}, routing enabled: {self.enable_router}"
+        super().__init__(config=config, service_extra_info=service_extra_info)
 
     def gc_collect_resources(self) -> None:
         # Collects unreferenced resources left in object storage

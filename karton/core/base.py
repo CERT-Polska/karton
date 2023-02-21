@@ -5,7 +5,8 @@ import textwrap
 from contextlib import contextmanager
 from typing import Optional, Union, cast
 
-from .backend import KartonBackend
+from .__version__ import __version__
+from .backend import KartonBackend, KartonServiceInfo
 from .config import Config
 from .logger import KartonLogHandler
 from .task import Task
@@ -22,11 +23,13 @@ class KartonBase(abc.ABC):
 
     identity = ""
     version: Optional[str] = None
+    with_service_info: bool = False
 
     def __init__(
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
+        service_extra_info: Optional[str] = None,
         backend: Optional[KartonBackend] = None,
     ) -> None:
         self.config = config or Config()
@@ -39,7 +42,18 @@ class KartonBase(abc.ABC):
         if self.config.has_option("karton", "identity"):
             self.identity = self.config.get("karton", "identity")
 
-        self.backend = backend or KartonBackend(self.config, identity=self.identity)
+        self.service_info = None
+        if self.identity is not None and self.with_service_info:
+            self.service_info = KartonServiceInfo(
+                identity=self.identity,
+                karton_version=__version__,
+                service_version=self.version,
+                extra_info=service_extra_info,
+            )
+
+        self.backend = backend or KartonBackend(
+            self.config, identity=self.identity, service_info=self.service_info
+        )
 
         self._log_handler = KartonLogHandler(
             backend=self.backend, channel=self.identity
@@ -181,6 +195,10 @@ class KartonServiceBase(KartonBase):
 
     :param config: Karton config to use for service configuration
     :param identity: Karton service identity to use
+    :param with_service_info: Include extended service information
+    :param service_extra_info: |
+        If with_service_info is enabled, includes extra information
+        to be displayed in Karton Dashboard
     :param backend: Karton backend to use
     """
 
@@ -188,9 +206,15 @@ class KartonServiceBase(KartonBase):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
+        service_extra_info: Optional[str] = None,
         backend: Optional[KartonBackend] = None,
     ) -> None:
-        super().__init__(config=config, identity=identity, backend=backend)
+        super().__init__(
+            config=config,
+            identity=identity,
+            service_extra_info=service_extra_info,
+            backend=backend,
+        )
         self.setup_logger()
         self._shutdown = False
 
