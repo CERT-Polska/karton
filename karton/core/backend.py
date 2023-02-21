@@ -119,7 +119,7 @@ class KartonBackend:
         )
 
     @staticmethod
-    def _validate_identity(identity: Optional[str]):
+    def _validate_identity(identity: str):
         disallowed_chars = [" ", "?"]
         if any(disallowed_char in identity for disallowed_char in disallowed_chars):
             raise InvalidIdentityError(
@@ -141,7 +141,7 @@ class KartonBackend:
         :return: Redis connection
         """
         if service_info is not None:
-            client_name = service_info.make_client_name()
+            client_name: Optional[str] = service_info.make_client_name()
         else:
             client_name = identity
 
