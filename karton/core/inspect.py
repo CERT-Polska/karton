@@ -4,7 +4,6 @@ from typing import Dict, List
 from .backend import KartonBackend, KartonBind
 from .task import Task, TaskState
 
-
 class KartonQueue:
     """
     View object representing a Karton queue
@@ -123,26 +122,62 @@ class KartonState:
         self.backend = backend
         self.binds = {bind.identity: bind for bind in backend.get_binds()}
         self.replicas = backend.get_online_consumers()
-        self.tasks = backend.get_all_tasks()
-        self.pending_tasks = [
+
+        self._tasks = None
+        self._analyses = None
+        self._queues = None
+
+    @property
+    def tasks(self):
+        if self._tasks is None:
+            self._tasks = self.backend.get_all_tasks()
+        return self._tasks
+
+    @property
+    def pending_tasks(self):
+        return [
             task for task in self.tasks if task.status != TaskState.FINISHED
         ]
 
-        # Tasks grouped by root_uid
-        tasks_per_analysis = defaultdict(list)
+    @property
+    def analyses(self):
+        if self._analyses is None:
+            # Tasks grouped by root_uid
+            tasks_per_analysis = defaultdict(list)
 
-        for task in self.pending_tasks:
-            tasks_per_analysis[task.root_uid].append(task)
+            for task in self.pending_tasks:
+                tasks_per_analysis[task.root_uid].append(task)
 
-        self.analyses = {
-            root_uid: KartonAnalysis(root_uid=root_uid, tasks=tasks, state=self)
-            for root_uid, tasks in tasks_per_analysis.items()
-        }
-        queues = get_queues_for_tasks(self.pending_tasks, self)
-        # Present registered queues without tasks
-        for bind_name, bind in self.binds.items():
-            if bind_name not in queues:
-                queues[bind_name] = KartonQueue(
-                    bind=self.binds[bind_name], tasks=[], state=self
-                )
-        self.queues = queues
+            self._analyses = {
+                root_uid: KartonAnalysis(root_uid=root_uid, tasks=tasks, state=self)
+                for root_uid, tasks in tasks_per_analysis.items()
+            }
+        return self._analyses
+
+    @property
+    def queues(self):
+        if self._queues is None:
+            queues = get_queues_for_tasks(self.pending_tasks, self)
+            # Present registered queues without tasks
+            for bind_name, bind in self.binds.items():
+                if bind_name not in queues:
+                    queues[bind_name] = KartonQueue(
+                        bind=self.binds[bind_name], tasks=[], state=self
+                    )
+            self._queues = queues
+        return self._queues
+
+    def iter_tasks(self):
+        return self.backend.iter_all_tasks()
+
+    def iter_pending_tasks(self):
+        return (
+            task for task in self.backend.iter_all_tasks() if task.status != TaskState.FINISHED
+        )
+
+    def get_analysis(self, root_uid: str):
+        return KartonAnalysis(
+            root_uid=root_uid,
+            tasks=list(self.backend.iter_task_tree(root_uid)),
+            state=self
+        )

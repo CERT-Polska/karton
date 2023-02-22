@@ -11,7 +11,6 @@ from typing import (
     Iterator,
     List,
     Optional,
-    Sequence,
     Set,
     Tuple,
     Union,
@@ -31,7 +30,7 @@ KARTON_LOG_CHANNEL = "karton.log"
 KARTON_BINDS_HSET = "karton.binds"
 KARTON_TASK_NAMESPACE = "karton.task"
 KARTON_OUTPUTS_NAMESPACE = "karton.outputs"
-
+KARTON_ASSIGNED_NAMESPACE = "karton.assigned"
 
 KartonBind = namedtuple(
     "KartonBind",
@@ -288,23 +287,19 @@ class KartonBackend:
             if task_data is not None
         ]
 
-    def iter_tasks(self, pattern: str, chunk_size: int = 1000) -> Iterator[Task]:
-        """
-        Iterates all tasks that match provided fully-qualified identifier pattern
-
-        :param pattern: Fully-qualified identifier pattern
-        :param chunk_size: Size of chunks passed to the Redis SCAN and MGET command
-        :return: Iterator with task objects
-        """
-        task_keys = self.redis.scan_iter(
-            match=f"{KARTON_TASK_NAMESPACE}:{pattern}", count=chunk_size
-        )
+    def _iter_tasks(self, task_keys: Iterator[str], chunk_size: int = 1000) -> Iterator[Task]:
         for chunk in chunks_iter(task_keys, chunk_size):
             yield from [
                 Task.unserialize(task_data, backend=self)
                 for task_data in self.redis.mget(chunk)
                 if task_data is not None
             ]
+
+    def iter_tasks(self, task_fquid_list: Iterable[str], chunk_size: int = 1000) -> Iterator[Task]:
+        return self._iter_tasks(
+            map(lambda task_fquid: f"{KARTON_TASK_NAMESPACE}:{task_fquid}", task_fquid_list),
+            chunk_size=chunk_size
+        )
 
     def iter_task_tree(self, root_uid: str, chunk_size: int = 1000) -> Iterator[Task]:
         """
@@ -321,7 +316,10 @@ class KartonBackend:
             Requires karton-system to be upgraded to Karton 5.1.0
             Unrouted tasks produced by older Karton versions won't be returned.
         """
-        return self.iter_tasks(f"{root_uid}:*", chunk_size)
+        task_keys = self.redis.scan_iter(
+            match=f"{KARTON_TASK_NAMESPACE}:{root_uid}:*", count=chunk_size
+        )
+        return self.iter_tasks(task_keys, chunk_size)
 
     def iter_all_tasks(self, chunk_size: int = 1000) -> Iterator[Task]:
         """
@@ -330,7 +328,10 @@ class KartonBackend:
         :param chunk_size: Size of chunks passed to the Redis MGET command
         :return: Iterator with Task objects
         """
-        return self.iter_tasks(f"*", chunk_size)
+        task_keys = self.redis.scan_iter(
+            match=f"{KARTON_TASK_NAMESPACE}:*", count=chunk_size
+        )
+        return self.iter_tasks(task_keys, chunk_size)
 
     def get_all_tasks(self, chunk_size: int = 1000) -> List[Task]:
         """
@@ -385,6 +386,13 @@ class KartonBackend:
         """
         Remove task from Redis
 
+        .. warning::
+
+            Used internally by karton.system. This method doesn't properly
+            unassign routed tasks, so it shouldn't be used without care.
+            If you want to cancel task: mark it as finished and let it be deleted
+            by karton.system.
+
         :param task: Task object
         """
         self.redis.delete(f"{KARTON_TASK_NAMESPACE}:{task.fquid}")
@@ -392,6 +400,9 @@ class KartonBackend:
     def delete_tasks(self, tasks: Iterable[Task], chunk_size: int = 1000) -> None:
         """
         Remove multiple tasks from Redis
+
+        .. warning::
+            Before use, read warning in :py:meth:`delete_task` method documentation
 
         :param tasks: List of Task objects
         :param chunk_size: Size of chunks passed to the Redis DELETE command
@@ -419,14 +430,8 @@ class KartonBackend:
         """
         return self.redis.lrange(queue, 0, -1)
 
-    def count_task_queue(self, queue: str) -> int:
-        """
-        Return number of tasks in a queue
-
-        :param queue: Queue name
-        :return: Number of tasks in a queue
-        """
-        return self.redis.llen(queue)
+    def delete_consumer_queues(self, identity: str) -> None:
+        self.redis.delete(*self.get_queue_names(identity))
 
     def remove_task_queue(self, queue: str) -> List[Task]:
         """
@@ -464,6 +469,51 @@ class KartonBackend:
         """
         rs = pipe or self.redis
         rs.rpush(self.get_queue_name(identity, task.priority), task.fquid)
+
+    def assign_task_to_consumer(
+        self, task: Task, pipe: Optional[Pipeline] = None
+    ) -> None:
+        rs = pipe or self.redis
+        identity = task.headers["receiver"]
+        if not identity:
+            raise ValueError("Can't assign task without 'receiver' header")
+        rs.sadd(f"{KARTON_ASSIGNED_NAMESPACE}:{identity}", task.fquid)
+
+    def unassign_task_from_consumer(
+        self, task: Task, pipe: Optional[Pipeline] = None
+    ):
+        rs = pipe or self.redis
+        identity = task.headers["receiver"]
+        if not identity:
+            # Just assume that they're unrouted/unassigned
+            return
+        rs.srem(f"{KARTON_ASSIGNED_NAMESPACE}:{identity}", task.fquid)
+
+    def unassign_tasks_from_consumers(
+        self, tasks: List[Task], chunk_size: int = 1000
+    ) -> None:
+        consumers = defaultdict(list)
+        for task in tasks:
+            identity = task.headers["receiver"]
+            if not identity:
+                # Just assume that they're unrouted/unassigned
+                continue
+            consumers[identity].append(task.fquid)
+            # If exceeded chunk_size: remove during grouping
+            if len(consumers[identity]) >= chunk_size:
+                self.redis.srem(f"{KARTON_ASSIGNED_NAMESPACE}:{identity}", consumers[identity])
+                consumers[identity] = []
+        # Remove grouped tasks
+        for identity, tasks in consumers.items():
+            if consumers[identity]:
+                self.redis.srem(f"{KARTON_ASSIGNED_NAMESPACE}:{identity}", consumers[identity])
+
+    def get_consumer_tasks(self, identity: str, chunk_size: int = 1000) -> Iterator[Task]:
+        task_fquids = self.redis.sscan_iter(f"{KARTON_ASSIGNED_NAMESPACE}:{identity}", count=chunk_size)
+        return self.iter_tasks(task_fquids, chunk_size=chunk_size)
+
+    def count_consumer_tasks(self, identity: str) -> int:
+        return self.redis.scard(f"{KARTON_ASSIGNED_NAMESPACE}:{identity}")
 
     def consume_queues(
         self, queues: Union[str, List[str]], timeout: int = 0

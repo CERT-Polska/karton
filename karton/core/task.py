@@ -118,6 +118,10 @@ class Task(object):
             return self.uid
         return f"{self.root_uid}:{self.uid}"
 
+    @property
+    def receiver(self) -> Optional[str]:
+        return self.headers.get("receiver")
+
     def fork_task(self) -> "Task":
         """
         Fork task to transfer single task to many queues (but use different UID).

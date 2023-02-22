@@ -71,16 +71,12 @@ class SystemService(KartonServiceBase):
         for bind in self.backend.get_binds():
             identity = bind.identity
             if identity not in online_consumers and not bind.persistent:
-                # If offline and not persistent: remove queue
-                for queue in self.backend.get_queue_names(identity):
-                    self.log.info(
-                        "Non-persistent: unwinding tasks from queue %s", queue
-                    )
-                    removed_tasks = self.backend.remove_task_queue(queue)
-                    for removed_task in removed_tasks:
-                        self.log.info("Unwinding task %s", str(removed_task.uid))
+                # If offline and not persistent: remove queue and assigned tasks
+                self.backend.delete_consumer_queues(identity)
+                for task in self.backend.get_consumer_tasks(identity):
+                    self.log.info("Unwinding task %s", str(task.uid))
                         # Mark task as finished
-                        self.backend.set_task_status(removed_task, TaskState.FINISHED)
+                        self.backend.set_task_status(task, TaskState.FINISHED)
                     self.log.info("Non-persistent: removing bind %s", identity)
                     self.backend.unregister_bind(identity)
 
@@ -146,6 +142,7 @@ class SystemService(KartonServiceBase):
                 task.headers.get("receiver", "unknown") for task in to_delete
             ]
             self.backend.delete_tasks(to_delete)
+            self.backend.unassign_tasks_from_consumers(to_delete)
             self.backend.increment_metrics_list(
                 KartonMetrics.TASK_GARBAGE_COLLECTED, to_increment
             )
@@ -181,6 +178,7 @@ class SystemService(KartonServiceBase):
                 routed_task.last_update = time.time()
                 routed_task.headers.update({"receiver": identity})
                 self.backend.register_task(routed_task, pipe=pipe)
+                self.backend.assign_task_to_consumer(routed_task, pipe=pipe)
                 self.backend.produce_routed_task(identity, routed_task, pipe=pipe)
                 self.backend.increment_metrics(
                     KartonMetrics.TASK_ASSIGNED, identity, pipe=pipe
