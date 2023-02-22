@@ -23,7 +23,7 @@ from redis.client import Pipeline
 from urllib3.response import HTTPResponse
 
 from .task import Task, TaskPriority, TaskState
-from .utils import chunks
+from .utils import chunks, chunks_iter
 
 KARTON_TASKS_QUEUE = "karton.tasks"
 KARTON_OPERATIONS_QUEUE = "karton.operations"
@@ -288,34 +288,27 @@ class KartonBackend:
             if task_data is not None
         ]
 
-    def _iter_tasks(
-        self, task_key_list: Sequence[str], chunk_size: int = 1000
-    ) -> Iterator[Task]:
-        for chunk in chunks(task_key_list, chunk_size):
+    def iter_tasks(self, pattern: str, chunk_size: int = 1000) -> Iterator[Task]:
+        """
+        Iterates all tasks that match provided fully-qualified identifier pattern
+
+        :param pattern: Fully-qualified identifier pattern
+        :param chunk_size: Size of chunks passed to the Redis SCAN and MGET command
+        :return: Iterator with task objects
+        """
+        task_keys = self.redis.scan_iter(
+            match=f"{KARTON_TASK_NAMESPACE}:{pattern}", count=chunk_size
+        )
+        for chunk in chunks_iter(task_keys, chunk_size):
             yield from [
                 Task.unserialize(task_data, backend=self)
                 for task_data in self.redis.mget(chunk)
                 if task_data is not None
             ]
 
-    def iter_tasks(
-        self, task_fquid_list: Sequence[str], chunk_size: int = 1000
-    ) -> Iterator[Task]:
+    def iter_task_tree(self, root_uid: str, chunk_size: int = 1000) -> Iterator[Task]:
         """
-        Iterate multiple tasks for given identifier list
-
-        :param task_fquid_list: List of task fully-qualified identifiers
-        :param chunk_size: Size of chunks passed to the Redis MGET command
-        :return: Iterator with task objects
-        """
-        return self._iter_tasks(
-            [f"{KARTON_TASK_NAMESPACE}:{task_fquid}" for task_fquid in task_fquid_list],
-            chunk_size,
-        )
-
-    def get_task_tree(self, root_uid: str, chunk_size: int = 1000) -> Iterator[Task]:
-        """
-        Iterate all tasks that belong to the same analysis task tree and have the same root_uid
+        Iterates all tasks that belong to the same analysis task tree and have the same root_uid
 
         :param root_uid: Root identifier of task tree
         :param chunk_size: Size of chunks passed to the Redis MGET command
@@ -328,8 +321,7 @@ class KartonBackend:
             Requires karton-system to be upgraded to Karton 5.1.0
             Unrouted tasks produced by older Karton versions won't be returned.
         """
-        task_keys = self.redis.keys(f"{KARTON_TASK_NAMESPACE}:{root_uid}:*")
-        return self._iter_tasks(task_keys, chunk_size)
+        return self.iter_tasks(f"{root_uid}:*", chunk_size)
 
     def iter_all_tasks(self, chunk_size: int = 1000) -> Iterator[Task]:
         """
@@ -338,15 +330,15 @@ class KartonBackend:
         :param chunk_size: Size of chunks passed to the Redis MGET command
         :return: Iterator with Task objects
         """
-        task_keys = self.redis.keys(f"{KARTON_TASK_NAMESPACE}:*")
-        return self._iter_tasks(task_keys, chunk_size)
+        return self.iter_tasks(f"*", chunk_size)
 
     def get_all_tasks(self, chunk_size: int = 1000) -> List[Task]:
         """
         Get all tasks registered in Redis
 
-        .. deprecated:: 5.1.0
-            Use :py:meth:`iter_all_tasks` instead
+        .. warning::
+            This method loads all tasks into memory.
+            Use :py:meth:`iter_all_tasks` instead.
 
         :param chunk_size: Size of chunks passed to the Redis MGET command
         :return: List with Task objects
@@ -420,12 +412,21 @@ class KartonBackend:
 
     def get_task_ids_from_queue(self, queue: str) -> List[str]:
         """
-        Return all task UIDs in a queue
+        Return all task fquids in a queue
 
         :param queue: Queue name
         :return: List with task identifiers contained in queue
         """
         return self.redis.lrange(queue, 0, -1)
+
+    def count_task_queue(self, queue: str) -> int:
+        """
+        Return number of tasks in a queue
+
+        :param queue: Queue name
+        :return: Number of tasks in a queue
+        """
+        return self.redis.llen(queue)
 
     def remove_task_queue(self, queue: str) -> List[Task]:
         """
@@ -597,6 +598,20 @@ class KartonBackend:
         """
         rs = pipe or self.redis
         rs.hincrby(metric.value, identity, 1)
+
+    def increment_multiple_metrics(
+        self, metric: KartonMetrics, increments: Dict[str, int]
+    ) -> None:
+        """
+        Increments metrics for multiple identities by given value via single pipeline
+
+        :param metric: Operation metric type
+        :param increments: Dictionary of Karton service identities and value to add to the metric
+        """
+        p = self.redis.pipeline()
+        for identity, increment in increments.items():
+            p.hincrby(metric.value, identity, increment)
+        p.execute()
 
     def increment_metrics_list(
         self, metric: KartonMetrics, identities: List[str]

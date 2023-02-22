@@ -53,7 +53,7 @@ class SystemService(KartonServiceBase):
         resources_to_remove = set(self.backend.list_objects(karton_bucket))
         # Note: it is important to get list of resources before getting list of tasks!
         # Task is created before resource upload to lock the reference to the resource.
-        tasks = self.backend.get_all_tasks()
+        tasks = self.backend.iter_all_tasks()
         for task in tasks:
             for resource in task.iterate_resources():
                 # If resource is referenced by task: remove it from set
@@ -88,17 +88,16 @@ class SystemService(KartonServiceBase):
         # Collects finished tasks
         root_tasks = set()
         running_root_tasks = set()
-        tasks = self.backend.get_all_tasks()
-        enqueued_task_uids = self.backend.get_task_ids_from_queue(KARTON_TASKS_QUEUE)
+        unrouted_task_fquids = self.backend.get_task_ids_from_queue(KARTON_TASKS_QUEUE)
 
         current_time = time.time()
         to_delete = []
 
-        for task in tasks:
+        for task in self.backend.iter_all_tasks():
             root_tasks.add(task.root_uid)
             if (
                 task.status == TaskState.DECLARED
-                and task.uid not in enqueued_task_uids
+                and task.fquid not in unrouted_task_fquids
                 and task.last_update is not None
                 and current_time > task.last_update + self.task_dispatched_timeout
             ):

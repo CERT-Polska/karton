@@ -60,6 +60,8 @@ class Task(object):
     :param error: Traceback of a exception that happened while performing this task
     """
 
+    REVISION = 2
+
     def __init__(
         self,
         headers: Dict[str, Any],
@@ -101,6 +103,9 @@ class Task(object):
 
         self.payload = dict(payload)
         self.payload_persistent = dict(payload_persistent)
+        # This field should be set to different value only during deserialization
+        # For tasks created by current code, it should be set to latest
+        self.revision = self.REVISION
 
     @property
     def fquid(self) -> str:
@@ -109,6 +114,8 @@ class Task(object):
 
         Used as a primary task identifier for storage in Redis since Karton 5.1.
         """
+        if self.REVISION == 1:
+            return self.uid
         return f"{self.root_uid}:{self.uid}"
 
     def fork_task(self) -> "Task":
@@ -264,6 +271,7 @@ class Task(object):
                 "payload_persistent": self.payload_persistent,
                 "headers": self.headers,
                 "error": self.error,
+                "revision": self.revision,
             },
             cls=KartonResourceEncoder,
             indent=indent,
@@ -365,6 +373,12 @@ class Task(object):
         task.last_update = task_data.get("last_update", None)
         task.payload = task_data["payload"]
         task.payload_persistent = task_data["payload_persistent"]
+        # Task scheme revision:
+        #  (none) or 1 - v1 (< 5.1.0)
+        #  2           - v2 (current)
+        #                task Redis key is karton.task:{root_uid}:{uid}
+        #                instead of karton.task:{uid}
+        task.revision = task_data.get("revision", 1)
         return task
 
     def __repr__(self) -> str:
