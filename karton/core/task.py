@@ -367,11 +367,15 @@ class Task(object):
         :param data: JSON-serialized task
         :param backend: Backend instance to be bound to RemoteResource objects
         :param parse_resources: |
-            If set to False (default is True), method doesn't deserialize
-            '__karton_resource__' entries, which speeds up deserialization process.
-            This flag is used mainly for multiple task processing e.g. filtering
-            based on status.
+            If set to False (default is True), method doesn't
+            deserialize '__karton_resource__' entries, which speeds up deserialization
+            process. This flag is used mainly for multiple task processing e.g.
+            filtering based on status.
 
+            When resource deserialization is turned off, Task.unserialize will try
+            to use faster 3rd-party JSON parser (orjson) if it's installed. It's not
+            added as a required dependency but can speed up things if you need to check
+            status of multiple tasks at once.
         :return: Unserialized Task object
 
         :meta private:

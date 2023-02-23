@@ -266,10 +266,9 @@ class KartonBackend:
 
         :param task_fquid_list: List of task fully-qualified identifiers
         :param chunk_size: Size of chunks passed to the Redis MGET command
-        :param parse_resources: If set to False (default is True), method doesn't
-            deserialize '__karton_resource__' entries, which speeds up deserialization
-            process. This flag is used mainly for multiple task processing e.g.
-            filtering based on status.
+        :param parse_resources: |
+            If set to False, resources are not parsed. It speeds up deserialization.
+            Read :py:meth:`Task.unserialize` documentation to learn more.
         :return: List of task objects
         """
         keys = chunks(
@@ -306,6 +305,16 @@ class KartonBackend:
         chunk_size: int = 1000,
         parse_resources: bool = True,
     ) -> Iterator[Task]:
+        """
+        Get multiple tasks for given identifier list as an iterator
+
+        :param task_fquid_list: List of task fully-qualified identifiers
+        :param chunk_size: Size of chunks passed to the Redis MGET command
+        :param parse_resources: |
+            If set to False, resources are not parsed. It speeds up deserialization.
+            Read :py:meth:`Task.unserialize` documentation to learn more.
+        :return: Iterator with task objects
+        """
         return self._iter_tasks(
             map(
                 lambda task_fquid: f"{KARTON_TASK_NAMESPACE}:{task_fquid}",
@@ -323,7 +332,10 @@ class KartonBackend:
         and have the same root_uid
 
         :param root_uid: Root identifier of task tree
-        :param chunk_size: Size of chunks passed to the Redis MGET command
+        :param chunk_size: Size of chunks passed to the Redis SCAN and MGET command
+        :param parse_resources: |
+            If set to False, resources are not parsed. It speeds up deserialization.
+            Read :py:meth:`Task.unserialize` documentation to learn more.
         :return: Iterator with task objects
 
         .. note::
@@ -347,7 +359,10 @@ class KartonBackend:
         """
         Iterates all tasks registered in Redis
 
-        :param chunk_size: Size of chunks passed to the Redis MGET command
+        :param chunk_size: Size of chunks passed to the Redis SCAN and MGET command
+        :param parse_resources: |
+            If set to False, resources are not parsed. It speeds up deserialization.
+            Read :py:meth:`Task.unserialize` documentation to learn more.
         :return: Iterator with Task objects
         """
         task_keys = self.redis.scan_iter(
@@ -367,7 +382,10 @@ class KartonBackend:
             This method loads all tasks into memory.
             Use :py:meth:`iter_all_tasks` instead.
 
-        :param chunk_size: Size of chunks passed to the Redis MGET command
+        :param chunk_size: Size of chunks passed to the Redis SCAN and MGET command
+        :param parse_resources: |
+            If set to False, resources are not parsed. It speeds up deserialization.
+            Read :py:meth:`Task.unserialize` documentation to learn more.
         :return: List with Task objects
         """
         return list(
@@ -459,6 +477,11 @@ class KartonBackend:
         return self.redis.lrange(queue, 0, -1)
 
     def delete_consumer_queues(self, identity: str) -> None:
+        """
+        Deletes consumer queues for given identity
+
+        :param identity: Consumer identity
+        """
         self.redis.delete(*self.get_queue_names(identity))
 
     def remove_task_queue(self, queue: str) -> List[Task]:
@@ -501,6 +524,14 @@ class KartonBackend:
     def assign_task_to_consumer(
         self, task: Task, pipe: Optional[Pipeline] = None
     ) -> None:
+        """
+        Assigns tasks to consumer based on 'receiver' header.
+
+        Used internally by karton.system
+
+        :param task: Task to assign
+        :param pipe: Optional pipeline object if operation is a part of pipeline
+        """
         rs = pipe or self.redis
         identity = task.headers.get("receiver")
         if not identity:
@@ -508,6 +539,14 @@ class KartonBackend:
         rs.sadd(f"{KARTON_ASSIGNED_NAMESPACE}:{identity}", task.fquid)
 
     def unassign_task_from_consumer(self, task: Task, pipe: Optional[Pipeline] = None):
+        """
+        Unassigns tasks from consumer based on 'receiver' header.
+
+        Used internally by karton.system
+
+        :param task: Task to unassign
+        :param pipe: Optional pipeline object if operation is a part of pipeline
+        """
         rs = pipe or self.redis
         identity = task.headers.get("receiver")
         if not identity:
@@ -518,6 +557,14 @@ class KartonBackend:
     def unassign_tasks_from_consumers(
         self, tasks: List[Task], chunk_size: int = 1000
     ) -> None:
+        """
+        Unassigns multiple tasks from multiple consumers based on 'receiver' header.
+
+        Used internally by karton.system
+
+        :param tasks: List of tasks to unassign
+        :param chunk_size: Size of chunks passed to the Redis SREM command
+        """
         consumers = defaultdict(list)
         for task in tasks:
             identity = task.headers.get("receiver")
@@ -541,6 +588,16 @@ class KartonBackend:
     def iter_consumer_tasks(
         self, identity: str, chunk_size: int = 1000, parse_resources: bool = False
     ) -> Iterator[Task]:
+        """
+        Iterates tasks assigned (routed) to given consumer.
+
+        :param identity: Consumer identity
+        :param chunk_size: Size of chunks passed to the SSCAN and MGET command
+        :param parse_resources: |
+            If set to False, resources are not parsed. It speeds up deserialization.
+            Read :py:meth:`Task.unserialize` documentation to learn more.
+        :return: Iterator with Task objects assigned to the consumer.
+        """
         task_fquids = self.redis.sscan_iter(
             f"{KARTON_ASSIGNED_NAMESPACE}:{identity}", count=chunk_size
         )
