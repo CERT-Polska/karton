@@ -25,9 +25,11 @@ if TYPE_CHECKING:
 try:
     # Use orjson for deserialization performance acceleration if available
     import orjson
+
     USE_ORJSON = True
 except ImportError:
     USE_ORJSON = False
+
 
 class TaskState(enum.Enum):
     DECLARED = "Declared"  # Task declared in TASKS_QUEUE
@@ -68,9 +70,18 @@ class Task(object):
 
     REVISION = 2
     __slots__ = (
-        "uid", "root_uid", "orig_uid", "parent_uid", "error", "headers",
-        "status", "last_update", "priority", "payload", "payload_persistent",
-        "revision"
+        "uid",
+        "root_uid",
+        "orig_uid",
+        "parent_uid",
+        "error",
+        "headers",
+        "status",
+        "last_update",
+        "priority",
+        "payload",
+        "payload_persistent",
+        "revision",
     )
 
     def __init__(
@@ -346,8 +357,9 @@ class Task(object):
 
     @staticmethod
     def unserialize(
-        data: Union[str, bytes], backend: Optional["KartonBackend"] = None,
-        parse_resources: bool = True
+        data: Union[str, bytes],
+        backend: Optional["KartonBackend"] = None,
+        parse_resources: bool = True,
     ) -> "Task":
         """
         Unserialize Task instance from JSON string
@@ -402,7 +414,7 @@ class Task(object):
                 else TaskPriority.NORMAL
             ),
             _status=TaskState(task_data["status"]),
-            _last_update=task_data.get("last_update", None)
+            _last_update=task_data.get("last_update", None),
         )
         # Task scheme revision:
         #  (none) or 1 - v1 (< 5.1.0)

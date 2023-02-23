@@ -3,18 +3,7 @@ import json
 import time
 import warnings
 from collections import defaultdict, namedtuple
-from typing import (
-    IO,
-    Any,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    Optional,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import IO, Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
 
 import boto3
 from redis import AuthenticationError, StrictRedis
@@ -267,8 +256,10 @@ class KartonBackend:
         return Task.unserialize(task_data, backend=self)
 
     def get_tasks(
-        self, task_fquid_list: List[str], chunk_size: int = 1000,
-        parse_resources: bool = True
+        self,
+        task_fquid_list: List[str],
+        chunk_size: int = 1000,
+        parse_resources: bool = True,
     ) -> List[Task]:
         """
         Get multiple tasks for given identifier list
@@ -277,8 +268,8 @@ class KartonBackend:
         :param chunk_size: Size of chunks passed to the Redis MGET command
         :param parse_resources: If set to False (default is True), method doesn't
             deserialize '__karton_resource__' entries, which speeds up deserialization
-            process. This flag is used mainly for multiple task processing e.g. filtering
-            based on status.
+            process. This flag is used mainly for multiple task processing e.g.
+            filtering based on status.
         :return: List of task objects
         """
         keys = chunks(
@@ -287,44 +278,58 @@ class KartonBackend:
         )
         return [
             Task.unserialize(task_data, backend=self)
-            if parse_resources else
-            Task.unserialize(task_data, parse_resources=False)
+            if parse_resources
+            else Task.unserialize(task_data, parse_resources=False)
             for chunk in keys
             for task_data in self.redis.mget(chunk)
             if task_data is not None
         ]
 
-    def _iter_tasks(self, task_keys: Iterator[str], chunk_size: int = 1000,
-                    parse_resources: bool = True) -> Iterator[Task]:
+    def _iter_tasks(
+        self,
+        task_keys: Iterator[str],
+        chunk_size: int = 1000,
+        parse_resources: bool = True,
+    ) -> Iterator[Task]:
         for chunk in chunks_iter(task_keys, chunk_size):
             yield from (
                 Task.unserialize(task_data, backend=self)
-                if parse_resources else
-                Task.unserialize(task_data, parse_resources=False)
+                if parse_resources
+                else Task.unserialize(task_data, parse_resources=False)
                 for task_data in self.redis.mget(chunk)
                 if task_data is not None
             )
 
-    def iter_tasks(self, task_fquid_list: Iterable[str], chunk_size: int = 1000,
-                   parse_resources: bool = True) -> Iterator[Task]:
+    def iter_tasks(
+        self,
+        task_fquid_list: Iterable[str],
+        chunk_size: int = 1000,
+        parse_resources: bool = True,
+    ) -> Iterator[Task]:
         return self._iter_tasks(
-            map(lambda task_fquid: f"{KARTON_TASK_NAMESPACE}:{task_fquid}", task_fquid_list),
+            map(
+                lambda task_fquid: f"{KARTON_TASK_NAMESPACE}:{task_fquid}",
+                task_fquid_list,
+            ),
             chunk_size=chunk_size,
-            parse_resources=parse_resources
+            parse_resources=parse_resources,
         )
 
-    def iter_task_tree(self, root_uid: str, chunk_size: int = 1000,
-                       parse_resources: bool = True) -> Iterator[Task]:
+    def iter_task_tree(
+        self, root_uid: str, chunk_size: int = 1000, parse_resources: bool = True
+    ) -> Iterator[Task]:
         """
-        Iterates all tasks that belong to the same analysis task tree and have the same root_uid
+        Iterates all tasks that belong to the same analysis task tree
+        and have the same root_uid
 
         :param root_uid: Root identifier of task tree
         :param chunk_size: Size of chunks passed to the Redis MGET command
         :return: Iterator with task objects
 
         .. note::
-            This method processes only these tasks that are stored under karton.task:<root_uid>:<task_uid>
-            key format which is fully-qualified identifier introduced in Karton 5.1.0
+            This method processes only these tasks that are stored under
+            karton.task:<root_uid>:<task_uid> key format which is fully-qualified
+            identifier introduced in Karton 5.1.0
 
             Requires karton-system to be upgraded to Karton 5.1.0
             Unrouted tasks produced by older Karton versions won't be returned.
@@ -332,9 +337,13 @@ class KartonBackend:
         task_keys = self.redis.scan_iter(
             match=f"{KARTON_TASK_NAMESPACE}:{root_uid}:*", count=chunk_size
         )
-        return self._iter_tasks(task_keys, chunk_size=chunk_size, parse_resources=parse_resources)
+        return self._iter_tasks(
+            task_keys, chunk_size=chunk_size, parse_resources=parse_resources
+        )
 
-    def iter_all_tasks(self, chunk_size: int = 1000, parse_resources: bool = True) -> Iterator[Task]:
+    def iter_all_tasks(
+        self, chunk_size: int = 1000, parse_resources: bool = True
+    ) -> Iterator[Task]:
         """
         Iterates all tasks registered in Redis
 
@@ -344,9 +353,13 @@ class KartonBackend:
         task_keys = self.redis.scan_iter(
             match=f"{KARTON_TASK_NAMESPACE}:*", count=chunk_size
         )
-        return self._iter_tasks(task_keys, chunk_size=chunk_size, parse_resources=parse_resources)
+        return self._iter_tasks(
+            task_keys, chunk_size=chunk_size, parse_resources=parse_resources
+        )
 
-    def get_all_tasks(self, chunk_size: int = 1000, parse_resources: bool = True) -> List[Task]:
+    def get_all_tasks(
+        self, chunk_size: int = 1000, parse_resources: bool = True
+    ) -> List[Task]:
         """
         Get all tasks registered in Redis
 
@@ -357,7 +370,9 @@ class KartonBackend:
         :param chunk_size: Size of chunks passed to the Redis MGET command
         :return: List with Task objects
         """
-        return list(self.iter_all_tasks(chunk_size=chunk_size, parse_resources=parse_resources))
+        return list(
+            self.iter_all_tasks(chunk_size=chunk_size, parse_resources=parse_resources)
+        )
 
     def register_task(self, task: Task, pipe: Optional[Pipeline] = None) -> None:
         """
@@ -487,16 +502,14 @@ class KartonBackend:
         self, task: Task, pipe: Optional[Pipeline] = None
     ) -> None:
         rs = pipe or self.redis
-        identity = task.headers["receiver"]
+        identity = task.headers.get("receiver")
         if not identity:
             raise ValueError("Can't assign task without 'receiver' header")
         rs.sadd(f"{KARTON_ASSIGNED_NAMESPACE}:{identity}", task.fquid)
 
-    def unassign_task_from_consumer(
-        self, task: Task, pipe: Optional[Pipeline] = None
-    ):
+    def unassign_task_from_consumer(self, task: Task, pipe: Optional[Pipeline] = None):
         rs = pipe or self.redis
-        identity = task.headers["receiver"]
+        identity = task.headers.get("receiver")
         if not identity:
             # Just assume that they're unrouted/unassigned
             return
@@ -507,26 +520,33 @@ class KartonBackend:
     ) -> None:
         consumers = defaultdict(list)
         for task in tasks:
-            identity = task.headers["receiver"]
+            identity = task.headers.get("receiver")
             if not identity:
                 # Just assume that they're unrouted/unassigned
                 continue
             consumers[identity].append(task.fquid)
             # If exceeded chunk_size: remove during grouping
             if len(consumers[identity]) >= chunk_size:
-                self.redis.srem(f"{KARTON_ASSIGNED_NAMESPACE}:{identity}", consumers[identity])
+                self.redis.srem(
+                    f"{KARTON_ASSIGNED_NAMESPACE}:{identity}", consumers[identity]
+                )
                 consumers[identity] = []
         # Remove grouped tasks
-        for identity, tasks in consumers.items():
+        for identity in consumers.keys():
             if consumers[identity]:
-                self.redis.srem(f"{KARTON_ASSIGNED_NAMESPACE}:{identity}", consumers[identity])
+                self.redis.srem(
+                    f"{KARTON_ASSIGNED_NAMESPACE}:{identity}", consumers[identity]
+                )
 
-    def get_consumer_tasks(self, identity: str, chunk_size: int = 1000) -> Iterator[Task]:
-        task_fquids = self.redis.sscan_iter(f"{KARTON_ASSIGNED_NAMESPACE}:{identity}", count=chunk_size)
-        return self.iter_tasks(task_fquids, chunk_size=chunk_size)
-
-    def count_consumer_tasks(self, identity: str) -> int:
-        return self.redis.scard(f"{KARTON_ASSIGNED_NAMESPACE}:{identity}")
+    def iter_consumer_tasks(
+        self, identity: str, chunk_size: int = 1000, parse_resources: bool = False
+    ) -> Iterator[Task]:
+        task_fquids = self.redis.sscan_iter(
+            f"{KARTON_ASSIGNED_NAMESPACE}:{identity}", count=chunk_size
+        )
+        return self.iter_tasks(
+            task_fquids, chunk_size=chunk_size, parse_resources=parse_resources
+        )
 
     def consume_queues(
         self, queues: Union[str, List[str]], timeout: int = 0
@@ -692,7 +712,9 @@ class KartonBackend:
         Increments metrics for multiple identities by given value via single pipeline
 
         :param metric: Operation metric type
-        :param increments: Dictionary of Karton service identities and value to add to the metric
+        :param increments: |
+            Dictionary of Karton service identities and value to
+            add to the metric
         """
         p = self.redis.pipeline()
         for identity, increment in increments.items():

@@ -4,6 +4,7 @@ from typing import Dict, List
 from .backend import KartonBackend, KartonBind
 from .task import Task, TaskState
 
+
 class KartonQueue:
     """
     View object representing a Karton queue
@@ -118,26 +119,32 @@ class KartonState:
     :param backend: :py:meth:`KartonBackend` object to use for data fetching
     """
 
-    def __init__(self, backend: KartonBackend) -> None:
+    def __init__(self, backend: KartonBackend, parse_resources: bool = True) -> None:
         self.backend = backend
         self.binds = {bind.identity: bind for bind in backend.get_binds()}
         self.replicas = backend.get_online_consumers()
+        self.parse_resources = parse_resources
 
         self._tasks = None
+        self._pending_tasks = None
         self._analyses = None
         self._queues = None
 
     @property
     def tasks(self):
         if self._tasks is None:
-            self._tasks = self.backend.get_all_tasks()
+            self._tasks = self.backend.get_all_tasks(
+                parse_resources=self.parse_resources
+            )
         return self._tasks
 
     @property
     def pending_tasks(self):
-        return [
-            task for task in self.tasks if task.status != TaskState.FINISHED
-        ]
+        if self._pending_tasks is None:
+            self._pending_tasks = [
+                task for task in self.tasks if task.status != TaskState.FINISHED
+            ]
+        return self._pending_tasks
 
     @property
     def analyses(self):
@@ -167,17 +174,26 @@ class KartonState:
             self._queues = queues
         return self._queues
 
-    def iter_tasks(self):
-        return self.backend.iter_all_tasks()
-
-    def iter_pending_tasks(self):
-        return (
-            task for task in self.backend.iter_all_tasks() if task.status != TaskState.FINISHED
-        )
-
     def get_analysis(self, root_uid: str):
         return KartonAnalysis(
             root_uid=root_uid,
-            tasks=list(self.backend.iter_task_tree(root_uid)),
-            state=self
+            tasks=list(
+                self.backend.iter_task_tree(
+                    root_uid, parse_resources=self.parse_resources
+                )
+            ),
+            state=self,
+        )
+
+    def get_queue(self, identity: str):
+        if identity not in self.binds:
+            return None
+        return KartonQueue(
+            self.binds[identity],
+            tasks=list(
+                self.backend.iter_consumer_tasks(
+                    identity, parse_resources=self.parse_resources
+                )
+            ),
+            state=self,
         )
