@@ -24,7 +24,7 @@ class SystemService(KartonServiceBase):
     identity = "karton.system"
     version = __version__
 
-    GC_INTERVAL = 60
+    GC_INTERVAL = 3 * 60
     TASK_DISPATCHED_TIMEOUT = 24 * 3600
     TASK_STARTED_TIMEOUT = 24 * 3600
     TASK_CRASHED_TIMEOUT = 3 * 24 * 3600
