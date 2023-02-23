@@ -572,6 +572,29 @@ class KartonBackend:
         queue, data = item
         return self.get_task(data)
 
+    def restart_task(self, task: Task) -> Task:
+        """
+        Requeues consumed task back to the consumer queue.
+
+        New task is created with new uid and can be consumed by any active replica.
+
+        Original task is marked as finished.
+
+        :param task: Task to be restarted
+        :return: Restarted task object
+        """
+        new_task = task.fork_task()
+        # Preserve orig_uid to point at unrouted task
+        new_task.orig_uid = task.orig_uid
+        new_task.status = TaskState.SPAWNED
+
+        p = self.make_pipeline()
+        self.register_task(new_task, pipe=p)
+        self.produce_routed_task(new_task.headers["receiver"], new_task, pipe=p)
+        self.set_task_status(task, status=TaskState.FINISHED, pipe=p)
+        p.execute()
+        return new_task
+
     @staticmethod
     def _log_channel(logger_name: Optional[str], level: Optional[str]) -> str:
         return ".".join(
