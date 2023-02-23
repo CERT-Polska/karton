@@ -297,13 +297,13 @@ class KartonBackend:
     def _iter_tasks(self, task_keys: Iterator[str], chunk_size: int = 1000,
                     parse_resources: bool = True) -> Iterator[Task]:
         for chunk in chunks_iter(task_keys, chunk_size):
-            yield from [
+            yield from (
                 Task.unserialize(task_data, backend=self)
                 if parse_resources else
                 Task.unserialize(task_data, parse_resources=False)
                 for task_data in self.redis.mget(chunk)
                 if task_data is not None
-            ]
+            )
 
     def iter_tasks(self, task_fquid_list: Iterable[str], chunk_size: int = 1000,
                    parse_resources: bool = True) -> Iterator[Task]:

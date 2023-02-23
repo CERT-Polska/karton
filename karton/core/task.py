@@ -22,6 +22,12 @@ from .utils import recursive_iter, recursive_iter_with_keys, recursive_map
 if TYPE_CHECKING:
     from .backend import KartonBackend  # noqa
 
+try:
+    # Use orjson for deserialization performance acceleration if available
+    import orjson
+    USE_ORJSON = True
+except ImportError:
+    USE_ORJSON = False
 
 class TaskState(enum.Enum):
     DECLARED = "Declared"  # Task declared in TASKS_QUEUE
@@ -61,6 +67,11 @@ class Task(object):
     """
 
     REVISION = 2
+    __slots__ = (
+        "uid", "root_uid", "orig_uid", "parent_uid", "error", "headers",
+        "status", "last_update", "priority", "payload", "payload_persistent",
+        "revision"
+    )
 
     def __init__(
         self,
@@ -73,6 +84,8 @@ class Task(object):
         orig_uid: Optional[str] = None,
         uid: Optional[str] = None,
         error: Optional[List[str]] = None,
+        _status: Optional[TaskState] = None,
+        _last_update: Optional[float] = None,
     ) -> None:
         payload = payload or {}
         payload_persistent = payload_persistent or {}
@@ -96,9 +109,9 @@ class Task(object):
 
         self.error = error
         self.headers = headers
-        self.status = TaskState.DECLARED
+        self.status = _status or TaskState.DECLARED
 
-        self.last_update: float = time.time()
+        self.last_update: float = _last_update or time.time()
         self.priority = priority or TaskPriority.NORMAL
 
         self.payload = dict(payload)
@@ -366,27 +379,31 @@ class Task(object):
 
         if parse_resources:
             task_data = json.loads(data, object_hook=unserialize_resources)
+        elif USE_ORJSON:
+            task_data = orjson.loads(data)
         else:
             task_data = json.loads(data)
 
-        task = Task(task_data["headers"])
-        task.uid = task_data["uid"]
-        task.root_uid = task_data["root_uid"]
-        task.parent_uid = task_data["parent_uid"]
-        # Compatibility with <= 3.x.x (get)
-        task.orig_uid = task_data.get("orig_uid", None)
-        task.status = TaskState(task_data["status"])
-        # Compatibility with <= 3.x.x (get)
-        task.error = task_data.get("error")
-        # Compatibility with <= 2.x.x (get)
-        task.priority = (
-            TaskPriority(task_data.get("priority"))
-            if "priority" in task_data
-            else TaskPriority.NORMAL
+        task = Task(
+            task_data["headers"],
+            uid=task_data["uid"],
+            root_uid=task_data["root_uid"],
+            parent_uid=task_data["parent_uid"],
+            # Compatibility with <= 3.x.x (get)
+            orig_uid=task_data.get("orig_uid", None),
+            payload=task_data["payload"],
+            payload_persistent=task_data["payload_persistent"],
+            # Compatibility with <= 3.x.x (get)
+            error=task_data.get("error"),
+            # Compatibility with <= 2.x.x (get)
+            priority=(
+                TaskPriority(task_data.get("priority"))
+                if "priority" in task_data
+                else TaskPriority.NORMAL
+            ),
+            _status=TaskState(task_data["status"]),
+            _last_update=task_data.get("last_update", None)
         )
-        task.last_update = task_data.get("last_update", None)
-        task.payload = task_data["payload"]
-        task.payload_persistent = task_data["payload_persistent"]
         # Task scheme revision:
         #  (none) or 1 - v1 (< 5.1.0)
         #  2           - v2 (current)
