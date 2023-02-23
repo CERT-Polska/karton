@@ -266,9 +266,9 @@ class KartonBackend:
 
         :param task_fquid_list: List of task fully-qualified identifiers
         :param chunk_size: Size of chunks passed to the Redis MGET command
-        :param parse_resources: |
-            If set to False, resources are not parsed. It speeds up deserialization.
-            Read :py:meth:`Task.unserialize` documentation to learn more.
+        :param parse_resources: If set to False, resources are not parsed.
+            It speeds up deserialization. Read :py:meth:`Task.unserialize`
+            documentation to learn more.
         :return: List of task objects
         """
         keys = chunks(
@@ -310,9 +310,9 @@ class KartonBackend:
 
         :param task_fquid_list: List of task fully-qualified identifiers
         :param chunk_size: Size of chunks passed to the Redis MGET command
-        :param parse_resources: |
-            If set to False, resources are not parsed. It speeds up deserialization.
-            Read :py:meth:`Task.unserialize` documentation to learn more.
+        :param parse_resources: If set to False, resources are not parsed.
+            It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
+            to learn more.
         :return: Iterator with task objects
         """
         return self._iter_tasks(
@@ -333,9 +333,9 @@ class KartonBackend:
 
         :param root_uid: Root identifier of task tree
         :param chunk_size: Size of chunks passed to the Redis SCAN and MGET command
-        :param parse_resources: |
-            If set to False, resources are not parsed. It speeds up deserialization.
-            Read :py:meth:`Task.unserialize` documentation to learn more.
+        :param parse_resources: If set to False, resources are not parsed.
+            It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
+            to learn more.
         :return: Iterator with task objects
 
         .. note::
@@ -360,9 +360,9 @@ class KartonBackend:
         Iterates all tasks registered in Redis
 
         :param chunk_size: Size of chunks passed to the Redis SCAN and MGET command
-        :param parse_resources: |
-            If set to False, resources are not parsed. It speeds up deserialization.
-            Read :py:meth:`Task.unserialize` documentation to learn more.
+        :param parse_resources: If set to False, resources are not parsed.
+            It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
+            to learn more.
         :return: Iterator with Task objects
         """
         task_keys = self.redis.scan_iter(
@@ -383,9 +383,9 @@ class KartonBackend:
             Use :py:meth:`iter_all_tasks` instead.
 
         :param chunk_size: Size of chunks passed to the Redis SCAN and MGET command
-        :param parse_resources: |
-            If set to False, resources are not parsed. It speeds up deserialization.
-            Read :py:meth:`Task.unserialize` documentation to learn more.
+        :param parse_resources: If set to False, resources are not parsed.
+            It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
+            to learn more.
         :return: List with Task objects
         """
         return list(
@@ -593,9 +593,9 @@ class KartonBackend:
 
         :param identity: Consumer identity
         :param chunk_size: Size of chunks passed to the SSCAN and MGET command
-        :param parse_resources: |
-            If set to False, resources are not parsed. It speeds up deserialization.
-            Read :py:meth:`Task.unserialize` documentation to learn more.
+        :param parse_resources: If set to False, resources are not parsed.
+            It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
+            to learn more.
         :return: Iterator with Task objects assigned to the consumer.
         """
         task_fquids = self.redis.sscan_iter(
@@ -769,9 +769,8 @@ class KartonBackend:
         Increments metrics for multiple identities by given value via single pipeline
 
         :param metric: Operation metric type
-        :param increments: |
-            Dictionary of Karton service identities and value to
-            add to the metric
+        :param increments: Dictionary of Karton service identities and value
+            to add to the metric
         """
         p = self.redis.pipeline()
         for identity, increment in increments.items():

@@ -52,3 +52,19 @@ karton.core.Config
 
 .. autoclass:: karton.core.config.Config
    :members:
+
+
+Low-level Karton access
+-----------------------
+
+.. autoclass:: karton.core.backend.KartonBackend
+   :members:
+
+.. autoclass:: karton.core.inspect.KartonState
+   :members:
+
+.. autoclass:: karton.core.inspect.KartonAnalysis
+   :members:
+
+.. autoclass:: karton.core.inspect.KartonQueue
+   :members:
