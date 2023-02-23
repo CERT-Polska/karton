@@ -267,13 +267,18 @@ class KartonBackend:
         return Task.unserialize(task_data, backend=self)
 
     def get_tasks(
-        self, task_fquid_list: List[str], chunk_size: int = 1000
+        self, task_fquid_list: List[str], chunk_size: int = 1000,
+        parse_resources: bool = True
     ) -> List[Task]:
         """
         Get multiple tasks for given identifier list
 
         :param task_fquid_list: List of task fully-qualified identifiers
         :param chunk_size: Size of chunks passed to the Redis MGET command
+        :param parse_resources: If set to False (default is True), method doesn't
+            deserialize '__karton_resource__' entries, which speeds up deserialization
+            process. This flag is used mainly for multiple task processing e.g. filtering
+            based on status.
         :return: List of task objects
         """
         keys = chunks(
@@ -282,26 +287,34 @@ class KartonBackend:
         )
         return [
             Task.unserialize(task_data, backend=self)
+            if parse_resources else
+            Task.unserialize(task_data, parse_resources=False)
             for chunk in keys
             for task_data in self.redis.mget(chunk)
             if task_data is not None
         ]
 
-    def _iter_tasks(self, task_keys: Iterator[str], chunk_size: int = 1000) -> Iterator[Task]:
+    def _iter_tasks(self, task_keys: Iterator[str], chunk_size: int = 1000,
+                    parse_resources: bool = True) -> Iterator[Task]:
         for chunk in chunks_iter(task_keys, chunk_size):
             yield from [
                 Task.unserialize(task_data, backend=self)
+                if parse_resources else
+                Task.unserialize(task_data, parse_resources=False)
                 for task_data in self.redis.mget(chunk)
                 if task_data is not None
             ]
 
-    def iter_tasks(self, task_fquid_list: Iterable[str], chunk_size: int = 1000) -> Iterator[Task]:
+    def iter_tasks(self, task_fquid_list: Iterable[str], chunk_size: int = 1000,
+                   parse_resources: bool = True) -> Iterator[Task]:
         return self._iter_tasks(
             map(lambda task_fquid: f"{KARTON_TASK_NAMESPACE}:{task_fquid}", task_fquid_list),
-            chunk_size=chunk_size
+            chunk_size=chunk_size,
+            parse_resources=parse_resources
         )
 
-    def iter_task_tree(self, root_uid: str, chunk_size: int = 1000) -> Iterator[Task]:
+    def iter_task_tree(self, root_uid: str, chunk_size: int = 1000,
+                       parse_resources: bool = True) -> Iterator[Task]:
         """
         Iterates all tasks that belong to the same analysis task tree and have the same root_uid
 
@@ -319,9 +332,9 @@ class KartonBackend:
         task_keys = self.redis.scan_iter(
             match=f"{KARTON_TASK_NAMESPACE}:{root_uid}:*", count=chunk_size
         )
-        return self.iter_tasks(task_keys, chunk_size)
+        return self._iter_tasks(task_keys, chunk_size=chunk_size, parse_resources=parse_resources)
 
-    def iter_all_tasks(self, chunk_size: int = 1000) -> Iterator[Task]:
+    def iter_all_tasks(self, chunk_size: int = 1000, parse_resources: bool = True) -> Iterator[Task]:
         """
         Iterates all tasks registered in Redis
 
@@ -331,9 +344,9 @@ class KartonBackend:
         task_keys = self.redis.scan_iter(
             match=f"{KARTON_TASK_NAMESPACE}:*", count=chunk_size
         )
-        return self.iter_tasks(task_keys, chunk_size)
+        return self._iter_tasks(task_keys, chunk_size=chunk_size, parse_resources=parse_resources)
 
-    def get_all_tasks(self, chunk_size: int = 1000) -> List[Task]:
+    def get_all_tasks(self, chunk_size: int = 1000, parse_resources: bool = True) -> List[Task]:
         """
         Get all tasks registered in Redis
 
@@ -344,7 +357,7 @@ class KartonBackend:
         :param chunk_size: Size of chunks passed to the Redis MGET command
         :return: List with Task objects
         """
-        return list(self.iter_all_tasks(chunk_size))
+        return list(self.iter_all_tasks(chunk_size=chunk_size, parse_resources=parse_resources))
 
     def register_task(self, task: Task, pipe: Optional[Pipeline] = None) -> None:
         """
@@ -801,8 +814,8 @@ class KartonBackend:
 
     def log_identity_output(self, identity: str, headers: Dict[str, Any]) -> None:
         """
-        Store the type of task outputted for given producer to
-        be used in tracking karton service connections.
+        Store the type of task outputted for given producer
+        to be used in tracking karton service connections.
 
         :param identity: producer identity
         :param headers: outputted headers

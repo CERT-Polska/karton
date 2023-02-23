@@ -75,8 +75,8 @@ class SystemService(KartonServiceBase):
                 self.backend.delete_consumer_queues(identity)
                 for task in self.backend.get_consumer_tasks(identity):
                     self.log.info("Unwinding task %s", str(task.uid))
-                        # Mark task as finished
-                        self.backend.set_task_status(task, TaskState.FINISHED)
+                    # Mark task as finished
+                    self.backend.set_task_status(task, TaskState.FINISHED)
                     self.log.info("Non-persistent: removing bind %s", identity)
                     self.backend.unregister_bind(identity)
 

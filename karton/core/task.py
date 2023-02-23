@@ -333,13 +333,20 @@ class Task(object):
 
     @staticmethod
     def unserialize(
-        data: Union[str, bytes], backend: Optional["KartonBackend"] = None
+        data: Union[str, bytes], backend: Optional["KartonBackend"] = None,
+        parse_resources: bool = True
     ) -> "Task":
         """
         Unserialize Task instance from JSON string
 
         :param data: JSON-serialized task
         :param backend: Backend instance to be bound to RemoteResource objects
+        :param parse_resources: |
+            If set to False (default is True), method doesn't deserialize
+            '__karton_resource__' entries, which speeds up deserialization process.
+            This flag is used mainly for multiple task processing e.g. filtering
+            based on status.
+
         :return: Unserialized Task object
 
         :meta private:
@@ -357,7 +364,10 @@ class Task(object):
         if not isinstance(data, str):
             data = data.decode("utf8")
 
-        task_data = json.loads(data, object_hook=unserialize_resources)
+        if parse_resources:
+            task_data = json.loads(data, object_hook=unserialize_resources)
+        else:
+            task_data = json.loads(data)
 
         task = Task(task_data["headers"])
         task.uid = task_data["uid"]
