@@ -1,6 +1,7 @@
 import dataclasses
 import enum
 import json
+import logging
 import time
 import urllib.parse
 import warnings
@@ -30,6 +31,7 @@ KartonBind = namedtuple(
 
 
 KartonOutputs = namedtuple("KartonOutputs", ["identity", "outputs"])
+logger = logging.getLogger("karton.core.backend")
 
 
 class KartonMetrics(enum.Enum):
@@ -353,10 +355,14 @@ class KartonBackend:
         for client in self.redis.client_list():
             name = client["name"]
             if "?" in name:
-                service_info = KartonServiceInfo.parse_client_name(
-                    name, redis_client_info=client
-                )
-                bound_services.append(service_info)
+                try:
+                    service_info = KartonServiceInfo.parse_client_name(
+                        name, redis_client_info=client
+                    )
+                    bound_services.append(service_info)
+                except Exception:
+                    logger.exception("Fatal error while parsing client name: ignoring")
+                    continue
         return bound_services
 
     def get_task(self, task_uid: str) -> Optional[Task]:
