@@ -361,7 +361,7 @@ class KartonBackend:
                     )
                     bound_services.append(service_info)
                 except Exception:
-                    logger.exception("Fatal error while parsing client name: ignoring")
+                    logger.exception("Fatal error while parsing client name: %s", name)
                     continue
         return bound_services
 
