@@ -80,7 +80,7 @@ class KartonServiceInfo:
             for field in dataclasses.fields(cls)
             if field.metadata.get("serializable", True)
         ]
-        identity, params_string = client_name.split("?")
+        identity, params_string = client_name.split("?", 1)
         # Filter out unknown params to not get crashed by future extensions
         params = dict(
             [
@@ -333,7 +333,7 @@ class KartonBackend:
             name = client["name"]
             # Strip extra service information from client name
             if "?" in name:
-                name, _ = name.split("?")
+                name, _ = name.split("?", 1)
             bound_identities[name].append(client)
         return bound_identities
 
