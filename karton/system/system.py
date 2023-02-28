@@ -23,6 +23,7 @@ class SystemService(KartonServiceBase):
 
     identity = "karton.system"
     version = __version__
+    with_service_info = True
 
     GC_INTERVAL = 3 * 60
     TASK_DISPATCHED_TIMEOUT = 24 * 3600
@@ -30,8 +31,7 @@ class SystemService(KartonServiceBase):
     TASK_CRASHED_TIMEOUT = 3 * 24 * 3600
 
     def __init__(self, config: Optional[Config]) -> None:
-        super(SystemService, self).__init__(config=config)
-
+        super().__init__(config=config)
         self.gc_interval = self.config.getint("system", "gc_interval", self.GC_INTERVAL)
         self.task_dispatched_timeout = self.config.getint(
             "system", "task_dispatched_timeout", self.TASK_DISPATCHED_TIMEOUT

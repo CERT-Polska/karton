@@ -1,3 +1,7 @@
+class InvalidIdentityError(Exception):
+    pass
+
+
 class TaskTimeoutError(Exception):
     pass
 
