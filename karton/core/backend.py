@@ -1,6 +1,9 @@
+import dataclasses
 import enum
 import json
+import logging
 import time
+import urllib.parse
 import warnings
 from collections import defaultdict, namedtuple
 from typing import IO, Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
@@ -10,6 +13,7 @@ from redis import AuthenticationError, StrictRedis
 from redis.client import Pipeline
 from urllib3.response import HTTPResponse
 
+from .exceptions import InvalidIdentityError
 from .task import Task, TaskPriority, TaskState
 from .utils import chunks, chunks_iter
 
@@ -28,6 +32,7 @@ KartonBind = namedtuple(
 
 
 KartonOutputs = namedtuple("KartonOutputs", ["identity", "outputs"])
+logger = logging.getLogger("karton.core.backend")
 
 
 class KartonMetrics(enum.Enum):
@@ -38,11 +43,77 @@ class KartonMetrics(enum.Enum):
     TASK_GARBAGE_COLLECTED = "karton.metrics.garbage-collected"
 
 
+@dataclasses.dataclass(frozen=True, order=True)
+class KartonServiceInfo:
+    """
+    Extended Karton service information.
+
+    Instances of this dataclass are meant to be aggregated to count service replicas
+    in Karton Dashboard. They're considered equal if identity and versions strings
+    are the same.
+    """
+
+    identity: str = dataclasses.field(metadata={"serializable": False})
+    karton_version: str
+    service_version: Optional[str] = None
+    # Extra information about Redis client
+    redis_client_info: Optional[Dict[str, str]] = dataclasses.field(
+        default=None, hash=False, compare=False, metadata={"serializable": False}
+    )
+
+    def make_client_name(self) -> str:
+        included_keys = [
+            field.name
+            for field in dataclasses.fields(self)
+            if field.metadata.get("serializable", True)
+        ]
+        params = {
+            k: v
+            for k, v in dataclasses.asdict(self).items()
+            if k in included_keys and v is not None
+        }
+        return f"{self.identity}?{urllib.parse.urlencode(params)}"
+
+    @classmethod
+    def parse_client_name(
+        cls, client_name: str, redis_client_info: Optional[Dict[str, str]] = None
+    ) -> "KartonServiceInfo":
+        included_keys = [
+            field.name
+            for field in dataclasses.fields(cls)
+            if field.metadata.get("serializable", True)
+        ]
+        identity, params_string = client_name.split("?", 1)
+        # Filter out unknown params to not get crashed by future extensions
+        params = dict(
+            [
+                (key, value)
+                for key, value in urllib.parse.parse_qsl(params_string)
+                if key in included_keys
+            ]
+        )
+        return KartonServiceInfo(
+            identity, redis_client_info=redis_client_info, **params
+        )
+
+
 class KartonBackend:
-    def __init__(self, config, identity: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        config,
+        identity: Optional[str] = None,
+        service_info: Optional[KartonServiceInfo] = None,
+    ) -> None:
         self.config = config
+
+        if identity is not None:
+            self._validate_identity(identity)
         self.identity = identity
-        self.redis = self.make_redis(config, identity=identity)
+
+        self.service_info = service_info
+        self.redis = self.make_redis(
+            config, identity=identity, service_info=service_info
+        )
         self.s3 = boto3.client(
             "s3",
             endpoint_url=config["s3"]["address"],
@@ -50,21 +121,40 @@ class KartonBackend:
             aws_secret_access_key=config["s3"]["secret_key"],
         )
 
-    def make_redis(self, config, identity: Optional[str] = None) -> StrictRedis:
+    @staticmethod
+    def _validate_identity(identity: str):
+        disallowed_chars = [" ", "?"]
+        if any(disallowed_char in identity for disallowed_char in disallowed_chars):
+            raise InvalidIdentityError(
+                f"Karton identity should not contain {disallowed_chars}"
+            )
+
+    @staticmethod
+    def make_redis(
+        config,
+        identity: Optional[str] = None,
+        service_info: Optional[KartonServiceInfo] = None,
+    ) -> StrictRedis:
         """
         Create and test a Redis connection.
 
         :param config: The karton configuration
         :param identity: Karton service identity
+        :param service_info: Additional service identity metadata
         :return: Redis connection
         """
+        if service_info is not None:
+            client_name: Optional[str] = service_info.make_client_name()
+        else:
+            client_name = identity
+
         redis_args = {
             "host": config["redis"]["host"],
             "port": config.getint("redis", "port", 6379),
             "db": config.getint("redis", "db", 0),
             "username": config.get("redis", "username"),
             "password": config.get("redis", "password"),
-            "client_name": identity,
+            "client_name": client_name,
             # set socket_timeout to None if set to 0
             "socket_timeout": config.getint("redis", "socket_timeout", 30) or None,
             "decode_responses": True,
@@ -232,16 +322,49 @@ class KartonBackend:
             DeprecationWarning,
         )
 
-    def get_online_consumers(self) -> Dict[str, List[str]]:
+    def get_online_consumers(self) -> Dict[str, List[Dict[str, str]]]:
         """
-        Gets all online consumer identities
+        Gets all online identities.
+
+        Actually this method returns all services having an identity,
+        so the list is not limited to consumers.
 
         :return: Dictionary {identity: [list of clients]}
         """
         bound_identities = defaultdict(list)
         for client in self.redis.client_list():
-            bound_identities[client["name"]].append(client)
+            name = client["name"]
+            # Strip extra service information from client name
+            if "?" in name:
+                name, _ = name.split("?", 1)
+            bound_identities[name].append(client)
         return bound_identities
+
+    def get_online_services(self) -> List[KartonServiceInfo]:
+        """
+        Gets all online services providing extended service information.
+
+        Consumers by default don't provide that information and it's included in binds
+        instead. If you want to get information about all services, use
+        :py:meth:`KartonBackend.get_online_consumers`.
+
+        .. versionadded:: 5.1.0
+
+        :return: List of KartonServiceInfo objects
+        """
+        bound_services = []
+        for client in self.redis.client_list():
+            name = client["name"]
+            if "?" in name:
+                try:
+                    service_info = KartonServiceInfo.parse_client_name(
+                        name, redis_client_info=client
+                    )
+                    bound_services.append(service_info)
+                except Exception:
+                    logger.exception("Fatal error while parsing client name: %s", name)
+                    continue
+        return bound_services
 
     def get_task(self, task_fquid: str) -> Optional[Task]:
         """
