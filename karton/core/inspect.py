@@ -184,16 +184,3 @@ class KartonState:
             ),
             state=self,
         )
-
-    def get_queue(self, identity: str):
-        if identity not in self.binds:
-            return None
-        return KartonQueue(
-            self.binds[identity],
-            tasks=list(
-                self.backend.iter_consumer_tasks(
-                    identity, parse_resources=self.parse_resources
-                )
-            ),
-            state=self,
-        )

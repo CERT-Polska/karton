@@ -66,20 +66,6 @@ class SystemService(KartonServiceBase):
         if resources_to_remove:
             self.backend.remove_objects(karton_bucket, resources_to_remove)
 
-    def gc_collect_abandoned_queues(self):
-        online_consumers = self.backend.get_online_consumers()
-        for bind in self.backend.get_binds():
-            identity = bind.identity
-            if identity not in online_consumers and not bind.persistent:
-                # If offline and not persistent: remove queue and assigned tasks
-                self.backend.delete_consumer_queues(identity)
-                for task in self.backend.get_consumer_tasks(identity):
-                    self.log.info("Unwinding task %s", str(task.uid))
-                    # Mark task as finished
-                    self.backend.set_task_status(task, TaskState.FINISHED)
-                    self.log.info("Non-persistent: removing bind %s", identity)
-                    self.backend.unregister_bind(identity)
-
     def gc_collect_tasks(self) -> None:
         # Collects finished tasks
         root_tasks = set()
@@ -89,9 +75,28 @@ class SystemService(KartonServiceBase):
         current_time = time.time()
         to_delete = []
 
+        queues_to_remove = set()
+        online_consumers = self.backend.get_online_consumers()
+        for bind in self.backend.get_binds():
+            identity = bind.identity
+            if identity not in online_consumers and not bind.persistent:
+                # If offline and not persistent: mark queue to be removed
+                queues_to_remove.add(identity)
+                self.log.info("Non-persistent: removing bind %s", identity)
+                self.backend.unregister_bind(identity)
+                self.backend.delete_consumer_queues(identity)
+
         for task in self.backend.iter_all_tasks(parse_resources=False):
             root_tasks.add(task.root_uid)
-            if (
+            if task.headers.get("receiver") in queues_to_remove:
+                to_delete.append(task)
+                self.log.info(
+                    "Task %s is abandoned by inactive non-persistent consumer."
+                    "Killed. (receiver: %s)",
+                    task.uid,
+                    task.headers.get("receiver", "<unknown>"),
+                )
+            elif (
                 task.status == TaskState.DECLARED
                 and task.fquid not in unrouted_task_fquids
                 and task.last_update is not None
@@ -142,7 +147,6 @@ class SystemService(KartonServiceBase):
                 task.headers.get("receiver", "unknown") for task in to_delete
             ]
             self.backend.delete_tasks(to_delete)
-            self.backend.unassign_tasks_from_consumers(to_delete)
             self.backend.increment_metrics_list(
                 KartonMetrics.TASK_GARBAGE_COLLECTED, to_increment
             )
@@ -154,7 +158,6 @@ class SystemService(KartonServiceBase):
     def gc_collect(self) -> None:
         if time.time() > (self.last_gc_trigger + self.gc_interval):
             try:
-                self.gc_collect_abandoned_queues()
                 self.gc_collect_tasks()
                 self.gc_collect_resources()
             except Exception:
@@ -178,7 +181,6 @@ class SystemService(KartonServiceBase):
                 routed_task.last_update = time.time()
                 routed_task.headers.update({"receiver": identity})
                 self.backend.register_task(routed_task, pipe=pipe)
-                self.backend.assign_task_to_consumer(routed_task, pipe=pipe)
                 self.backend.produce_routed_task(identity, routed_task, pipe=pipe)
                 self.backend.increment_metrics(
                     KartonMetrics.TASK_ASSIGNED, identity, pipe=pipe

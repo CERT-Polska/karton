@@ -23,7 +23,6 @@ KARTON_LOG_CHANNEL = "karton.log"
 KARTON_BINDS_HSET = "karton.binds"
 KARTON_TASK_NAMESPACE = "karton.task"
 KARTON_OUTPUTS_NAMESPACE = "karton.outputs"
-KARTON_ASSIGNED_NAMESPACE = "karton.assigned"
 
 KartonBind = namedtuple(
     "KartonBind",
@@ -643,90 +642,6 @@ class KartonBackend:
         """
         rs = pipe or self.redis
         rs.rpush(self.get_queue_name(identity, task.priority), task.fquid)
-
-    def assign_task_to_consumer(
-        self, task: Task, pipe: Optional[Pipeline] = None
-    ) -> None:
-        """
-        Assigns tasks to consumer based on 'receiver' header.
-
-        Used internally by karton.system
-
-        :param task: Task to assign
-        :param pipe: Optional pipeline object if operation is a part of pipeline
-        """
-        rs = pipe or self.redis
-        identity = task.headers.get("receiver")
-        if not identity:
-            raise ValueError("Can't assign task without 'receiver' header")
-        rs.sadd(f"{KARTON_ASSIGNED_NAMESPACE}:{identity}", task.fquid)
-
-    def unassign_task_from_consumer(self, task: Task, pipe: Optional[Pipeline] = None):
-        """
-        Unassigns tasks from consumer based on 'receiver' header.
-
-        Used internally by karton.system
-
-        :param task: Task to unassign
-        :param pipe: Optional pipeline object if operation is a part of pipeline
-        """
-        rs = pipe or self.redis
-        identity = task.headers.get("receiver")
-        if not identity:
-            # Just assume that they're unrouted/unassigned
-            return
-        rs.srem(f"{KARTON_ASSIGNED_NAMESPACE}:{identity}", task.fquid)
-
-    def unassign_tasks_from_consumers(
-        self, tasks: List[Task], chunk_size: int = 1000
-    ) -> None:
-        """
-        Unassigns multiple tasks from multiple consumers based on 'receiver' header.
-
-        Used internally by karton.system
-
-        :param tasks: List of tasks to unassign
-        :param chunk_size: Size of chunks passed to the Redis SREM command
-        """
-        consumers = defaultdict(list)
-        for task in tasks:
-            identity = task.headers.get("receiver")
-            if not identity:
-                # Just assume that they're unrouted/unassigned
-                continue
-            consumers[identity].append(task.fquid)
-            # If exceeded chunk_size: remove during grouping
-            if len(consumers[identity]) >= chunk_size:
-                self.redis.srem(
-                    f"{KARTON_ASSIGNED_NAMESPACE}:{identity}", consumers[identity]
-                )
-                consumers[identity] = []
-        # Remove grouped tasks
-        for identity in consumers.keys():
-            if consumers[identity]:
-                self.redis.srem(
-                    f"{KARTON_ASSIGNED_NAMESPACE}:{identity}", consumers[identity]
-                )
-
-    def iter_consumer_tasks(
-        self, identity: str, chunk_size: int = 1000, parse_resources: bool = False
-    ) -> Iterator[Task]:
-        """
-        Iterates tasks assigned (routed) to given consumer.
-
-        :param identity: Consumer identity
-        :param chunk_size: Size of chunks passed to the SSCAN and MGET command
-        :param parse_resources: If set to False, resources are not parsed.
-            It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
-            to learn more.
-        :return: Iterator with Task objects assigned to the consumer.
-        """
-        task_fquids = self.redis.sscan_iter(
-            f"{KARTON_ASSIGNED_NAMESPACE}:{identity}", count=chunk_size
-        )
-        return self.iter_tasks(
-            task_fquids, chunk_size=chunk_size, parse_resources=parse_resources
-        )
 
     def consume_queues(
         self, queues: Union[str, List[str]], timeout: int = 0
