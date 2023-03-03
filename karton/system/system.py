@@ -75,20 +75,20 @@ class SystemService(KartonServiceBase):
         current_time = time.time()
         to_delete = []
 
-        queues_to_remove = set()
+        queues_to_clear = set()
         online_consumers = self.backend.get_online_consumers()
         for bind in self.backend.get_binds():
             identity = bind.identity
             if identity not in online_consumers and not bind.persistent:
                 # If offline and not persistent: mark queue to be removed
-                queues_to_remove.add(identity)
+                queues_to_clear.add(identity)
                 self.log.info("Non-persistent: removing bind %s", identity)
                 self.backend.unregister_bind(identity)
                 self.backend.delete_consumer_queues(identity)
 
         for task in self.backend.iter_all_tasks(parse_resources=False):
             root_tasks.add(task.root_uid)
-            if task.headers.get("receiver") in queues_to_remove:
+            if task.headers.get("receiver") in queues_to_clear:
                 to_delete.append(task)
                 self.log.info(
                     "Task %s is abandoned by inactive non-persistent consumer."
