@@ -22,13 +22,7 @@ from .utils import recursive_iter, recursive_iter_with_keys, recursive_map
 if TYPE_CHECKING:
     from .backend import KartonBackend  # noqa
 
-try:
-    # Use orjson for deserialization performance acceleration if available
-    import orjson
-
-    USE_ORJSON = True
-except ImportError:
-    USE_ORJSON = False
+import orjson
 
 
 class TaskState(enum.Enum):
@@ -395,10 +389,8 @@ class Task(object):
 
         if parse_resources:
             task_data = json.loads(data, object_hook=unserialize_resources)
-        elif USE_ORJSON:
-            task_data = orjson.loads(data)
         else:
-            task_data = json.loads(data)
+            task_data = orjson.loads(data)
 
         task = Task(
             task_data["headers"],

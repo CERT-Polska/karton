@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from .backend import KartonBackend, KartonBind
 from .task import Task, TaskState
@@ -125,10 +125,10 @@ class KartonState:
         self.replicas = backend.get_online_consumers()
         self.parse_resources = parse_resources
 
-        self._tasks = None
-        self._pending_tasks = None
-        self._analyses = None
-        self._queues = None
+        self._tasks: Optional[List[Task]] = None
+        self._pending_tasks: Optional[List[Task]] = None
+        self._analyses: Optional[Dict[str, KartonAnalysis]] = None
+        self._queues: Optional[Dict[str, KartonQueue]] = None
 
     @property
     def tasks(self) -> List[Task]:
@@ -147,7 +147,7 @@ class KartonState:
         return self._pending_tasks
 
     @property
-    def analyses(self) -> List[KartonAnalysis]:
+    def analyses(self) -> Dict[str, KartonAnalysis]:
         if self._analyses is None:
             # Tasks grouped by root_uid
             tasks_per_analysis = defaultdict(list)
@@ -162,7 +162,7 @@ class KartonState:
         return self._analyses
 
     @property
-    def queues(self):
+    def queues(self) -> Dict[str, KartonQueue]:
         if self._queues is None:
             queues = get_queues_for_tasks(self.pending_tasks, self)
             # Present registered queues without tasks
