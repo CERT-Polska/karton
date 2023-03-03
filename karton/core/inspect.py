@@ -131,7 +131,7 @@ class KartonState:
         self._queues = None
 
     @property
-    def tasks(self):
+    def tasks(self) -> List[Task]:
         if self._tasks is None:
             self._tasks = self.backend.get_all_tasks(
                 parse_resources=self.parse_resources
@@ -139,7 +139,7 @@ class KartonState:
         return self._tasks
 
     @property
-    def pending_tasks(self):
+    def pending_tasks(self) -> List[Task]:
         if self._pending_tasks is None:
             self._pending_tasks = [
                 task for task in self.tasks if task.status != TaskState.FINISHED
@@ -147,7 +147,7 @@ class KartonState:
         return self._pending_tasks
 
     @property
-    def analyses(self):
+    def analyses(self) -> List[KartonAnalysis]:
         if self._analyses is None:
             # Tasks grouped by root_uid
             tasks_per_analysis = defaultdict(list)
@@ -174,7 +174,7 @@ class KartonState:
             self._queues = queues
         return self._queues
 
-    def get_analysis(self, root_uid: str):
+    def get_analysis(self, root_uid: str) -> KartonAnalysis:
         return KartonAnalysis(
             root_uid=root_uid,
             tasks=list(
