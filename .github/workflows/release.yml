@@ -40,3 +40,5 @@ jobs:
             certpl/karton-system:${{ github.event.release.tag_name }}
             certpl/karton-system:latest
           push: true
+          # Flux v1 doesn't support OCI-compliant manifests
+          provenance: false
