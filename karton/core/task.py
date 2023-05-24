@@ -46,6 +46,8 @@ class Task(object):
                     Systems filter by these.
     :param payload: Any instance of :py:class:`dict` - contains resources \
                     and additional informations
+    :param headers_persistent: Persistent headers for whole task subtree, \
+                               propagated from initial task.
     :param payload_persistent: Persistent payload set for whole task subtree, \
                                propagated from initial task
     :param priority: Priority of whole task subtree, \
@@ -64,6 +66,7 @@ class Task(object):
         self,
         headers: Dict[str, Any],
         payload: Optional[Dict[str, Any]] = None,
+        headers_persistent: Optional[Dict[str, Any]] = None,
         payload_persistent: Optional[Dict[str, Any]] = None,
         priority: Optional[TaskPriority] = None,
         parent_uid: Optional[str] = None,
@@ -74,10 +77,14 @@ class Task(object):
     ) -> None:
         payload = payload or {}
         payload_persistent = payload_persistent or {}
+        headers_persistent = headers_persistent or {}
+
         if not isinstance(payload, dict):
             raise ValueError("Payload should be an instance of a dict")
         if not isinstance(payload_persistent, dict):
             raise ValueError("Persistent payload should be an instance of a dict")
+        if not isinstance(headers_persistent, dict):
+            raise ValueError("Persistent headers should be an instance of a dict")
 
         if uid is None:
             self.uid = str(uuid.uuid4())
@@ -93,7 +100,8 @@ class Task(object):
         self.parent_uid = parent_uid
 
         self.error = error
-        self.headers = headers
+        self.headers = {**headers, **headers_persistent}
+        self._headers_persistent_keys = set(headers_persistent.keys())
         self.status = TaskState.DECLARED
 
         self.last_update: float = time.time()
@@ -101,6 +109,12 @@ class Task(object):
 
         self.payload = dict(payload)
         self.payload_persistent = dict(payload_persistent)
+
+    @property
+    def headers_persistent(self) -> Dict[str, Any]:
+        return {
+            k: v for k, v in self.headers.items() if k in self._headers_persistent_keys
+        }
 
     def fork_task(self) -> "Task":
         """
@@ -114,6 +128,7 @@ class Task(object):
         """
         new_task = Task(
             headers=self.headers,
+            headers_persistent=self.headers_persistent,
             payload=self.payload,
             payload_persistent=self.payload_persistent,
             priority=self.priority,
@@ -160,6 +175,7 @@ class Task(object):
         """
         new_task = Task(
             headers=headers,
+            headers_persistent=self.headers_persistent,
             payload=self.payload,
             payload_persistent=self.payload_persistent,
         )
@@ -227,6 +243,19 @@ class Task(object):
                 # Delete conflicting non-persistent payload
                 del self.payload[name]
 
+    def merge_persistent_headers(self, other_task: "Task") -> None:
+        """
+        Merge persistent headers from another task
+
+        :param other_task: Task from which to merge persistent headers
+
+        :meta private:
+        """
+        self.headers.update(other_task.headers_persistent)
+        self._headers_persistent_keys = self._headers_persistent_keys.union(
+            other_task._headers_persistent_keys
+        )
+
     def to_dict(self) -> Dict[str, Any]:
         """
         Transform task data into dictionary
@@ -245,6 +274,16 @@ class Task(object):
             else:
                 return obj
 
+        headers_persistent = self.headers_persistent
+        payload_persistent = {
+            **self.payload_persistent,
+            # Compatibility with Karton <5.2.0
+            # Consumers <5.2.0 are not merging headers_persistent
+            # from previous task, so we need to hide it there to
+            # let karton-system fix it for us during deserialization
+            "__headers_persistent": headers_persistent,
+        }
+
         return {
             "uid": self.uid,
             "root_uid": self.root_uid,
@@ -254,8 +293,9 @@ class Task(object):
             "priority": self.priority.value,
             "last_update": self.last_update,
             "payload": serialize_resources(self.payload),
-            "payload_persistent": serialize_resources(self.payload_persistent),
+            "payload_persistent": serialize_resources(payload_persistent),
             "headers": self.headers,
+            "headers_persistent": headers_persistent,
             "error": self.error,
         }
 
@@ -350,7 +390,18 @@ class Task(object):
 
         task_data = json.loads(data, object_hook=unserialize_resources)
 
-        task = Task(task_data["headers"])
+        # Compatibility with Karton <5.2.0
+        headers_persistent_fallback = task_data["payload_persistent"].get(
+            "__headers_persistent", None
+        )
+        headers_persistent = task_data.get(
+            "headers_persistent", headers_persistent_fallback
+        )
+
+        task = Task(
+            task_data["headers"],
+            headers_persistent=headers_persistent,
+        )
         task.uid = task_data["uid"]
         task.root_uid = task_data["root_uid"]
         task.parent_uid = task_data["parent_uid"]
@@ -459,6 +510,15 @@ class Task(object):
         :return: If tasks payload contains a value with given name
         """
         return name in self.payload or name in self.payload_persistent
+
+    def is_header_persistent(self, name: str) -> bool:
+        """
+        Checks whether header exists and is persistent
+
+        :param name: Name of the header to be checked
+        :return: If tasks header with given name is persistent
+        """
+        return name in self._headers_persistent_keys
 
     def is_payload_persistent(self, name: str) -> bool:
         """

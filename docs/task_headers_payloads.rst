@@ -352,3 +352,39 @@ Regular payloads and persistent payload keys have common namespace so persistent
     Because merging strategy is quite aggressive, it's not recommended to overuse that feature. They should be treated as "analysis-wide payload". It's recommended to set them only in initial task.
     
     Don't store any references to resources or other heavy objects here, unless you need to. Persistent payload is, as the name says, persistent, so it is propagated to the whole task subtree and **can't be removed** during analysis. Resource referenced by persistent payload won't be garbage-collected until the whole analysis (task subtree) ends, even if it's not needed by further analysis steps.
+
+Persistent headers
+------------------
+
+.. versionadded:: 5.2.0
+
+Headers that are propagated to the whole task subtree, so consumers don't need to care about passing these things to child tasks.
+
+Using persistent headers you can mark properties that are crucial for routing and should be kept for analysis artifacts as well:
+
+* Analysis volatility if we don't want to report and persist artifacts from analysis, so tasks are not routed to reporter services
+* Analysis confidentiality if we shouldn't pass artifacts to 3rd party services and they should be considered internal
+* Marking analysis as made for testing, so we can pass only testing analyses to testing consumers
+
+Semantics are similar as for persistent payload:
+
+.. code-block:: python
+
+    task = Task(
+        headers=...,
+        payload=...,
+        headers_persistent={
+            "uploader": "psrok1"
+        }
+    )
+
+
+``headers_persistent`` passed to Task are merged with ``self.headers`` with keys marked internally as persistent.
+
+Headers precedence is as follows:
+
+* ``headers_persistent`` from parent task (most important)
+* ``headers_persistent`` from current task
+* ``headers`` from current task (least important)
+
+Following these rules: persistent headers are propagating to the whole subtree and always override other headers with the same key.
