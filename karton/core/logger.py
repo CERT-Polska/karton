@@ -1,10 +1,13 @@
 import logging
+import platform
 import traceback
 import warnings
 from typing import Optional
 
 from .backend import KartonBackend
 from .task import Task
+
+HOSTNAME = platform.node()
 
 
 class KartonLogHandler(logging.Handler):
@@ -53,6 +56,8 @@ class KartonLogHandler(logging.Handler):
 
         if self.task is not None:
             log_line["task"] = self.task.serialize()
+
+        log_line["hostname"] = HOSTNAME
 
         log_consumed = self.backend.produce_log(
             log_line, logger_name=self.channel, level=record.levelname
