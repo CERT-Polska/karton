@@ -463,9 +463,9 @@ class KartonBackend:
         .. note::
             This method processes only these tasks that are stored under
             karton.task:<root_uid>:<task_uid> key format which is fully-qualified
-            identifier introduced in Karton 5.1.0
+            identifier introduced in Karton 5.2.0
 
-            Requires karton-system to be upgraded to Karton 5.1.0
+            Requires karton-system to be upgraded to Karton 5.2.0
             Unrouted tasks produced by older Karton versions won't be returned.
         """
         task_keys = self.redis.scan_iter(

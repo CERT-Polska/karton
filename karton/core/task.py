@@ -413,7 +413,7 @@ class Task(object):
             _last_update=task_data.get("last_update", None),
         )
         # Task scheme revision:
-        #  (none) or 1 - v1 (< 5.1.0)
+        #  (none) or 1 - v1 (< 5.2.0)
         #  2           - v2 (current)
         #                task Redis key is karton.task:{root_uid}:{uid}
         #                instead of karton.task:{uid}
