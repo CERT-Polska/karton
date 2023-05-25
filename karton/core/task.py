@@ -227,6 +227,38 @@ class Task(object):
                 # Delete conflicting non-persistent payload
                 del self.payload[name]
 
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Transform task data into dictionary
+        :return: Task data dictionary
+
+        :meta private:
+        """
+
+        def serialize_resources(obj):
+            if type(obj) is dict:
+                return {k: serialize_resources(v) for k, v in obj.items()}
+            elif type(obj) is list or type(obj) is tuple:
+                return [serialize_resources(v) for v in obj]
+            elif isinstance(obj, ResourceBase):
+                return {"__karton_resource__": obj.to_dict()}
+            else:
+                return obj
+
+        return {
+            "uid": self.uid,
+            "root_uid": self.root_uid,
+            "parent_uid": self.parent_uid,
+            "orig_uid": self.orig_uid,
+            "status": self.status.value,
+            "priority": self.priority.value,
+            "last_update": self.last_update,
+            "payload": serialize_resources(self.payload),
+            "payload_persistent": serialize_resources(self.payload_persistent),
+            "headers": self.headers,
+            "error": self.error,
+        }
+
     def serialize(self, indent: Optional[int] = None) -> str:
         """
         Serialize task data into JSON string
@@ -235,28 +267,8 @@ class Task(object):
 
         :meta private:
         """
-
-        class KartonResourceEncoder(json.JSONEncoder):
-            def default(kself, obj: Any):
-                if isinstance(obj, ResourceBase):
-                    return {"__karton_resource__": obj.to_dict()}
-                return json.JSONEncoder.default(kself, obj)
-
         return json.dumps(
-            {
-                "uid": self.uid,
-                "root_uid": self.root_uid,
-                "parent_uid": self.parent_uid,
-                "orig_uid": self.orig_uid,
-                "status": self.status.value,
-                "priority": self.priority.value,
-                "last_update": self.last_update,
-                "payload": self.payload,
-                "payload_persistent": self.payload_persistent,
-                "headers": self.headers,
-                "error": self.error,
-            },
-            cls=KartonResourceEncoder,
+            self.to_dict(),
             indent=indent,
             sort_keys=True,
         )
