@@ -358,15 +358,15 @@ Persistent headers
 
 .. versionadded:: 5.2.0
 
-Headers that are propagated to the whole task subtree, so consumers don't need to care about passing these things to child tasks.
+Headers that are propagated to the whole task subtree, so consumers don't need to remember about passing these values to child tasks.
 
 Using persistent headers you can mark properties that are crucial for routing and should be kept for analysis artifacts as well:
 
 * Analysis volatility if we don't want to report and persist artifacts from analysis, so tasks are not routed to reporter services
 * Analysis confidentiality if we shouldn't pass artifacts to 3rd party services and they should be considered internal
-* Marking analysis as made for testing, so we can pass only testing analyses to testing consumers
+* Marking analysis as test cases, so we can pass only testing analyses to testing consumers
 
-Semantics are similar as for persistent payload:
+Semantics are similar to persistent payload:
 
 .. code-block:: python
 
@@ -387,4 +387,4 @@ Headers precedence is as follows:
 * ``headers_persistent`` from current task
 * ``headers`` from current task (least important)
 
-Following these rules: persistent headers are propagating to the whole subtree and always override other headers with the same key.
+Following these rules: persistent headers propagate to the whole subtree and always override other headers with the same key.
