@@ -112,9 +112,7 @@ class Task(object):
 
     @property
     def headers_persistent(self) -> Dict[str, Any]:
-        return {
-            k: v for k, v in self.headers.items() if self.is_header_persistent(k)
-        }
+        return {k: v for k, v in self.headers.items() if self.is_header_persistent(k)}
 
     def fork_task(self) -> "Task":
         """
