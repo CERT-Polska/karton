@@ -71,6 +71,7 @@ class Producer(KartonBase):
         if self.current_task is not None:
             task.set_task_parent(self.current_task)
             task.merge_persistent_payload(self.current_task)
+            task.merge_persistent_headers(self.current_task)
             task.priority = self.current_task.priority
 
         task.last_update = time.time()
