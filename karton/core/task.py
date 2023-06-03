@@ -143,7 +143,7 @@ class Task(object):
 
         Used as a primary task identifier for storage in Redis since Karton 5.1.
         """
-        if self.REVISION == 1:
+        if self.revision == 1:
             return self.uid
         return f"{self.root_uid}:{self.uid}"
 
