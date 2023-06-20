@@ -22,6 +22,8 @@ from .utils import recursive_iter, recursive_iter_with_keys, recursive_map
 if TYPE_CHECKING:
     from .backend import KartonBackend  # noqa
 
+import orjson
+
 
 class TaskState(enum.Enum):
     DECLARED = "Declared"  # Task declared in TASKS_QUEUE
@@ -62,6 +64,21 @@ class Task(object):
     :param error: Traceback of a exception that happened while performing this task
     """
 
+    __slots__ = (
+        "uid",
+        "root_uid",
+        "orig_uid",
+        "parent_uid",
+        "error",
+        "headers",
+        "status",
+        "last_update",
+        "priority",
+        "payload",
+        "payload_persistent",
+        "_headers_persistent_keys",
+    )
+
     def __init__(
         self,
         headers: Dict[str, Any],
@@ -74,6 +91,8 @@ class Task(object):
         orig_uid: Optional[str] = None,
         uid: Optional[str] = None,
         error: Optional[List[str]] = None,
+        _status: Optional[TaskState] = None,
+        _last_update: Optional[float] = None,
     ) -> None:
         payload = payload or {}
         payload_persistent = payload_persistent or {}
@@ -102,9 +121,9 @@ class Task(object):
         self.error = error
         self.headers = {**headers, **headers_persistent}
         self._headers_persistent_keys = set(headers_persistent.keys())
-        self.status = TaskState.DECLARED
+        self.status = _status or TaskState.DECLARED
 
-        self.last_update: float = time.time()
+        self.last_update: float = _last_update or time.time()
         self.priority = priority or TaskPriority.NORMAL
 
         self.payload = dict(payload)
@@ -113,6 +132,10 @@ class Task(object):
     @property
     def headers_persistent(self) -> Dict[str, Any]:
         return {k: v for k, v in self.headers.items() if self.is_header_persistent(k)}
+
+    @property
+    def receiver(self) -> Optional[str]:
+        return self.headers.get("receiver")
 
     def fork_task(self) -> "Task":
         """
@@ -362,13 +385,24 @@ class Task(object):
 
     @staticmethod
     def unserialize(
-        data: Union[str, bytes], backend: Optional["KartonBackend"] = None
+        data: Union[str, bytes],
+        backend: Optional["KartonBackend"] = None,
+        parse_resources: bool = True,
     ) -> "Task":
         """
         Unserialize Task instance from JSON string
 
         :param data: JSON-serialized task
         :param backend: Backend instance to be bound to RemoteResource objects
+        :param parse_resources: |
+            If set to False (default is True), method doesn't
+            deserialize '__karton_resource__' entries, which speeds up deserialization
+            process. This flag is used mainly for multiple task processing e.g.
+            filtering based on status.
+            When resource deserialization is turned off, Task.unserialize will try
+            to use faster 3rd-party JSON parser (orjson) if it's installed. It's not
+            added as a required dependency but can speed up things if you need to check
+            status of multiple tasks at once.
         :return: Unserialized Task object
 
         :meta private:
@@ -386,7 +420,10 @@ class Task(object):
         if not isinstance(data, str):
             data = data.decode("utf8")
 
-        task_data = json.loads(data, object_hook=unserialize_resources)
+        if parse_resources:
+            task_data = json.loads(data, object_hook=unserialize_resources)
+        else:
+            task_data = orjson.loads(data)
 
         # Compatibility with Karton <5.2.0
         headers_persistent_fallback = task_data["payload_persistent"].get(
@@ -399,24 +436,24 @@ class Task(object):
         task = Task(
             task_data["headers"],
             headers_persistent=headers_persistent,
+            uid=task_data["uid"],
+            root_uid=task_data["root_uid"],
+            parent_uid=task_data["parent_uid"],
+            # Compatibility with <= 3.x.x (get)
+            orig_uid=task_data.get("orig_uid", None),
+            payload=task_data["payload"],
+            payload_persistent=task_data["payload_persistent"],
+            # Compatibility with <= 3.x.x (get)
+            error=task_data.get("error"),
+            # Compatibility with <= 2.x.x (get)
+            priority=(
+                TaskPriority(task_data.get("priority"))
+                if "priority" in task_data
+                else TaskPriority.NORMAL
+            ),
+            _status=TaskState(task_data["status"]),
+            _last_update=task_data.get("last_update", None),
         )
-        task.uid = task_data["uid"]
-        task.root_uid = task_data["root_uid"]
-        task.parent_uid = task_data["parent_uid"]
-        # Compatibility with <= 3.x.x (get)
-        task.orig_uid = task_data.get("orig_uid", None)
-        task.status = TaskState(task_data["status"])
-        # Compatibility with <= 3.x.x (get)
-        task.error = task_data.get("error")
-        # Compatibility with <= 2.x.x (get)
-        task.priority = (
-            TaskPriority(task_data.get("priority"))
-            if "priority" in task_data
-            else TaskPriority.NORMAL
-        )
-        task.last_update = task_data.get("last_update", None)
-        task.payload = task_data["payload"]
-        task.payload_persistent = task_data["payload_persistent"]
         return task
 
     def __repr__(self) -> str:

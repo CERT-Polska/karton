@@ -15,7 +15,7 @@ from urllib3.response import HTTPResponse
 
 from .exceptions import InvalidIdentityError
 from .task import Task, TaskPriority, TaskState
-from .utils import chunks
+from .utils import chunks, chunks_iter
 
 KARTON_TASKS_QUEUE = "karton.tasks"
 KARTON_OPERATIONS_QUEUE = "karton.operations"
@@ -377,12 +377,20 @@ class KartonBackend:
             return None
         return Task.unserialize(task_data, backend=self)
 
-    def get_tasks(self, task_uid_list: List[str], chunk_size: int = 1000) -> List[Task]:
+    def get_tasks(
+        self,
+        task_uid_list: List[str],
+        chunk_size: int = 1000,
+        parse_resources: bool = True,
+    ) -> List[Task]:
         """
         Get multiple tasks for given identifier list
 
         :param task_uid_list: List of task identifiers
         :param chunk_size: Size of chunks passed to the Redis MGET command
+        :param parse_resources: If set to False, resources are not parsed.
+            It speeds up deserialization. Read :py:meth:`Task.unserialize`
+            documentation to learn more.
         :return: List of task objects
         """
         keys = chunks(
@@ -391,25 +399,89 @@ class KartonBackend:
         )
         return [
             Task.unserialize(task_data, backend=self)
+            if parse_resources
+            else Task.unserialize(task_data, parse_resources=False)
             for chunk in keys
             for task_data in self.redis.mget(chunk)
             if task_data is not None
         ]
 
-    def get_all_tasks(self, chunk_size: int = 1000) -> List[Task]:
+    def _iter_tasks(
+        self,
+        task_keys: Iterator[str],
+        chunk_size: int = 1000,
+        parse_resources: bool = True,
+    ) -> Iterator[Task]:
+        for chunk in chunks_iter(task_keys, chunk_size):
+            yield from (
+                Task.unserialize(task_data, backend=self)
+                if parse_resources
+                else Task.unserialize(task_data, parse_resources=False)
+                for task_data in self.redis.mget(chunk)
+                if task_data is not None
+            )
+
+    def iter_tasks(
+        self,
+        task_uid_list: Iterable[str],
+        chunk_size: int = 1000,
+        parse_resources: bool = True,
+    ) -> Iterator[Task]:
+        """
+        Get multiple tasks for given identifier list as an iterator
+        :param task_uid_list: List of task fully-qualified identifiers
+        :param chunk_size: Size of chunks passed to the Redis MGET command
+        :param parse_resources: If set to False, resources are not parsed.
+            It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
+            to learn more.
+        :return: Iterator with task objects
+        """
+        return self._iter_tasks(
+            map(
+                lambda task_uid: f"{KARTON_TASK_NAMESPACE}:{task_uid}",
+                task_uid_list,
+            ),
+            chunk_size=chunk_size,
+            parse_resources=parse_resources,
+        )
+
+    def iter_all_tasks(
+        self, chunk_size: int = 1000, parse_resources: bool = True
+    ) -> Iterator[Task]:
+        """
+        Iterates all tasks registered in Redis
+        :param chunk_size: Size of chunks passed to the Redis SCAN and MGET command
+        :param parse_resources: If set to False, resources are not parsed.
+            It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
+            to learn more.
+        :return: Iterator with Task objects
+        """
+        task_keys = self.redis.scan_iter(
+            match=f"{KARTON_TASK_NAMESPACE}:*", count=chunk_size
+        )
+        return self._iter_tasks(
+            task_keys, chunk_size=chunk_size, parse_resources=parse_resources
+        )
+
+    def get_all_tasks(
+        self, chunk_size: int = 1000, parse_resources: bool = True
+    ) -> List[Task]:
         """
         Get all tasks registered in Redis
 
+        .. warning::
+            This method loads all tasks into memory.
+            It's recommended to use :py:meth:`iter_all_tasks` instead.
+
         :param chunk_size: Size of chunks passed to the Redis MGET command
+        :param parse_resources: If set to False, resources are not parsed.
+            It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
+            to learn more.
         :return: List with Task objects
         """
-        tasks = self.redis.keys(f"{KARTON_TASK_NAMESPACE}:*")
-        return [
-            Task.unserialize(task_data)
-            for chunk in chunks(tasks, chunk_size)
-            for task_data in self.redis.mget(chunk)
-            if task_data is not None
-        ]
+        return list(
+            self.iter_all_tasks(chunk_size=chunk_size, parse_resources=parse_resources)
+        )
 
     def register_task(self, task: Task, pipe: Optional[Pipeline] = None) -> None:
         """
@@ -451,6 +523,11 @@ class KartonBackend:
         """
         Remove task from Redis
 
+        .. warning::
+            Used internally by karton.system.
+            If you want to cancel task: mark it as finished and let it be deleted
+            by karton.system.
+
         :param task: Task object
         """
         self.redis.delete(f"{KARTON_TASK_NAMESPACE}:{task.uid}")
@@ -458,6 +535,11 @@ class KartonBackend:
     def delete_tasks(self, tasks: Iterable[Task], chunk_size: int = 1000) -> None:
         """
         Remove multiple tasks from Redis
+
+        .. warning::
+            Used internally by karton.system.
+            If you want to cancel task: mark it as finished and let it be deleted
+            by karton.system.
 
         :param tasks: List of Task objects
         :param chunk_size: Size of chunks passed to the Redis DELETE command
@@ -484,6 +566,14 @@ class KartonBackend:
         :return: List with task identifiers contained in queue
         """
         return self.redis.lrange(queue, 0, -1)
+
+    def delete_consumer_queues(self, identity: str) -> None:
+        """
+        Deletes consumer queues for given identity
+
+        :param identity: Consumer identity
+        """
+        self.redis.delete(*self.get_queue_names(identity))
 
     def remove_task_queue(self, queue: str) -> List[Task]:
         """
@@ -534,6 +624,20 @@ class KartonBackend:
         :return: Tuple of [queue_name, item] objects or None if timeout has been reached
         """
         return self.redis.blpop(queues, timeout=timeout)
+
+    def increment_multiple_metrics(
+        self, metric: KartonMetrics, increments: Dict[str, int]
+    ) -> None:
+        """
+        Increments metrics for multiple identities by given value via single pipeline
+        :param metric: Operation metric type
+        :param increments: Dictionary of Karton service identities and value
+            to add to the metric
+        """
+        p = self.redis.pipeline()
+        for identity, increment in increments.items():
+            p.hincrby(metric.value, identity, increment)
+        p.execute()
 
     def consume_queues_batch(self, queue: str, max_count: int) -> List[str]:
         """
