@@ -429,7 +429,6 @@ class KartonBackend:
     ) -> Iterator[Task]:
         """
         Get multiple tasks for given identifier list as an iterator
-
         :param task_fquid_list: List of task fully-qualified identifiers
         :param chunk_size: Size of chunks passed to the Redis MGET command
         :param parse_resources: If set to False, resources are not parsed.
@@ -444,6 +443,24 @@ class KartonBackend:
             ),
             chunk_size=chunk_size,
             parse_resources=parse_resources,
+        )
+
+    def iter_all_tasks(
+        self, chunk_size: int = 1000, parse_resources: bool = True
+    ) -> Iterator[Task]:
+        """
+        Iterates all tasks registered in Redis
+        :param chunk_size: Size of chunks passed to the Redis SCAN and MGET command
+        :param parse_resources: If set to False, resources are not parsed.
+            It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
+            to learn more.
+        :return: Iterator with Task objects
+        """
+        task_keys = self.redis.scan_iter(
+            match=f"{KARTON_TASK_NAMESPACE}:*", count=chunk_size
+        )
+        return self._iter_tasks(
+            task_keys, chunk_size=chunk_size, parse_resources=parse_resources
         )
 
     def iter_task_tree(
@@ -475,36 +492,17 @@ class KartonBackend:
             task_keys, chunk_size=chunk_size, parse_resources=parse_resources
         )
 
-    def iter_all_tasks(
-        self, chunk_size: int = 1000, parse_resources: bool = True
-    ) -> Iterator[Task]:
-        """
-        Iterates all tasks registered in Redis
-
-        :param chunk_size: Size of chunks passed to the Redis SCAN and MGET command
-        :param parse_resources: If set to False, resources are not parsed.
-            It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
-            to learn more.
-        :return: Iterator with Task objects
-        """
-        task_keys = self.redis.scan_iter(
-            match=f"{KARTON_TASK_NAMESPACE}:*", count=chunk_size
-        )
-        return self._iter_tasks(
-            task_keys, chunk_size=chunk_size, parse_resources=parse_resources
-        )
-
     def get_all_tasks(
         self, chunk_size: int = 1000, parse_resources: bool = True
     ) -> List[Task]:
         """
-        Get all tasks registered in Redis
+        Get multiple tasks for given identifier list as an iterator
 
         .. warning::
             This method loads all tasks into memory.
-            Use :py:meth:`iter_all_tasks` instead.
+            It's recommended to use :py:meth:`iter_all_tasks` instead.
 
-        :param chunk_size: Size of chunks passed to the Redis SCAN and MGET command
+        :param chunk_size: Size of chunks passed to the Redis MGET command
         :param parse_resources: If set to False, resources are not parsed.
             It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
             to learn more.
@@ -555,9 +553,7 @@ class KartonBackend:
         Remove task from Redis
 
         .. warning::
-
-            Used internally by karton.system. This method doesn't properly
-            unassign routed tasks, so it shouldn't be used without care.
+            Used internally by karton.system.
             If you want to cancel task: mark it as finished and let it be deleted
             by karton.system.
 
@@ -570,7 +566,9 @@ class KartonBackend:
         Remove multiple tasks from Redis
 
         .. warning::
-            Before use, read warning in :py:meth:`delete_task` method documentation
+            Used internally by karton.system.
+            If you want to cancel task: mark it as finished and let it be deleted
+            by karton.system.
 
         :param tasks: List of Task objects
         :param chunk_size: Size of chunks passed to the Redis DELETE command

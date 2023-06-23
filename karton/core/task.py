@@ -123,8 +123,6 @@ class Task(object):
         self.error = error
         self.headers = {**headers, **headers_persistent}
         self._headers_persistent_keys = set(headers_persistent.keys())
-        self.status = TaskState.DECLARED
-        self.headers = headers
         self.status = _status or TaskState.DECLARED
 
         self.last_update: float = _last_update or time.time()
@@ -148,12 +146,12 @@ class Task(object):
         return f"{self.root_uid}:{self.uid}"
 
     @property
-    def receiver(self) -> Optional[str]:
-        return self.headers.get("receiver")
-
-    @property
     def headers_persistent(self) -> Dict[str, Any]:
         return {k: v for k, v in self.headers.items() if self.is_header_persistent(k)}
+
+    @property
+    def receiver(self) -> Optional[str]:
+        return self.headers.get("receiver")
 
     def fork_task(self) -> "Task":
         """

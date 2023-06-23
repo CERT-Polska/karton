@@ -88,13 +88,13 @@ class SystemService(KartonServiceBase):
 
         for task in self.backend.iter_all_tasks(parse_resources=False):
             root_tasks.add(task.root_uid)
-            if task.headers.get("receiver") in queues_to_clear:
+            if task.receiver in queues_to_clear:
                 to_delete.append(task)
                 self.log.info(
                     "Task %s is abandoned by inactive non-persistent consumer."
                     "Killed. (receiver: %s)",
                     task.uid,
-                    task.headers.get("receiver", "<unknown>"),
+                    task.receiver,
                 )
             elif (
                 task.status == TaskState.DECLARED
