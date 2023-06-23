@@ -1,4 +1,5 @@
 import functools
+import itertools
 import signal
 from contextlib import contextmanager
 from typing import Any, Callable, Iterator, Sequence, Tuple, TypeVar
@@ -10,6 +11,16 @@ T = TypeVar("T")
 
 def chunks(seq: Sequence[T], size: int) -> Iterator[Sequence[T]]:
     return (seq[pos : pos + size] for pos in range(0, len(seq), size))
+
+
+def chunks_iter(seq: Iterator[T], size: int) -> Iterator[Sequence[T]]:
+    # We need to ensure that seq is iterator, so this method works correctly
+    it = iter(seq)
+    while True:
+        elements = list(itertools.islice(it, size))
+        if len(elements) == 0:
+            return
+        yield elements
 
 
 def recursive_iter(obj: Any) -> Iterator[Any]:
