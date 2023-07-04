@@ -179,7 +179,7 @@ and override things you need.
 
     class CustomMWDBReporter(MWDBReporter):
         filters = [
-            *CustomMWDBReporter,
+            *MWDBReporter.filters,
             {"type": "sample", "stage", "my-stage"}
         ]
 
