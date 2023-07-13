@@ -237,12 +237,12 @@ Karton debug mode
 
 During your karton services development endeavours you'll often have the urge to test them out on the production environment.
 
-While this is totally fine you have to be careful not to disrupt the production services by consuming the tasks meant for them.
+While this is totally fine, you have to be careful not to disrupt the production services by consuming the tasks meant for them. In most cases you also don't want to propagate logs from your experiments to the production log pipeline.
 
 Karton debug mode was crafted especially for this purpose. It adds a random suffix to the service identity to create a new, non-conflicting task queue.
 It also permanently sets the consumer persistence to False and disables log forwarding.
 
 You can enable it by setting:
-- :code:`KARTON_KARTON_DEBUG` environment value
-- :code:`[debug]` parameter in the :code:`[karton]` config section
+- :code:`KARTON_KARTON_DEBUG` environment value to "1"
+- :code:`[debug]` parameter to `1` in the :code:`[karton]` config section
 - :code:`--debug` command-line parameter
