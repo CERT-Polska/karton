@@ -6,3 +6,5 @@ karton.ini
 config.ini
 docs/_build
 .mypy_cache
+build
+karton_core.egg-info/

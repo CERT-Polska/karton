@@ -1,4 +1,5 @@
 import abc
+import os
 import argparse
 import logging
 import textwrap
@@ -8,7 +9,7 @@ from typing import Optional, Union, cast
 from .__version__ import __version__
 from .backend import KartonBackend, KartonServiceInfo
 from .config import Config
-from .logger import KartonLogHandler
+from .logger import KartonLogHandler, KartonLogDebugHandler
 from .task import Task
 from .utils import HardShutdownInterrupt, StrictClassMethod, graceful_killer
 
@@ -43,6 +44,11 @@ class KartonBase(abc.ABC):
         # If passed via configuration: override
         if self.config.has_option("karton", "identity"):
             self.identity = self.config.get("karton", "identity")
+
+        self.debug = self.config.getboolean("karton", "debug")
+
+        if self.debug:
+            self.identity += "-" + os.urandom(4).hex() + "-dev"
 
         self.service_info = None
         if self.identity is not None and self.with_service_info:
@@ -101,7 +107,9 @@ class KartonBase(abc.ABC):
             logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s")
         )
         logger.addHandler(stream_handler)
-        logger.addHandler(self._log_handler)
+
+        if not self.debug:
+            logger.addHandler(self._log_handler)
 
     @property
     def log_handler(self) -> KartonLogHandler:

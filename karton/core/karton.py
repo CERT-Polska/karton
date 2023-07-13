@@ -123,7 +123,7 @@ class Consumer(KartonServiceBase):
 
         self.persistent = self.config.getboolean(
             "karton", "persistent", self.persistent
-        )
+        ) and not self.debug
         self.task_timeout = self.config.getint("karton", "task_timeout")
         self.current_task: Optional[Task] = None
         self._pre_hooks: List[Tuple[Optional[str], Callable[[Task], None]]] = []
