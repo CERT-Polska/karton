@@ -162,6 +162,9 @@ class KartonBase(abc.ABC):
             "--identity", help="Alternative identity for Karton service"
         )
         parser.add_argument("--log-level", help="Logging level of Karton logger")
+        parser.add_argument(
+            "--debug", help="Enable debugging mode", action="store_true", default=None
+        )
         return parser
 
     @classmethod
@@ -174,7 +177,10 @@ class KartonBase(abc.ABC):
         """
         config.load_from_dict(
             {
-                "karton": {"identity": args.identity},
+                "karton": {
+                    "identity": args.identity,
+                    "debug": args.debug,
+                },
                 "logging": {"level": args.log_level},
             }
         )
