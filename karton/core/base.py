@@ -9,7 +9,7 @@ from typing import Optional, Union, cast
 from .__version__ import __version__
 from .backend import KartonBackend, KartonServiceInfo
 from .config import Config
-from .logger import KartonLogHandler, KartonLogDebugHandler
+from .logger import KartonLogHandler
 from .task import Task
 from .utils import HardShutdownInterrupt, StrictClassMethod, graceful_killer
 
