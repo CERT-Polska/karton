@@ -230,3 +230,19 @@ The simplest way to do that is to perform all of these actions synchronously, in
         # If analysis has been finished: get the results and process them
         analysis = sandbox.get_results(analysis_id)
         self.process_results(analysis)
+
+
+Karton debug mode
+-----------------
+
+During your karton services development endeavours you'll often have the urge to test them out on the production environment.
+
+While this is totally fine you have to be careful not to disrupt the production services by consuming the tasks meant for them.
+
+Karton debug mode was crafted especially for this purpose. It adds a random suffix to the service identity to create a new, non-conflicting task queue.
+It also permanently sets the consumer persistence to False and disables log forwarding.
+
+You can enable it by setting:
+- :code:`KARTON_KARTON_DEBUG` environment value
+- :code:`[debug]` parameter in the :code:`[karton]` config section
+- :code:`--debug` command-line parameter
