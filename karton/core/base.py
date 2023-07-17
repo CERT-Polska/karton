@@ -45,7 +45,7 @@ class KartonBase(abc.ABC):
         if self.config.has_option("karton", "identity"):
             self.identity = self.config.get("karton", "identity")
 
-        self.debug = self.config.getboolean("karton", "debug")
+        self.debug = self.config.getboolean("karton", "debug", False)
 
         if self.debug:
             self.identity += "-" + os.urandom(4).hex() + "-dev"
