@@ -244,5 +244,5 @@ It also permanently sets the consumer persistence to False and disables log forw
 
 You can enable it by setting:
 - :code:`KARTON_KARTON_DEBUG` environment value to "1"
-- :code:`[debug]` parameter to `1` in the :code:`[karton]` config section
+- :code:`debug` parameter to `1` in the :code:`[karton]` config section
 - :code:`--debug` command-line parameter
