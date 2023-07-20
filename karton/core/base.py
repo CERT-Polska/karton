@@ -1,6 +1,7 @@
 import abc
 import argparse
 import logging
+import os
 import textwrap
 from contextlib import contextmanager
 from typing import Optional, Union, cast
@@ -43,6 +44,11 @@ class KartonBase(abc.ABC):
         # If passed via configuration: override
         if self.config.has_option("karton", "identity"):
             self.identity = self.config.get("karton", "identity")
+
+        self.debug = self.config.getboolean("karton", "debug", False)
+
+        if self.debug:
+            self.identity += "-" + os.urandom(4).hex() + "-dev"
 
         self.service_info = None
         if self.identity is not None and self.with_service_info:
@@ -101,7 +107,9 @@ class KartonBase(abc.ABC):
             logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s")
         )
         logger.addHandler(stream_handler)
-        logger.addHandler(self._log_handler)
+
+        if not self.debug:
+            logger.addHandler(self._log_handler)
 
     @property
     def log_handler(self) -> KartonLogHandler:
@@ -154,6 +162,9 @@ class KartonBase(abc.ABC):
             "--identity", help="Alternative identity for Karton service"
         )
         parser.add_argument("--log-level", help="Logging level of Karton logger")
+        parser.add_argument(
+            "--debug", help="Enable debugging mode", action="store_true", default=None
+        )
         return parser
 
     @classmethod
@@ -166,7 +177,10 @@ class KartonBase(abc.ABC):
         """
         config.load_from_dict(
             {
-                "karton": {"identity": args.identity},
+                "karton": {
+                    "identity": args.identity,
+                    "debug": args.debug,
+                },
                 "logging": {"level": args.log_level},
             }
         )

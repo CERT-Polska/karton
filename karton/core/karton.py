@@ -121,8 +121,9 @@ class Consumer(KartonServiceBase):
         if self.filters is None:
             raise ValueError("Cannot bind consumer on Empty binds")
 
-        self.persistent = self.config.getboolean(
-            "karton", "persistent", self.persistent
+        self.persistent = (
+            self.config.getboolean("karton", "persistent", self.persistent)
+            and not self.debug
         )
         self.task_timeout = self.config.getint("karton", "task_timeout")
         self.current_task: Optional[Task] = None

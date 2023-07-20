@@ -48,6 +48,7 @@ Common Karton configuration fields are listed below:
  [redis]        socket_timeout    Socket timeout for Redis operations in seconds (default: 30, use 0 to turn off if timeout doesn't work properly)
  [karton]       identity          Karton service identity override (overrides the name provided in class / constructor arguments)
  [karton]       persistent        Karton service queue persistency override
+ [karton]       debug             Karton debug mode for service development
  [karton]       task_timeout      Karton service task execution timeout in seconds. Useful if your service sometimes hangs. Karton will schedule SIGALRM if this value is set.
  [logging]      level             Logging level for Karton service logger (default: INFO)
  [signaling]    status            Turns on producing of 'karton.signaling.status' tasks, signalling the task start and finish events by Karton service (default: 0, off)
@@ -90,6 +91,7 @@ All settings can be set using command-line.
       --identity IDENTITY   Alternative identity for Karton service
       --log-level LOG_LEVEL
                             Logging level of Karton logger
+      --debug               Enable debugging mode
       --setup-bucket        Create missing bucket in S3 storage
       --disable-gc          Do not run GC in this instance
       --disable-router      Do not run task routing in this instance
