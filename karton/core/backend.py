@@ -12,7 +12,7 @@ import boto3
 from botocore.credentials import (
     ContainerProvider,
     InstanceMetadataFetcher,
-    InstanceMetadataProvider
+    InstanceMetadataProvider,
 )
 from redis import AuthenticationError, StrictRedis
 from redis.client import Pipeline
@@ -129,11 +129,7 @@ class KartonBackend:
         if not endpoint:
             raise RuntimeError("Attempting to get S3 client without an endpoint set")
 
-        if (
-            access_key and
-            secret_key and
-            iam_auth
-        ):
+        if access_key and secret_key and iam_auth:
             logger.warning(
                 "Warning: iam is turned on and both S3 access key and secret key are provided"
             )
@@ -142,7 +138,9 @@ class KartonBackend:
             iam_providers = [
                 ContainerProvider(),
                 InstanceMetadataProvider(
-                    iam_role_fetcher=InstanceMetadataFetcher(timeout=1000, num_attempts=2)
+                    iam_role_fetcher=InstanceMetadataFetcher(
+                        timeout=1000, num_attempts=2
+                    )
                 ),
             ]
 
@@ -153,7 +151,7 @@ class KartonBackend:
                     secret_key = creds.secret_key
                     session_token = creds.token
                     break
-        
+
         if access_key is None or secret_key is None:
             raise RuntimeError(
                 "Attempting to get S3 client without an access_key/secret_key set"
