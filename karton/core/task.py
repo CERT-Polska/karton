@@ -408,7 +408,11 @@ class Task(object):
         if parse_resources:
             task_data = json.loads(data, object_hook=unserialize_resources)
         else:
-            task_data = orjson.loads(data)
+            try:
+                task_data = orjson.loads(data)
+            except orjson.JSONDecodeError:
+                # fallback, in case orjson raises exception during loading
+                task_data = json.loads(data, object_hook=unserialize_resources)
 
         # Compatibility with Karton <5.2.0
         headers_persistent_fallback = task_data["payload_persistent"].get(
