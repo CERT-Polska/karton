@@ -241,7 +241,7 @@ class Task(object):
                 matched.append(match != negated)
 
             # set the flag if all consumer filter fields match the task header.
-            # It wil be set to True only if at least one filter matches the header
+            # It will be set to True only if at least one filter matches the header
             matches |= all(m for m in matched)
 
         return matches
