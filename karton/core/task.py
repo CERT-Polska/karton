@@ -232,7 +232,8 @@ class Task(object):
 
                 # fnmatch is great for handling simple wildcard patterns (?, *, [abc])
                 match = fnmatch.fnmatchcase(header_value_str, filter_value_str)
-                # if matches, but it's negated then we can return straight away since no matter the other filters
+                # if matches, but it's negated then we can return straight away
+                # since no matter the other filters
                 if match and negated:
                     return False
 
