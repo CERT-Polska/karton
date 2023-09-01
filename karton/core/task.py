@@ -212,32 +212,39 @@ class Task(object):
         :meta private:
         """
 
-        def value_compare(filter_value: Any, header_value: Any) -> bool:
-            # Coerce to string for comparison
-            filter_value_str = str(filter_value)
-            header_value_str = str(header_value)
+        matches = False
+        for task_filter in filters:
+            matched = []
+            for filter_key, filter_value in task_filter.items():
+                # Coerce to string for comparison
+                header_value = self.headers.get(filter_key)
+                filter_value_str = str(filter_value)
+                header_value_str = str(header_value)
 
-            negated = False
-            if filter_value_str.startswith("!"):
-                negated = True
-                filter_value_str = filter_value_str[1:]
+                negated = False
+                if filter_value_str.startswith("!"):
+                    negated = True
+                    filter_value_str = filter_value_str[1:]
 
-            if header_value is None:
-                return negated
+                if header_value is None:
+                    matched.append(negated)
+                    continue
 
-            # fnmatch is great for handling simple wildcard patterns (?, *, [abc])
-            # If negated: match result should not be True (XOR)
-            return fnmatch.fnmatchcase(header_value_str, filter_value_str) != negated
+                # fnmatch is great for handling simple wildcard patterns (?, *, [abc])
+                match = fnmatch.fnmatchcase(header_value_str, filter_value_str)
+                # if matches, but it's negated then we can return straight away
+                # since no matter the other filters
+                if match and negated:
+                    return False
 
-        return any(
-            # If any of consumer filters matches the header
-            all(
-                # Match: all consumer filter fields match the task header
-                value_compare(filter_value, self.headers.get(filter_key))
-                for filter_key, filter_value in task_filter.items()
-            )
-            for task_filter in filters
-        )
+                # else, apply a XOR logic to take care of negation matching
+                matched.append(match != negated)
+
+            # set the flag if all consumer filter fields match the task header.
+            # It will be set to True only if at least one filter matches the header
+            matches |= all(m for m in matched)
+
+        return matches
 
     def set_task_parent(self, parent: "Task"):
         """
