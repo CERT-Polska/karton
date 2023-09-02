@@ -61,6 +61,10 @@ class TestTaskFilters(unittest.TestCase):
         filters = [
             {
                 "type": "sample",
+                "platform": "!macos"
+            },
+            {
+                "type": "sample",
                 "platform": "!win*"
             }
         ]

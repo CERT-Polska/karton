@@ -9,3 +9,5 @@ line_length = 88
 [tool.lint-python]
 lint-version = "2"
 source = "karton/"
+# Temporary workaround for Union[Awaitable[T]], T] mess in Redis typing
+extra-requirements = "redis<5.0.0"
