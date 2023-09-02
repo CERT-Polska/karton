@@ -131,7 +131,8 @@ class KartonBackend:
 
         if access_key and secret_key and iam_auth:
             logger.warning(
-                "Warning: iam is turned on and both S3 access key and secret key are provided"
+                "Warning: iam is turned on and both S3 access key and secret key are"
+                " provided"
             )
 
         if iam_auth:
