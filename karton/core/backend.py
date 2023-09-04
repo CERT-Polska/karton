@@ -9,10 +9,16 @@ from collections import defaultdict, namedtuple
 from typing import IO, Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
 
 import boto3
+from botocore.credentials import (
+    ContainerProvider,
+    InstanceMetadataFetcher,
+    InstanceMetadataProvider,
+)
 from redis import AuthenticationError, StrictRedis
 from redis.client import Pipeline
 from urllib3.response import HTTPResponse
 
+from .config import Config
 from .exceptions import InvalidIdentityError
 from .task import Task, TaskPriority, TaskState
 from .utils import chunks, chunks_iter
@@ -99,7 +105,7 @@ class KartonServiceInfo:
 class KartonBackend:
     def __init__(
         self,
-        config,
+        config: Config,
         identity: Optional[str] = None,
         service_info: Optional[KartonServiceInfo] = None,
     ) -> None:
@@ -113,11 +119,51 @@ class KartonBackend:
         self.redis = self.make_redis(
             config, identity=identity, service_info=service_info
         )
+
+        session_token = None
+        endpoint = config.get("s3", "address")
+        access_key = config.get("s3", "access_key")
+        secret_key = config.get("s3", "secret_key")
+        iam_auth = config.getboolean("s3", "iam_auth")
+
+        if not endpoint:
+            raise RuntimeError("Attempting to get S3 client without an endpoint set")
+
+        if access_key and secret_key and iam_auth:
+            logger.warning(
+                "Warning: iam is turned on and both S3 access key and secret key are"
+                " provided"
+            )
+
+        if iam_auth:
+            iam_providers = [
+                ContainerProvider(),
+                InstanceMetadataProvider(
+                    iam_role_fetcher=InstanceMetadataFetcher(
+                        timeout=1000, num_attempts=2
+                    )
+                ),
+            ]
+
+            for provider in iam_providers:
+                creds = provider.load()
+                if creds:
+                    access_key = creds.access_key
+                    secret_key = creds.secret_key
+                    session_token = creds.token
+                    break
+
+        if access_key is None or secret_key is None:
+            raise RuntimeError(
+                "Attempting to get S3 client without an access_key/secret_key set"
+            )
+
         self.s3 = boto3.client(
             "s3",
-            endpoint_url=config["s3"]["address"],
-            aws_access_key_id=config["s3"]["access_key"],
-            aws_secret_access_key=config["s3"]["secret_key"],
+            endpoint_url=endpoint,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            aws_session_token=session_token,
         )
 
     @staticmethod

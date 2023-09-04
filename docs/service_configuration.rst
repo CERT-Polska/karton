@@ -39,6 +39,7 @@ Common Karton configuration fields are listed below:
  [s3]           address           S3 API address
  [s3]           access_key        S3 API access key (username)
  [s3]           secret_key        S3 API secret key (password)
+ [s3]           iam_auth          S3 IAM configuration (default: False)
  [s3]           bucket            Default bucket name for storing produced resources
  [redis]        host              Redis server hostname
  [redis]        port              Redis server port
@@ -54,6 +55,8 @@ Common Karton configuration fields are listed below:
  [signaling]    status            Turns on producing of 'karton.signaling.status' tasks, signalling the task start and finish events by Karton service (default: 0, off)
 ============   ===============   =======================================================================================================================================
 
+Note that if both ``iam_auth = True`` and the ``access_key``, ``secret_key`` pair are provided in the configuration file, Karton will first try to load secrets via IAM provider and
+will fallback to the provided pair otherwise. More information about credential loading can be found `here <https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html#configuring-credentials>`_.
 
 Karton System configuration
 ---------------------------
