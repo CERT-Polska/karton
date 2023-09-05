@@ -3,9 +3,10 @@ sphinx:
   configuration: docs/conf.py
 formats:
   - pdf
+build:
+  os: ubuntu-22.04
+  tools:
+    python: "3.10"
 python:
-  version: 3.6
   install:
-    - method: pip
-      path: .
     - requirements: docs/requirements.txt

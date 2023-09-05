@@ -29,8 +29,9 @@ setup(
     },
     url="https://github.com/CERT-Polska/karton",
     classifiers=[
-        "Programming Language :: Python",
+        "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
         "License :: OSI Approved :: BSD License",
     ],
+    python_requires='>=3.8',
 )
