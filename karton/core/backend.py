@@ -152,7 +152,7 @@ class KartonBackend:
                     boto_session._credentials = creds  # type: ignore
                     break
 
-        creds_loaded = boto_session._credentials is not None
+        creds_loaded = boto_session._credentials is not None  # type: ignore
 
         if not iam_auth or not creds_loaded:
             if access_key is None or secret_key is None:
