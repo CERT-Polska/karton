@@ -14,6 +14,7 @@ from botocore.credentials import (
     InstanceMetadataFetcher,
     InstanceMetadataProvider,
 )
+from botocore.session import get_session
 from redis import AuthenticationError, StrictRedis
 from redis.client import Pipeline
 from urllib3.response import HTTPResponse
@@ -120,7 +121,6 @@ class KartonBackend:
             config, identity=identity, service_info=service_info
         )
 
-        session_token = None
         endpoint = config.get("s3", "address")
         access_key = config.get("s3", "access_key")
         secret_key = config.get("s3", "secret_key")
@@ -135,6 +135,7 @@ class KartonBackend:
                 " provided"
             )
 
+        boto_session = get_session()
         if iam_auth:
             iam_providers = [
                 ContainerProvider(),
@@ -148,22 +149,22 @@ class KartonBackend:
             for provider in iam_providers:
                 creds = provider.load()
                 if creds:
-                    access_key = creds.access_key
-                    secret_key = creds.secret_key
-                    session_token = creds.token
+                    boto_session._credentials = creds  # type: ignore
                     break
 
-        if access_key is None or secret_key is None:
-            raise RuntimeError(
-                "Attempting to get S3 client without an access_key/secret_key set"
-            )
+        creds_loaded = boto_session._credentials is not None
 
-        self.s3 = boto3.client(
+        if not iam_auth or not creds_loaded:
+            if access_key is None or secret_key is None:
+                raise RuntimeError(
+                    "Attempting to get S3 client without an access_key/secret_key set"
+                )
+
+        self.s3 = boto3.Session(botocore_session=boto_session).client(
             "s3",
             endpoint_url=endpoint,
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
-            aws_session_token=session_token,
+            aws_access_key_id=None if creds_loaded else access_key,
+            aws_secret_access_key=None if creds_loaded else secret_key,
         )
 
     @staticmethod
