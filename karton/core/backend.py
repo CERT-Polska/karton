@@ -135,37 +135,41 @@ class KartonBackend:
                 " provided"
             )
 
-        boto_session = get_session()
         if iam_auth:
-            iam_providers = [
-                ContainerProvider(),
-                InstanceMetadataProvider(
-                    iam_role_fetcher=InstanceMetadataFetcher(
-                        timeout=1000, num_attempts=2
-                    )
-                ),
-            ]
+            s3_client = self.iam_auth_s3(endpoint)
+            if s3_client:
+                self.s3 = s3_client
+                return
 
-            for provider in iam_providers:
-                creds = provider.load()
-                if creds:
-                    boto_session._credentials = creds  # type: ignore
-                    break
+        if access_key is None or secret_key is None:
+            raise RuntimeError(
+                "Attempting to get S3 client without an access_key/secret_key set"
+            )
 
-        creds_loaded = boto_session._credentials is not None  # type: ignore
-
-        if not iam_auth or not creds_loaded:
-            if access_key is None or secret_key is None:
-                raise RuntimeError(
-                    "Attempting to get S3 client without an access_key/secret_key set"
-                )
-
-        self.s3 = boto3.Session(botocore_session=boto_session).client(
+        self.s3 = boto3.client(
             "s3",
             endpoint_url=endpoint,
-            aws_access_key_id=None if creds_loaded else access_key,
-            aws_secret_access_key=None if creds_loaded else secret_key,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
         )
+
+    def iam_auth_s3(self, endpoint: str):
+        boto_session = get_session()
+        iam_providers = [
+            ContainerProvider(),
+            InstanceMetadataProvider(
+                iam_role_fetcher=InstanceMetadataFetcher(timeout=1000, num_attempts=2)
+            ),
+        ]
+
+        for provider in iam_providers:
+            creds = provider.load()
+            if creds:
+                boto_session._credentials = creds  # type: ignore
+                return boto3.Session(botocore_session=boto_session).client(
+                    "s3",
+                    endpoint_url=endpoint,
+                )
 
     @staticmethod
     def _validate_identity(identity: str):
