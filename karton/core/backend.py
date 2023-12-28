@@ -544,6 +544,10 @@ class KartonBackend:
         Register or update multiple tasks in Redis.
         :param tasks: List of task objects
         """
+        # calling mset with an empty dictionary results in a crash
+        if not tasks:
+            return
+
         taskmap = {
             f"{KARTON_TASK_NAMESPACE}:{task.uid}": task.serialize() for task in tasks
         }
