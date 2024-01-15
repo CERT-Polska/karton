@@ -14,6 +14,7 @@ from botocore.credentials import (
     InstanceMetadataFetcher,
     InstanceMetadataProvider,
 )
+from botocore.client import S3
 from botocore.session import get_session
 from redis import AuthenticationError, StrictRedis
 from redis.client import Pipeline
@@ -153,7 +154,7 @@ class KartonBackend:
             aws_secret_access_key=secret_key,
         )
 
-    def iam_auth_s3(self, endpoint: str) -> Optional[botocore.client.S3]:
+    def iam_auth_s3(self, endpoint: str) -> Optional[S3]:
         boto_session = get_session()
         iam_providers = [
             ContainerProvider(),
