@@ -171,6 +171,12 @@ Karton classes expose dedicated methods for this purpose.
 argparse are then passed to ``config_from_args`` that maps arguments into sections and options of configuration.
 That mechanism allows you to define your own arguments and include these values in the final configuration.
 
+.. warning::
+
+    Watch out for sections with a ``-`` character when configuring karton services using environment variables.
+    Some shells won't work correctly and configuration will not be populated with your settings.
+    See `karton/issues/235 <https://github.com/CERT-Polska/karton/issues/235>`_ for more info.
+
 Customizing ready-made Karton services
 --------------------------------------
 
