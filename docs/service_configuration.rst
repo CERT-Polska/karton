@@ -174,7 +174,7 @@ That mechanism allows you to define your own arguments and include these values 
 .. warning::
 
     Watch out for sections with a ``-`` character when configuring karton services using environment variables.
-    Some shells won't work correctly and configuration will not be populated with your settings.
+    Some shells (like /bin/sh) won't work correctly and configuration will not be populated with your settings.
     See `karton/issues/235 <https://github.com/CERT-Polska/karton/issues/235>`_ for more info.
 
 Customizing ready-made Karton services
