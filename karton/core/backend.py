@@ -153,7 +153,7 @@ class KartonBackend:
             aws_secret_access_key=secret_key,
         )
 
-    def iam_auth_s3(self, endpoint: str):
+    def iam_auth_s3(self, endpoint: str) -> Optional[botocore.client.S3]:
         boto_session = get_session()
         iam_providers = [
             ContainerProvider(),
