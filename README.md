@@ -63,8 +63,7 @@ class GenericUnpacker(Karton):
         self.send_task(task)
 
 if __name__ == "__main__":
-    # Here comes the main loop
-    GenericUnpacker().loop()
+    GenericUnpacker.main()
 ```
 
 ## Karton systems
