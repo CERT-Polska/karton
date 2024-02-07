@@ -42,3 +42,4 @@ jobs:
           push: true
           # Flux v1 doesn't support OCI-compliant manifests
           provenance: false
+          platforms: linux/arm64,linux/amd64

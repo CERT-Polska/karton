@@ -32,3 +32,4 @@ jobs:
           push: ${{ github.event_name == 'push' }}
           # Flux v1 doesn't support OCI-compliant manifests
           provenance: false
+          platforms: linux/arm64,linux/amd64
