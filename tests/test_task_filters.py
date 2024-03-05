@@ -57,6 +57,14 @@ class TestTaskFilters(unittest.TestCase):
         task_without_headers = Task(headers={})
         self.assertTrue(task_without_headers.matches_filters(filters))
 
+    def test_catch_none_filter(self):
+        filters = []
+        task_with_headers = Task(headers={"foo": "bar", "bar": "baz"})
+        self.assertFalse(task_with_headers.matches_filters(filters))
+
+        task_without_headers = Task(headers={})
+        self.assertFalse(task_without_headers.matches_filters(filters))
+
     def test_negated_filter(self):
         filters = [
             {
@@ -129,6 +137,68 @@ class TestTaskFilters(unittest.TestCase):
         })
         self.assertTrue(task_noplatform.matches_filters(filters))
 
+        # Platform requirement is defined for type=sample
+        task_different_type = Task(headers={
+            "type": "different",
+            "platform": "hehe",
+        })
+        self.assertTrue(task_different_type.matches_filters(filters))
+
+    def test_negate_header_existence_but_catch_all(self):
+        filters = [
+            {
+                "type": "sample",
+                "platform": "!*"
+            },
+            {}
+        ]
+        task_linux = Task(headers={
+            "type": "sample",
+            "kind": "runnable",
+            "platform": "linux"
+        })
+        self.assertFalse(task_linux.matches_filters(filters))
+
+        task_empty_string = Task(headers={
+            "type": "sample",
+            "kind": "runnable",
+            "platform": ""
+        })
+        self.assertFalse(task_empty_string.matches_filters(filters))
+
+        task_noplatform = Task(headers={
+            "type": "sample",
+            "kind": "runnable",
+        })
+        self.assertTrue(task_noplatform.matches_filters(filters))
+
+    def test_require_header_existence(self):
+        filters = [
+            {
+                "type": "sample",
+                "platform": "*"
+            }
+        ]
+        task_linux = Task(headers={
+            "type": "sample",
+            "kind": "runnable",
+            "platform": "linux"
+        })
+        self.assertTrue(task_linux.matches_filters(filters))
+
+        task_empty_string = Task(headers={
+            "type": "sample",
+            "kind": "runnable",
+            "platform": ""
+        })
+        self.assertTrue(task_empty_string.matches_filters(filters))
+
+        task_noplatform = Task(headers={
+            "type": "sample",
+            "kind": "runnable",
+        })
+        self.assertFalse(task_noplatform.matches_filters(filters))
+
     def test_non_string_headers(self):
         # It's not recommended but was allowed by earlier versions
         filters = [
@@ -156,3 +226,38 @@ class TestTaskFilters(unittest.TestCase):
         })
         self.assertFalse(task_different_value.matches_filters(filters))
 
+    def test_negated_filter_for_different_type(self):
+        filters = [
+            {
+                "type": "sample",
+                "platform": "win32"
+            },
+            {
+                "type": "different",
+                "platform": "!win32"
+            }
+        ]
+
+        task_sample = Task(headers={
+            "type": "sample",
+            "platform": "win32"
+        })
+        self.assertTrue(task_sample.matches_filters(filters))
+
+        task_different_win32 = Task(headers={
+            "type": "different",
+            "platform": "win32"
+        })
+        self.assertFalse(task_different_win32.matches_filters(filters))
+
+        task_different_win64 = Task(headers={
+            "type": "different",
+            "platform": "win64"
+        })
+        self.assertTrue(task_different_win64.matches_filters(filters))
+
+        task_sample_win64 = Task(headers={
+            "type": "sample",
+            "platform": "win64"
+        })
+        self.assertFalse(task_sample_win64.matches_filters(filters))
