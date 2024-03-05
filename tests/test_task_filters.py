@@ -137,13 +137,6 @@ class TestTaskFilters(unittest.TestCase):
         })
         self.assertTrue(task_noplatform.matches_filters(filters))
 
-        # Platform requirement is defined for type=sample
-        task_different_type = Task(headers={
-            "type": "different",
-            "platform": "hehe",
-        })
-        self.assertTrue(task_different_type.matches_filters(filters))
-
     def test_negate_header_existence_but_catch_all(self):
         filters = [
             {
@@ -171,6 +164,13 @@ class TestTaskFilters(unittest.TestCase):
             "kind": "runnable",
         })
         self.assertTrue(task_noplatform.matches_filters(filters))
+
+        # Platform requirement is defined for type=sample
+        task_different_type = Task(headers={
+            "type": "different",
+            "platform": "hehe",
+        })
+        self.assertTrue(task_different_type.matches_filters(filters))
 
     def test_require_header_existence(self):
         filters = [
