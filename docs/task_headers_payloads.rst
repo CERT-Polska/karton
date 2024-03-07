@@ -107,6 +107,18 @@ Filter logic can be used to fulfill specific use-cases:
 ``[{"foo": "!*"}]``                   'foo' header must be not defined.
 ====================================  ==============================================================================
 
+Excluding (negated) filters come with specific corner-cases. Regular filters require specific value to be defined in header, while
+negated filters are accepting all possible values except specified in filter.
+
+==================================================================================  =============================================================================================================================================
+   ``filters`` value                                                                  Meaning
+----------------------------------------------------------------------------------  ---------------------------------------------------------------------------------------------------------------------------------------------
+``[{"type": "sample", "stage": "!*"}]``                                             matches only tasks that have type 'sample' but no 'stage' key
+``[{"platform": "!linux"}, {"platform": "!windows"}]``                              matches **all** tasks (even with no headers) but not these with platform 'linux' or 'windows'
+``[{"foo": "bar", "platform": "!linux"}, {"foo": "bar", "platform": "!windows"}]``  'foo' header is required and must have 'bar' value, but platform can't be 'linux' or 'windows'
+``[{"foo": "bar", "platform": "!linux"}, {"foo": "baz", "platform": "!windows"}]``  'foo' header is required and must have 'bar' value and no 'linux' in platform key, or foo must be 'baz', but then platform can't be 'windows'
+==================================================================================  =============================================================================================================================================
+
 .. warning::
 
     It's recommended to use only strings in filter and header values
