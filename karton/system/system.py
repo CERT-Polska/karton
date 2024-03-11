@@ -103,7 +103,7 @@ class SystemService(KartonServiceBase):
                 and current_time > task.last_update + self.task_dispatched_timeout
             ):
                 to_delete.append(task)
-                self.log.warning(
+                self.log.error(
                     "Task %s is in Dispatched state more than %d seconds. "
                     "Killed. (origin: %s)",
                     task.uid,
@@ -116,7 +116,7 @@ class SystemService(KartonServiceBase):
                 and current_time > task.last_update + self.task_started_timeout
             ):
                 to_delete.append(task)
-                self.log.warning(
+                self.log.error(
                     "Task %s is in Started state more than %d seconds. "
                     "Killed. (receiver: %s)",
                     task.uid,
