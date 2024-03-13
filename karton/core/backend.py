@@ -416,28 +416,28 @@ class KartonBackend:
                     continue
         return bound_services
 
-    def get_task(self, task_uid: str) -> Optional[Task]:
+    def get_task(self, task_fquid: str) -> Optional[Task]:
         """
         Get task object with given identifier
 
-        :param task_uid: Task identifier
+        :param task_fquid: Task fully-qualified identifier
         :return: Task object
         """
-        task_data = self.redis.get(f"{KARTON_TASK_NAMESPACE}:{task_uid}")
+        task_data = self.redis.get(f"{KARTON_TASK_NAMESPACE}:{task_fquid}")
         if not task_data:
             return None
         return Task.unserialize(task_data, backend=self)
 
     def get_tasks(
         self,
-        task_uid_list: List[str],
+        task_fquid_list: List[str],
         chunk_size: int = 1000,
         parse_resources: bool = True,
     ) -> List[Task]:
         """
         Get multiple tasks for given identifier list
 
-        :param task_uid_list: List of task identifiers
+        :param task_fquid_list: List of task fully-qualified identifiers
         :param chunk_size: Size of chunks passed to the Redis MGET command
         :param parse_resources: If set to False, resources are not parsed.
             It speeds up deserialization. Read :py:meth:`Task.unserialize`
@@ -445,7 +445,7 @@ class KartonBackend:
         :return: List of task objects
         """
         keys = chunks(
-            [f"{KARTON_TASK_NAMESPACE}:{task_uid}" for task_uid in task_uid_list],
+            [f"{KARTON_TASK_NAMESPACE}:{task_fquid}" for task_fquid in task_fquid_list],
             chunk_size,
         )
         return [
@@ -474,13 +474,13 @@ class KartonBackend:
 
     def iter_tasks(
         self,
-        task_uid_list: Iterable[str],
+        task_fquid_list: Iterable[str],
         chunk_size: int = 1000,
         parse_resources: bool = True,
     ) -> Iterator[Task]:
         """
         Get multiple tasks for given identifier list as an iterator
-        :param task_uid_list: List of task fully-qualified identifiers
+        :param task_fquid_list: List of task fully-qualified identifiers
         :param chunk_size: Size of chunks passed to the Redis MGET command
         :param parse_resources: If set to False, resources are not parsed.
             It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
@@ -489,8 +489,8 @@ class KartonBackend:
         """
         return self._iter_tasks(
             map(
-                lambda task_uid: f"{KARTON_TASK_NAMESPACE}:{task_uid}",
-                task_uid_list,
+                lambda task_fquid: f"{KARTON_TASK_NAMESPACE}:{task_fquid}",
+                task_fquid_list,
             ),
             chunk_size=chunk_size,
             parse_resources=parse_resources,
@@ -514,11 +514,40 @@ class KartonBackend:
             task_keys, chunk_size=chunk_size, parse_resources=parse_resources
         )
 
+    def iter_task_tree(
+        self, root_uid: str, chunk_size: int = 1000, parse_resources: bool = True
+    ) -> Iterator[Task]:
+        """
+        Iterates all tasks that belong to the same analysis task tree
+        and have the same root_uid
+
+        :param root_uid: Root identifier of task tree
+        :param chunk_size: Size of chunks passed to the Redis SCAN and MGET command
+        :param parse_resources: If set to False, resources are not parsed.
+            It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
+            to learn more.
+        :return: Iterator with task objects
+
+        .. note::
+            This method processes only these tasks that are stored under
+            karton.task:<root_uid>:<task_uid> key format which is fully-qualified
+            identifier introduced in Karton 5.2.0
+
+            Requires karton-system to be upgraded to Karton 5.2.0
+            Unrouted tasks produced by older Karton versions won't be returned.
+        """
+        task_keys = self.redis.scan_iter(
+            match=f"{KARTON_TASK_NAMESPACE}:{root_uid}:*", count=chunk_size
+        )
+        return self._iter_tasks(
+            task_keys, chunk_size=chunk_size, parse_resources=parse_resources
+        )
+
     def get_all_tasks(
         self, chunk_size: int = 1000, parse_resources: bool = True
     ) -> List[Task]:
         """
-        Get all tasks registered in Redis
+        Get multiple tasks for given identifier list as an iterator
 
         .. warning::
             This method loads all tasks into memory.
@@ -542,7 +571,7 @@ class KartonBackend:
         :param pipe: Optional pipeline object if operation is a part of pipeline
         """
         rs = pipe or self.redis
-        rs.set(f"{KARTON_TASK_NAMESPACE}:{task.uid}", task.serialize())
+        rs.set(f"{KARTON_TASK_NAMESPACE}:{task.fquid}", task.serialize())
 
     def register_tasks(self, tasks: List[Task]) -> None:
         """
@@ -554,7 +583,7 @@ class KartonBackend:
             return
 
         taskmap = {
-            f"{KARTON_TASK_NAMESPACE}:{task.uid}": task.serialize() for task in tasks
+            f"{KARTON_TASK_NAMESPACE}:{task.fquid}": task.serialize() for task in tasks
         }
         self.redis.mset(taskmap)
 
@@ -585,7 +614,7 @@ class KartonBackend:
 
         :param task: Task object
         """
-        self.redis.delete(f"{KARTON_TASK_NAMESPACE}:{task.uid}")
+        self.redis.delete(f"{KARTON_TASK_NAMESPACE}:{task.fquid}")
 
     def delete_tasks(self, tasks: Iterable[Task], chunk_size: int = 1000) -> None:
         """
@@ -599,7 +628,7 @@ class KartonBackend:
         :param tasks: List of Task objects
         :param chunk_size: Size of chunks passed to the Redis DELETE command
         """
-        keys = [f"{KARTON_TASK_NAMESPACE}:{task.uid}" for task in tasks]
+        keys = [f"{KARTON_TASK_NAMESPACE}:{task.fquid}" for task in tasks]
         for chunk in chunks(keys, chunk_size):
             self.redis.delete(*chunk)
 
@@ -610,12 +639,12 @@ class KartonBackend:
         :param queue: Queue name
         :return: List with Task objects contained in queue
         """
-        task_uids = self.redis.lrange(queue, 0, -1)
-        return self.get_tasks(task_uids)
+        task_fquids = self.redis.lrange(queue, 0, -1)
+        return self.get_tasks(task_fquids)
 
     def get_task_ids_from_queue(self, queue: str) -> List[str]:
         """
-        Return all task UIDs in a queue
+        Return all task fquids in a queue
 
         :param queue: Queue name
         :return: List with task identifiers contained in queue
@@ -650,7 +679,7 @@ class KartonBackend:
 
         :param task: Task object
         """
-        self.redis.rpush(KARTON_TASKS_QUEUE, task.uid)
+        self.redis.rpush(KARTON_TASKS_QUEUE, task.fquid)
 
     def produce_routed_task(
         self, identity: str, task: Task, pipe: Optional[Pipeline] = None
@@ -665,7 +694,7 @@ class KartonBackend:
         :param pipe: Optional pipeline object if operation is a part of pipeline
         """
         rs = pipe or self.redis
-        rs.rpush(self.get_queue_name(identity, task.priority), task.uid)
+        rs.rpush(self.get_queue_name(identity, task.priority), task.fquid)
 
     def consume_queues(
         self, queues: Union[str, List[str]], timeout: int = 0
@@ -679,20 +708,6 @@ class KartonBackend:
         :return: Tuple of [queue_name, item] objects or None if timeout has been reached
         """
         return self.redis.blpop(queues, timeout=timeout)
-
-    def increment_multiple_metrics(
-        self, metric: KartonMetrics, increments: Dict[str, int]
-    ) -> None:
-        """
-        Increments metrics for multiple identities by given value via single pipeline
-        :param metric: Operation metric type
-        :param increments: Dictionary of Karton service identities and value
-            to add to the metric
-        """
-        p = self.redis.pipeline()
-        for identity, increment in increments.items():
-            p.hincrby(metric.value, identity, increment)
-        p.execute()
 
     def consume_queues_batch(self, queue: str, max_count: int) -> List[str]:
         """
@@ -838,6 +853,21 @@ class KartonBackend:
         rs = pipe or self.redis
         rs.hincrby(metric.value, identity, 1)
 
+    def increment_multiple_metrics(
+        self, metric: KartonMetrics, increments: Dict[str, int]
+    ) -> None:
+        """
+        Increments metrics for multiple identities by given value via single pipeline
+
+        :param metric: Operation metric type
+        :param increments: Dictionary of Karton service identities and value
+            to add to the metric
+        """
+        p = self.redis.pipeline()
+        for identity, increment in increments.items():
+            p.hincrby(metric.value, identity, increment)
+        p.execute()
+
     def increment_metrics_list(
         self, metric: KartonMetrics, identities: List[str]
     ) -> None:
@@ -976,8 +1006,8 @@ class KartonBackend:
 
     def log_identity_output(self, identity: str, headers: Dict[str, Any]) -> None:
         """
-        Store the type of task outputted for given producer to
-        be used in tracking karton service connections.
+        Store the type of task outputted for given producer
+        to be used in tracking karton service connections.
 
         :param identity: producer identity
         :param headers: outputted headers

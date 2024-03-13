@@ -70,7 +70,7 @@ class SystemService(KartonServiceBase):
         # Collects finished tasks
         root_tasks = set()
         running_root_tasks = set()
-        unrouted_task_uids = self.backend.get_task_ids_from_queue(KARTON_TASKS_QUEUE)
+        unrouted_task_fquids = self.backend.get_task_ids_from_queue(KARTON_TASKS_QUEUE)
 
         current_time = time.time()
         to_delete = []
@@ -94,11 +94,11 @@ class SystemService(KartonServiceBase):
                     "Task %s is abandoned by inactive non-persistent consumer."
                     "Killed. (receiver: %s)",
                     task.uid,
-                    task.headers.get("receiver", "<unknown>"),
+                    task.receiver,
                 )
             elif (
                 task.status == TaskState.DECLARED
-                and task.uid not in unrouted_task_uids
+                and task.fquid not in unrouted_task_fquids
                 and task.last_update is not None
                 and current_time > task.last_update + self.task_dispatched_timeout
             ):
@@ -249,14 +249,16 @@ class SystemService(KartonServiceBase):
 
         with self.graceful_killer():
             while not self.shutdown:
-                if self.enable_router:
-                    # This will wait for up to 5s, so this is not a busy loop
-                    self.process_routing()
-                if self.enable_gc:
-                    # This will only do anything once every self.gc_interval seconds
-                    self.gc_collect()
-                    if not self.enable_router:
-                        time.sleep(1)  # Avoid a busy loop
+                try:
+                    if self.enable_router:
+                        # This will wait for up to 5s, so this is not a busy loop
+                        self.process_routing()
+                finally:
+                    if self.enable_gc:
+                        # This will only do anything once every self.gc_interval seconds
+                        self.gc_collect()
+                        if not self.enable_router:
+                            time.sleep(1)  # Avoid a busy loop
 
     @classmethod
     def args_parser(cls) -> argparse.ArgumentParser:

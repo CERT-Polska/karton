@@ -64,6 +64,7 @@ class Task(object):
     :param error: Traceback of a exception that happened while performing this task
     """
 
+    REVISION = 2
     __slots__ = (
         "uid",
         "root_uid",
@@ -76,6 +77,7 @@ class Task(object):
         "priority",
         "payload",
         "payload_persistent",
+        "revision",
         "_headers_persistent_keys",
     )
 
@@ -128,6 +130,20 @@ class Task(object):
 
         self.payload = dict(payload)
         self.payload_persistent = dict(payload_persistent)
+        # This field should be set to different value only during deserialization
+        # For tasks created by current code, it should be set to latest
+        self.revision = self.REVISION
+
+    @property
+    def fquid(self) -> str:
+        """
+        Fully-qualified task uid in form <root_uid>:<task_uid>.
+
+        Used as a primary task identifier for storage in Redis since Karton 5.1.
+        """
+        if self.revision == 1:
+            return self.uid
+        return f"{self.root_uid}:{self.uid}"
 
     @property
     def headers_persistent(self) -> Dict[str, Any]:
@@ -352,6 +368,7 @@ class Task(object):
             "headers": self.headers,
             "headers_persistent": headers_persistent,
             "error": self.error,
+            "revision": self.revision,
         }
 
     def serialize(self, indent: Optional[int] = None) -> str:
@@ -433,6 +450,7 @@ class Task(object):
             deserialize '__karton_resource__' entries, which speeds up deserialization
             process. This flag is used mainly for multiple task processing e.g.
             filtering based on status.
+
             When resource deserialization is turned off, Task.unserialize will try
             to use faster 3rd-party JSON parser (orjson) if it's installed. It's not
             added as a required dependency but can speed up things if you need to check
@@ -492,6 +510,12 @@ class Task(object):
             _status=TaskState(task_data["status"]),
             _last_update=task_data.get("last_update", None),
         )
+        # Task scheme revision:
+        #  (none) or 1 - v1 (< 5.2.0)
+        #  2           - v2 (current)
+        #                task Redis key is karton.task:{root_uid}:{uid}
+        #                instead of karton.task:{uid}
+        task.revision = task_data.get("revision", 1)
         return task
 
     def __repr__(self) -> str:
