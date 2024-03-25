@@ -12,6 +12,7 @@ from .__version__ import __version__
 from .backend import KartonBackend, KartonBind, KartonMetrics
 from .base import KartonBase, KartonServiceBase
 from .config import Config
+from .exceptions import TimeoutException
 from .resource import LocalResource
 from .task import Task, TaskState
 from .utils import timeout
@@ -179,14 +180,14 @@ class Consumer(KartonServiceBase):
                         self.process(self.current_task)
                 else:
                     self.process(self.current_task)
-            except Exception as exc:
+            except (Exception, TimeoutException) as exc:
                 saved_exception = exc
                 raise
             finally:
                 self._run_post_hooks(saved_exception)
 
             self.log.info("Task done - %s", self.current_task.uid)
-        except Exception:
+        except (Exception, TimeoutException):
             exc_info = sys.exc_info()
             exception_str = traceback.format_exception(*exc_info)
 
