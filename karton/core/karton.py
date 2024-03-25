@@ -437,7 +437,7 @@ class Karton(Consumer, Producer):
         self._send_signaling_status_task("task_begin")
 
     def _send_signaling_status_task_end(
-        self, task: Task, ex: Optional[Exception]
+        self, task: Task, ex: Optional[KartonTaskException]
     ) -> None:
         """Send a begin status signaling task.
 
