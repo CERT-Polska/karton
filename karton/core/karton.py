@@ -6,7 +6,7 @@ import argparse
 import sys
 import time
 import traceback
-from typing import Any, Callable, Dict, List, Optional, Tuple, cast
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
 
 from .__version__ import __version__
 from .backend import KartonBackend, KartonBind, KartonMetrics
@@ -290,7 +290,9 @@ class Consumer(KartonServiceBase):
                 else:
                     self.log.exception("Pre-hook failed")
 
-    def _run_post_hooks(self, exception: Optional[Exception]) -> None:
+    def _run_post_hooks(
+        self, exception: Optional[Union[Exception, BaseException]]
+    ) -> None:
         """
         Run registered postprocessing hooks
 
