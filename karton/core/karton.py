@@ -17,6 +17,8 @@ from .resource import LocalResource
 from .task import Task, TaskState
 from .utils import timeout
 
+KartonTaskException = Union[Exception, BaseException]
+
 
 class Producer(KartonBase):
     """
@@ -132,7 +134,7 @@ class Consumer(KartonServiceBase):
         self._post_hooks: List[
             Tuple[
                 Optional[str],
-                Callable[[Task, Optional[Union[Exception, BaseException]]], None],
+                Callable[[Task, Optional[KartonTaskException]], None],
             ]
         ] = []
 
@@ -264,7 +266,7 @@ class Consumer(KartonServiceBase):
 
     def add_post_hook(
         self,
-        callback: Callable[[Task, Optional[Exception]], None],
+        callback: Callable[[Task, Optional[KartonTaskException]], None],
         name: Optional[str] = None,
     ) -> None:
         """
@@ -293,9 +295,7 @@ class Consumer(KartonServiceBase):
                 else:
                     self.log.exception("Pre-hook failed")
 
-    def _run_post_hooks(
-        self, exception: Optional[Union[Exception, BaseException]]
-    ) -> None:
+    def _run_post_hooks(self, exception: Optional[KartonTaskException]) -> None:
         """
         Run registered postprocessing hooks
 
