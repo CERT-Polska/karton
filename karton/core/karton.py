@@ -130,7 +130,10 @@ class Consumer(KartonServiceBase):
         self.current_task: Optional[Task] = None
         self._pre_hooks: List[Tuple[Optional[str], Callable[[Task], None]]] = []
         self._post_hooks: List[
-            Tuple[Optional[str], Callable[[Task, Optional[Exception]], None]]
+            Tuple[
+                Optional[str],
+                Callable[[Task, Optional[Union[Exception, BaseException]]], None],
+            ]
         ] = []
 
     @abc.abstractmethod
