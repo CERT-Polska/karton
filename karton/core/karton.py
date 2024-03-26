@@ -6,7 +6,7 @@ import argparse
 import sys
 import time
 import traceback
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from .__version__ import __version__
 from .backend import KartonBackend, KartonBind, KartonMetrics
