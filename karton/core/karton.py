@@ -18,7 +18,6 @@ from .task import Task, TaskState
 from .utils import timeout
 
 
-
 class Producer(KartonBase):
     """
     Producer part of Karton. Used for dispatching initial tasks into karton.
