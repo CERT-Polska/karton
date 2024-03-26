@@ -12,6 +12,7 @@ from .__version__ import __version__
 from .backend import KartonBackend, KartonBind, KartonMetrics
 from .base import KartonBase, KartonServiceBase
 from .config import Config
+from .exceptions import TaskTimeoutError
 from .resource import LocalResource
 from .task import Task, TaskState
 from .utils import timeout
@@ -129,7 +130,10 @@ class Consumer(KartonServiceBase):
         self.current_task: Optional[Task] = None
         self._pre_hooks: List[Tuple[Optional[str], Callable[[Task], None]]] = []
         self._post_hooks: List[
-            Tuple[Optional[str], Callable[[Task, Optional[Exception]], None]]
+            Tuple[
+                Optional[str],
+                Callable[[Task, Optional[BaseException]], None],
+            ]
         ] = []
 
     @abc.abstractmethod
@@ -179,14 +183,14 @@ class Consumer(KartonServiceBase):
                         self.process(self.current_task)
                 else:
                     self.process(self.current_task)
-            except Exception as exc:
+            except (Exception, TaskTimeoutError) as exc:
                 saved_exception = exc
                 raise
             finally:
                 self._run_post_hooks(saved_exception)
 
             self.log.info("Task done - %s", self.current_task.uid)
-        except Exception:
+        except (Exception, TaskTimeoutError):
             exc_info = sys.exc_info()
             exception_str = traceback.format_exception(*exc_info)
 
@@ -260,7 +264,7 @@ class Consumer(KartonServiceBase):
 
     def add_post_hook(
         self,
-        callback: Callable[[Task, Optional[Exception]], None],
+        callback: Callable[[Task, Optional[BaseException]], None],
         name: Optional[str] = None,
     ) -> None:
         """
@@ -289,7 +293,7 @@ class Consumer(KartonServiceBase):
                 else:
                     self.log.exception("Pre-hook failed")
 
-    def _run_post_hooks(self, exception: Optional[Exception]) -> None:
+    def _run_post_hooks(self, exception: Optional[BaseException]) -> None:
         """
         Run registered postprocessing hooks
 
@@ -431,7 +435,7 @@ class Karton(Consumer, Producer):
         self._send_signaling_status_task("task_begin")
 
     def _send_signaling_status_task_end(
-        self, task: Task, ex: Optional[Exception]
+        self, task: Task, ex: Optional[BaseException]
     ) -> None:
         """Send a begin status signaling task.
 
