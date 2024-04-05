@@ -322,7 +322,7 @@ class Consumer(KartonServiceBase):
         if self.task_timeout is not None:
             self.log.info(f"Task timeout is set to {self.task_timeout} seconds")
 
-        # Get the old binds and set the new ones atomically
+        # Get the old binds and set the new ones automatically
         old_bind = self.backend.register_bind(self._bind)
 
         if not old_bind:
