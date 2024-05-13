@@ -532,6 +532,34 @@ class KartonBackend:
             self.iter_all_tasks(chunk_size=chunk_size, parse_resources=parse_resources)
         )
 
+    def iter_task_tree(
+        self, root_uid: str, chunk_size: int = 1000, parse_resources: bool = True
+    ) -> Iterator[Task]:
+        """
+        Iterates all tasks that belong to the same analysis task tree
+        and have the same root_uid
+
+        :param root_uid: Root identifier of task tree
+        :param chunk_size: Size of chunks passed to the Redis SCAN and MGET command
+        :param parse_resources: If set to False, resources are not parsed.
+            It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
+            to learn more.
+        :return: Iterator with task objects
+
+        .. note::
+            This method processes only these tasks that are stored under
+            karton.task:<root_uid>:<task_uid> key format which is fully-qualified
+            identifier introduced in Karton 5.4.0
+
+            Unrouted tasks produced by older Karton versions won't be returned.
+        """
+        task_keys = self.redis.scan_iter(
+            match=f"{KARTON_TASK_NAMESPACE}:{{{root_uid}}}:*", count=chunk_size
+        )
+        return self._iter_tasks(
+            task_keys, chunk_size=chunk_size, parse_resources=parse_resources
+        )
+
     def register_task(self, task: Task, pipe: Optional[Pipeline] = None) -> None:
         """
         Register or update task in Redis.

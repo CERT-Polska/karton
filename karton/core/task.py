@@ -106,13 +106,18 @@ class Task(object):
             raise ValueError("Persistent headers should be an instance of a dict")
 
         if uid is None:
-            self.uid = str(uuid.uuid4())
+            task_uid = str(uuid.uuid4())
+            if root_uid is None:
+                self.root_uid = task_uid
+            else:
+                self.root_uid = root_uid
+            # New-style UID format introduced in v5.4.0
+            # {12345678-1234-1234-1234-12345678abcd}:12345678-1234-1234-1234-12345678abcd
+            self.uid = f"{{{self.root_uid}}}:{task_uid}"
         else:
             self.uid = uid
-
-        if root_uid is None:
-            self.root_uid = self.uid
-        else:
+            if root_uid is None:
+                raise ValueError("root_uid cannot be None when uid is not None")
             self.root_uid = root_uid
 
         self.orig_uid = orig_uid
@@ -136,6 +141,12 @@ class Task(object):
     @property
     def receiver(self) -> Optional[str]:
         return self.headers.get("receiver")
+
+    @property
+    def task_uid(self) -> str:
+        if ":" not in self.uid:
+            return self.uid
+        return self.uid.split(":")[-1]
 
     def fork_task(self) -> "Task":
         """
