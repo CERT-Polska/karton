@@ -532,6 +532,28 @@ class KartonBackend:
             self.iter_all_tasks(chunk_size=chunk_size, parse_resources=parse_resources)
         )
 
+    def _iter_legacy_task_tree(
+        self, root_uid: str, chunk_size: int = 1000, parse_resources: bool = True
+    ) -> Iterator[Task]:
+        """
+        Processes tasks made by <5.4.0 (unrouted from <5.4.0 producers or existing
+        before upgrade)
+
+        Used internally by iter_task_tree.
+        """
+        legacy_task_keys = self.redis.scan_iter(
+            match=f"{KARTON_TASK_NAMESPACE}:*[^:]*", count=chunk_size
+        )
+        for chunk in chunks_iter(legacy_task_keys, chunk_size):
+            yield from filter(
+                lambda task: task.root_uid == root_uid,
+                (
+                    Task.unserialize(task_data, parse_resources=parse_resources)
+                    for task_data in self.redis.mget(chunk)
+                    if task_data is not None
+                ),
+            )
+
     def iter_task_tree(
         self, root_uid: str, chunk_size: int = 1000, parse_resources: bool = True
     ) -> Iterator[Task]:
@@ -546,21 +568,11 @@ class KartonBackend:
             to learn more.
         :return: Iterator with task objects
         """
-        # Process unrouted tasks produced by Karton <5.4.0
-        legacy_task_keys = self.redis.scan_iter(
-            match=f"{KARTON_TASK_NAMESPACE}:*[^:]*", count=chunk_size
+        # Process <5.4.0 tasks (unrouted from <5.4.0 producers
+        # or existing before upgrade)
+        yield from self._iter_legacy_task_tree(
+            root_uid, chunk_size=chunk_size, parse_resources=parse_resources
         )
-        for chunk in chunks_iter(legacy_task_keys, chunk_size):
-            yield from filter(
-                lambda task: task.root_uid == root_uid,
-                (
-                    Task.unserialize(task_data, backend=self)
-                    if parse_resources
-                    else Task.unserialize(task_data, parse_resources=False)
-                    for task_data in self.redis.mget(chunk)
-                    if task_data is not None
-                ),
-            )
         # Process >=5.4.0 tasks
         task_keys = self.redis.scan_iter(
             match=f"{KARTON_TASK_NAMESPACE}:{{{root_uid}}}:*", count=chunk_size
