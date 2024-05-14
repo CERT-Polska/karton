@@ -545,18 +545,27 @@ class KartonBackend:
             It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
             to learn more.
         :return: Iterator with task objects
-
-        .. note::
-            This method processes only these tasks that are stored under
-            karton.task:<root_uid>:<task_uid> key format which is fully-qualified
-            identifier introduced in Karton 5.4.0
-
-            Unrouted tasks produced by older Karton versions won't be returned.
         """
+        # Process unrouted tasks produced by Karton <5.4.0
+        legacy_task_keys = self.redis.scan_iter(
+            match=f"{KARTON_TASK_NAMESPACE}:*[^:]*", count=chunk_size
+        )
+        for chunk in chunks_iter(legacy_task_keys, chunk_size):
+            yield from filter(
+                lambda task: task.root_uid == root_uid,
+                (
+                    Task.unserialize(task_data, backend=self)
+                    if parse_resources
+                    else Task.unserialize(task_data, parse_resources=False)
+                    for task_data in self.redis.mget(chunk)
+                    if task_data is not None
+                ),
+            )
+        # Process >=5.4.0 tasks
         task_keys = self.redis.scan_iter(
             match=f"{KARTON_TASK_NAMESPACE}:{{{root_uid}}}:*", count=chunk_size
         )
-        return self._iter_tasks(
+        yield from self._iter_tasks(
             task_keys, chunk_size=chunk_size, parse_resources=parse_resources
         )
 
