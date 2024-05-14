@@ -144,9 +144,18 @@ class Task(object):
 
     @property
     def task_uid(self) -> str:
-        if ":" not in self.uid:
-            return self.uid
-        return self.uid.split(":")[-1]
+        return self.fquid_to_uid(self.uid)
+
+    @staticmethod
+    def fquid_to_uid(fquid: str) -> str:
+        """
+        Gets task uid from fully-qualified fquid ({root_uid}:task_uid)
+
+        :return: Task uid
+        """
+        if ":" not in fquid:
+            return fquid
+        return fquid.split(":")[-1]
 
     def fork_task(self) -> "Task":
         """
