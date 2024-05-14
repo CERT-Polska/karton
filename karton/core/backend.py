@@ -449,9 +449,7 @@ class KartonBackend:
             chunk_size,
         )
         return [
-            Task.unserialize(task_data, backend=self)
-            if parse_resources
-            else Task.unserialize(task_data, parse_resources=False)
+            Task.unserialize(task_data, parse_resources=parse_resources)
             for chunk in keys
             for task_data in self.redis.mget(chunk)
             if task_data is not None
@@ -465,9 +463,7 @@ class KartonBackend:
     ) -> Iterator[Task]:
         for chunk in chunks_iter(task_keys, chunk_size):
             yield from (
-                Task.unserialize(task_data, backend=self)
-                if parse_resources
-                else Task.unserialize(task_data, parse_resources=False)
+                Task.unserialize(task_data, parse_resources=parse_resources)
                 for task_data in self.redis.mget(chunk)
                 if task_data is not None
             )
