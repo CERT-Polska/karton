@@ -434,9 +434,7 @@ class Task(object):
             process. This flag is used mainly for multiple task processing e.g.
             filtering based on status.
             When resource deserialization is turned off, Task.unserialize will try
-            to use faster 3rd-party JSON parser (orjson) if it's installed. It's not
-            added as a required dependency but can speed up things if you need to check
-            status of multiple tasks at once.
+            to use faster 3rd-party JSON parser (orjson).
         :return: Unserialized Task object
 
         :meta private:
