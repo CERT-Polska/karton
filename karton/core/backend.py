@@ -549,7 +549,9 @@ class KartonBackend:
             yield from filter(
                 lambda task: task.root_uid == root_uid,
                 (
-                    Task.unserialize(task_data, parse_resources=parse_resources)
+                    Task.unserialize(
+                        task_data, backend=self, parse_resources=parse_resources
+                    )
                     for task_data in self.redis.mget(chunk)
                     if task_data is not None
                 ),
