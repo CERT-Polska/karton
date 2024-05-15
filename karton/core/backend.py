@@ -541,6 +541,7 @@ class KartonBackend:
 
         Used internally by iter_task_tree.
         """
+        # Iterate over all karton tasks that do not match the new task id format
         legacy_task_keys = self.redis.scan_iter(
             match=f"{KARTON_TASK_NAMESPACE}:*[^:]*", count=chunk_size
         )
