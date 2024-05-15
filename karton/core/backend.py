@@ -543,7 +543,7 @@ class KartonBackend:
         """
         # Iterate over all karton tasks that do not match the new task id format
         legacy_task_keys = self.redis.scan_iter(
-            match=f"{KARTON_TASK_NAMESPACE}:*[^:]*", count=chunk_size
+            match=f"{KARTON_TASK_NAMESPACE}:[^{{]*", count=chunk_size
         )
         for chunk in chunks_iter(legacy_task_keys, chunk_size):
             yield from filter(
