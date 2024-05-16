@@ -166,7 +166,7 @@ class SystemService(KartonServiceBase):
 
     def route_task(self, task: Task, binds: List[KartonBind]) -> None:
         # Performs routing of task
-        self.log.info("[%s] Processing task %s", task.root_uid, task.uid)
+        self.log.info("[%s] Processing task %s", task.root_uid, task.task_uid)
         # store the producer-task relationship in redis for task tracking
         self.backend.log_identity_output(
             task.headers.get("origin", "unknown"), task.headers

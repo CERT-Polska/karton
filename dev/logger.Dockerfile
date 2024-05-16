@@ -1,4 +1,4 @@
-FROM python:3.7
+FROM python:3.11
 
 COPY requirements.txt /karton/
 COPY setup.py /karton/
