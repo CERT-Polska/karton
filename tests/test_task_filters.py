@@ -468,3 +468,8 @@ class TestTaskFilters(unittest.TestCase):
             "platform": "linux",
         })
         self.assertFalse(task_sample.matches_filters(filters))
+
+        task_sample = Task(headers={
+            "platform": "linux*",
+        })
+        self.assertTrue(task_sample.matches_filters(filters))
