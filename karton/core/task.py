@@ -16,9 +16,9 @@ from typing import (
     Union,
 )
 
+from .query import convert
 from .resource import RemoteResource, ResourceBase
 from .utils import recursive_iter, recursive_iter_with_keys, recursive_map
-from .query import convert
 
 if TYPE_CHECKING:
     from .backend import KartonBackend  # noqa
