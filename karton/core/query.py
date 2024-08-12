@@ -1,7 +1,6 @@
 import re
-from collections.abc import Sequence, Mapping
+from collections.abc import Mapping, Sequence
 from typing import Dict, Type
-
 
 # Source code adopted from https://github.com/kapouille/mongoquery
 # Original licenced under "The Unlicense" license.
