@@ -287,6 +287,7 @@ class TestTaskFilters(unittest.TestCase):
             "platform": "win32"
         })
         self.assertFalse(task_different_win64.matches_filters(filters))
+
     def test_element_is_contained(self):
         filters = [
             {
