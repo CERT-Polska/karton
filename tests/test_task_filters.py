@@ -424,9 +424,9 @@ class TestTaskFilters(unittest.TestCase):
         })
         # no anchors in the regex, so this should actually match
         self.assertTrue(task_sample.matches_filters(filters))
+
     def test_example_from_convert(self):
         # Test for a literal example used in the convert method documentation
-
         oldstyle = [{"platform": "!win32"}, {"platform": "!linux"}]
         wrong = [{"platform": {"$not": "win32"}}, {"platform": {"$not": "linux"}}]
         good = [{"platform": {"$not": {"$or": ["win32", "linux"]}}}]
