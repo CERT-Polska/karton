@@ -88,12 +88,10 @@ Starting from 5.0.0, consumer filters support basic wildcards and exclusions.
        Pattern                                           Meaning
 ------------------------  ------------------------------------------------------------------------------
 ``{"foo": "bar"}``        matches 'bar' value of 'foo' header
-``{"foo": "!bar"}``       matches any value other than 'bar' in 'foo' header
 ``{"foo": "ba?"}``        matches 'ba' value followed by any character
 ``{"foo": "ba*"}``        matches 'ba' value followed by any substring (including empty)
 ``{"foo": "ba[rz]"}``     matches 'ba' value followed by 'r' or 'z' character
 ``{"foo": "ba[!rz]"}``    matches 'ba' value followed by any character other than 'r' or 'z'
-``{"foo": "!ba[!rz]"}``   matches any value of 'foo' header that doesn't match to the "bar[!rz]" pattern
 ========================  ==============================================================================
 
 Filter logic can be used to fulfill specific use-cases:
@@ -104,27 +102,46 @@ Filter logic can be used to fulfill specific use-cases:
 ``[]``                                matches no tasks (no headers allowed). Can be used to turn off queue and consume tasks left.
 ``[{}]``                              matches any task (no header conditions). Can be used to intercept all tasks incoming to Karton.
 ``[{"foo": "bar"}, {"foo": "baz"}]``  'foo' header is required and must have 'bar' or 'baz' value.
-``[{"foo": "!*"}]``                   'foo' header must be not defined.
 ====================================  ==============================================================================
 
-Excluding (negated) filters come with specific corner-cases. Regular filters require specific value to be defined in header, while
-negated filters are accepting all possible values except specified in filter.
+.. versionadded:: 5.4.1
 
-==================================================================================  =============================================================================================================================================
-   ``filters`` value                                                                  Meaning
-----------------------------------------------------------------------------------  ---------------------------------------------------------------------------------------------------------------------------------------------
-``[{"type": "sample", "stage": "!*"}]``                                             matches only tasks that have type 'sample' but no 'stage' key
-``[{"platform": "!linux"}, {"platform": "!windows"}]``                              matches **all** tasks (even with no headers) but not these with platform 'linux' or 'windows'
-``[{"foo": "bar", "platform": "!linux"}, {"foo": "bar", "platform": "!windows"}]``  'foo' header is required and must have 'bar' value, but platform can't be 'linux' or 'windows'
-``[{"foo": "bar", "platform": "!linux"}, {"foo": "baz", "platform": "!windows"}]``  'foo' header is required and must have 'bar' value and no 'linux' in platform key, or foo must be 'baz', but then platform can't be 'windows'
-==================================================================================  =============================================================================================================================================
+Sometimes a more flexible behavior is necessary. This should be done with caution, as Karton can handle quite complex
+workflows without resorting to this. The need to use complex task filtering rules may mean that one is doing something not in the "spirit" of Karton.
 
-.. warning::
+The advanced filter syntax is based on MongoDB syntax. See `MongoDB documentation<https://www.mongodb.com/docs/manual/reference/operator/query/>`_
+for a detailed explanation.
 
-    It's recommended to use only strings in filter and header values
+In case of Karton, the following operators are allowed:
 
-    Although some of non-string types are allowed, they will be converted to string for comparison
-    which may lead to unexpected results.
+- Comparison: :code:`$eq`, :code:`ne` :code:`$gt`, :code:`$gte`, :code:`$lt`, :code:`$lte` 
+- Logical: :code:`$and`, :code:`$or`, :code:`$not`, :code:`$nor`
+- Array: :code:`$in`, :code:`$nin`, :code:`$all`, :code:`$elemMatch`, :code:`$size`
+- Miscellaneous: :code:`$type`, :code:`$mod`, :code:`$regex`, :code:`$elemMatch``
+
+For some concrete examples, consider these filters:
+
+.. code-block:: python
+
+    filters = [
+        {  # checks if `version` header is a number greater than 3
+            "type": "sample",
+            "version": {"$gt": 3},
+        },
+        {  # checks if `tags` header contain both "emotet" and "dimp"
+            "type": "sample",
+            "tags": {"$all": ["emotet", "dump"]},
+        },
+        {  # checks if `platform` header is either "win32" or "linux"
+            "type": "sample",
+            "platform": {"$in": ["win32", "linux"]},
+        },
+        {  # checks if `respects` header contains a prime number of letters "f"
+            "type": "sample",
+            "respects": {"$not": {"$regex": r"^f?$|^(ff+?)\1+$"}}
+        },
+    ]
+
 
 Task payload
 ------------
