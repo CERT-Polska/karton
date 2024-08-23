@@ -144,7 +144,7 @@ For some concrete examples, consider these filters:
 
 .. warning::
 
-    These two filter styles don't mix, and wildcard patterns only work at the top level.
+    Filter styles don't mix well, and wildcard patterns only work at the top level.
     For example, the following won't work as expected:
 
     .. code-block:: python
