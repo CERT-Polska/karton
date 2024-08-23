@@ -1,6 +1,5 @@
 import fnmatch
 import re
-
 from collections.abc import Mapping, Sequence
 from typing import Dict, Type
 
