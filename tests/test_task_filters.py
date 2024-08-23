@@ -522,3 +522,17 @@ class TestTaskFilters(unittest.TestCase):
             "foo": "bat",
         })
         self.assertTrue(task_sample.matches_filters(filters))
+
+    def test_wildcards_anchored(self):
+        # Old-style wildcards, except negative filters, don't mix
+        filters = [{"foo": "bar"}]
+
+        task_sample = Task(headers={
+            "foo": "rabarbar",
+        })
+        self.assertFalse(task_sample.matches_filters(filters))
+
+        task_sample = Task(headers={
+            "foo": "bar",
+        })
+        self.assertTrue(task_sample.matches_filters(filters))
