@@ -340,9 +340,11 @@ def convert(filters):
                 positive_checks.append({key: value})
         regular_filter.append({"$and": positive_checks})
         negative_filter.append({"$and": positive_checks + [{"$or": negative_checks}]})
-    return Query({
-        "$and": [
-            {"$not": {"$or": negative_filter}},
-            {"$or": regular_filter},
-        ]
-    })
+    return Query(
+        {
+            "$and": [
+                {"$not": {"$or": negative_filter}},
+                {"$or": regular_filter},
+            ]
+        }
+    )
