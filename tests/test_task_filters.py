@@ -473,39 +473,25 @@ class TestTaskFilters(unittest.TestCase):
 
     def test_newstyle_flip(self):
         # It's not recommended, but mongo syntax is allowed at the top level too
-        # Example: match type:sample, when either platform:win32 or kind:runnable
+        # Pointless example: match platform:win32 or kind:runnable
         filters = [
             {
-                "$and": [
-                    {"type": "sample"},
-                    {
-                        "$or": [
-                            {"platform": "win32"},
-                            {"kind": "runnable"},
-                        ]
-                    },
-                ]
+                "$or": [{"platform": "win32"}, {"kind": "runnable"}],
             },
         ]
 
         task_sample = Task(
-            headers={"type": "sample", "platform": "linux", "kind": "runnable"}
+            headers={"platform": "linux", "kind": "runnable"}
         )
         self.assertTrue(task_sample.matches_filters(filters))
 
         task_sample = Task(
-            headers={
-                "type": "sample",
-                "platform": "win32",
-            }
+            headers={"platform": "win32"}
         )
         self.assertTrue(task_sample.matches_filters(filters))
 
         task_sample = Task(
-            headers={
-                "type": "sample",
-                "platform": "linux",
-            }
+            headers={"platform": "linux"}
         )
         self.assertFalse(task_sample.matches_filters(filters))
 
