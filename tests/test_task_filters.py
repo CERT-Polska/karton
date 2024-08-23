@@ -508,3 +508,17 @@ class TestTaskFilters(unittest.TestCase):
             }
         )
         self.assertFalse(task_sample.matches_filters(filters))
+
+    def test_oldstyle_wildcards(self):
+        # Old-style wildcards, except negative filters, don't mix
+        filters = [{"foo": "ba[!rz]"}]
+
+        task_sample = Task(headers={
+            "foo": "bar",
+        })
+        self.assertFalse(task_sample.matches_filters(filters))
+
+        task_sample = Task(headers={
+            "foo": "bat",
+        })
+        self.assertTrue(task_sample.matches_filters(filters))

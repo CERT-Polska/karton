@@ -1,4 +1,6 @@
+import fnmatch
 import re
+
 from collections.abc import Mapping, Sequence
 from typing import Dict, Type
 
@@ -303,13 +305,13 @@ class Query(object):
         return f"<Query({self._definition})>"
 
 
-def toregex(x):
-    """Naive/PoC wildcard-to-regex conversion"""
-    if not isinstance(x, str):
-        raise QueryError(f"Unexpected value in the regex conversion: {x}")
-    if "?" in x or "*" in x or "[" in x:
-        return {"$regex": "^" + x.replace("?", ".?").replace("*", ".*") + "$"}
-    return x
+def toregex(wildcard):
+    if not isinstance(wildcard, str):
+        raise QueryError(f"Unexpected value in the regex conversion: {wildcard}")
+    # If is not neessary, but we avoid unnecessary regular expressions.
+    if any(c in wildcard for c in "?*[]!"):
+        return {"$regex": fnmatch.translate(wildcard)}
+    return wildcard
 
 
 def convert(filters):
