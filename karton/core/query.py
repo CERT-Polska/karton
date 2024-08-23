@@ -299,6 +299,9 @@ class Query(object):
 
         return False
 
+    def __repr__(self):
+        return f"<Query({self._definition})>"
+
 
 def toregex(x):
     """Naive/PoC wildcard-to-regex conversion"""
@@ -324,7 +327,6 @@ def convert(filters):
     # To get equivalent behaviour with mongo syntax, you should use:
     # [{"platform": {"$not": {"$or": ["win32", "linux"]}}}]
     regular_filter, negative_filter = [], []
-    negative_filter = []
     for rule in filters:
         positive_checks, negative_checks = [], []
         for key, value in rule.items():
@@ -337,6 +339,9 @@ def convert(filters):
                 positive_checks.append({key: value})
         regular_filter.append({"$and": positive_checks})
         negative_filter.append({"$and": positive_checks + [{"$or": negative_checks}]})
-    positive = Query({"$or": regular_filter})
-    negative = Query({"$or": negative_filter})
-    return positive, negative
+    return Query({
+        "$and": [
+            {"$not": {"$or": negative_filter}},
+            {"$or": regular_filter},
+        ]
+    })

@@ -454,7 +454,7 @@ class TestTaskFilters(unittest.TestCase):
         assertExpect(tasks, good, [False, False, True])
 
     def test_nested_oldstyle(self):
-        # Old-style wildcards, and certainly negative filters, don't mix
+        # Old-style wildcards, except negative filters, don't mix
         filters = [
             {
                 "platform": {"$or": ["win*", "linux*"]}

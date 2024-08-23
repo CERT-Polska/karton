@@ -38,7 +38,7 @@ class TestConfig(unittest.TestCase):
         """ Test missing config file """
         mock_isfile.return_value = False
         with self.assertRaises(IOError):
-            cfg = Config("this_file_doesnt_exist")
+            Config("this_file_doesnt_exist")
 
     @patch('os.path.isfile', lambda path: True)
     @patch('builtins.open', mock_open(read_data=MOCK_CONFIG))

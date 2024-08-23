@@ -15,7 +15,7 @@ from typing import (
     Union,
 )
 
-from .query import convert
+from . import query
 from .resource import RemoteResource, ResourceBase
 from .utils import recursive_iter, recursive_iter_with_keys, recursive_map
 
@@ -224,13 +224,7 @@ class Task(object):
 
     def matches_filters(self, filters: List[Dict[str, Any]]) -> bool:
         """Check if a task matches the given filters"""
-        positive_match, negative_match = convert(filters)
-        if negative_match.match(self.headers):
-            return False
-        elif positive_match.match(self.headers):
-            return True
-        else:
-            return False
+        return query.convert(filters).match(self.headers)
 
     def set_task_parent(self, parent: "Task"):
         """

@@ -109,7 +109,7 @@ Filter logic can be used to fulfill specific use-cases:
 Sometimes a more flexible behavior is necessary. This should be done with caution, as Karton can handle quite complex
 workflows without resorting to this. The need to use complex task filtering rules may mean that one is doing something not in the "spirit" of Karton.
 
-The advanced filter syntax is based on MongoDB syntax. See `MongoDB documentation<https://www.mongodb.com/docs/manual/reference/operator/query/>`_
+The advanced filter syntax is based on MongoDB syntax. See `MongoDB documentation <https://www.mongodb.com/docs/manual/reference/operator/query/>`_
 for a detailed explanation.
 
 In case of Karton, the following operators are allowed:
@@ -117,7 +117,7 @@ In case of Karton, the following operators are allowed:
 - Comparison: :code:`$eq`, :code:`ne` :code:`$gt`, :code:`$gte`, :code:`$lt`, :code:`$lte` 
 - Logical: :code:`$and`, :code:`$or`, :code:`$not`, :code:`$nor`
 - Array: :code:`$in`, :code:`$nin`, :code:`$all`, :code:`$elemMatch`, :code:`$size`
-- Miscellaneous: :code:`$type`, :code:`$mod`, :code:`$regex`, :code:`$elemMatch``
+- Miscellaneous: :code:`$type`, :code:`$mod`, :code:`$regex`, :code:`$elemMatch`
 
 For some concrete examples, consider these filters:
 
@@ -136,11 +136,43 @@ For some concrete examples, consider these filters:
             "type": "sample",
             "platform": {"$in": ["win32", "linux"]},
         },
-        {  # checks if `respects` header contains a prime number of letters "f"
+        {  # checks if `respect` header contains a prime number of letters "f"
             "type": "sample",
-            "respects": {"$not": {"$regex": r"^f?$|^(ff+?)\1+$"}}
+            "respect": {"$not": {"$regex": r"^f?$|^(ff+?)\1+$"}}
         },
     ]
+
+.. warning::
+
+    These two filter styles don't mix, and wildcard patterns only work at the top level.
+    For example, the following won't work as expected:
+
+    .. code-block:: python
+
+        filters = [
+            { "version": {"$or": ["win*", "linux*"]} },
+        ]
+
+    Instead you have to use regex explicitly: 
+
+    .. code-block:: python
+
+        filters = [{
+            "version": {
+                "$or": [
+                    {"$regex": "win*"},
+                    {"$regex": "linux*"},
+                ],
+            }
+        ]
+
+    Or just:
+
+    .. code-block:: python
+
+        filters = [
+            { "version": {"$regex": "win*|linux*"} },
+        ]
 
 
 Task payload

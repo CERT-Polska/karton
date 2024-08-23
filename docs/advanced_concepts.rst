@@ -249,7 +249,9 @@ You can enable it by setting:
 
 
 Negated filter patterns
------------------
+-----------------------
+
+.. versionadded:: 5.4.1
 
 There is one more pattern syntax, not documented in the :code:`Filter Patterns` section anymore.
 It is possible to define a negated filter, and they are handled in a special way. For example let's consider following filters:
@@ -259,7 +261,7 @@ It is possible to define a negated filter, and they are handled in a special way
     # Special ("old style") negation
     [
         {"foo": "bar", "platform": "!linux"},
-        {"foo": "bar", "platform": "!windows"}
+        {"foo": "bar", "platform": "!windows"},
     ]
 
 Depending on how you think this should work, this may have a surprising behavior. In particular this is **not** equivalent to:
@@ -272,7 +274,7 @@ Depending on how you think this should work, this may have a surprising behavior
         {"foo": "bar", "platform": {"$not": "windows"}},
     ]
 
-That's because negated filters are handled in a very special way, but :code:`$not$` is not. Let's use the following task as an example:
+That's because negated "old style" filters are handled in a very special way, but :code:`$not` is not. Let's use the following task as an example:
 
 .. code-block:: python
 
@@ -282,10 +284,10 @@ That's because negated filters are handled in a very special way, but :code:`$no
     }
 
 Recall that filters are checked top to bottom, and if at least one pattern matches, the task will be accepted by a consumer.
-Using a regular ("new style") patterns, the matching will proceed as follows:
+Using regular ("new style") patterns, the matching will proceed as follows:
 
-- A task is checked against the first filter. Then :code:`foo` matches, but the filters explicitly rejects tasks with :code:`platform: linux"`. 
-- A task is checked against the second filter. Then :code:`foo` matches, and the platform - :code:`linux` - is not equal to to :code:`windows`, so the task is accepted.
+- Check against the first filter: :code:`foo` matches, but the filter explicitly rejects tasks with :code:`platform: linux`. 
+- Check against the second filter: :code:`foo` matches, and the platform - :code:`linux` - is not equal to to :code:`windows`, so the task is accepted.
 
 Whoops! This is probably not what the programmer intended. In comparison, "old style" filters will always reject a task if it matches at least one negated filter.
 This sounds nice, but as every special case may cause unpleasant surprised. This is especially true when combining "old style" and "new style" patterns.
@@ -299,7 +301,7 @@ In this case, the proper way to get the desired behavior with "new-style" filter
     [
         {
             "foo": "bar",
-            "platform": {"$not": {"$or": ["linux", "windows"]}},
+            "platform": {"$not": {"$or": ["linux", "windows"]}},,
         }
     ]
 
