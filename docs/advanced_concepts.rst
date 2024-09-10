@@ -246,3 +246,76 @@ You can enable it by setting:
 - :code:`KARTON_KARTON_DEBUG` environment value to "1"
 - :code:`debug` parameter to `1` in the :code:`[karton]` config section
 - :code:`--debug` command-line parameter
+
+
+Negated filter patterns
+-----------------------
+
+.. versionadded:: 5.4.1
+
+There is one more pattern syntax, not documented in the :code:`Filter Patterns` section anymore.
+It is possible to define a negated filter, and they are handled in a special way. For example let's consider following filters:
+
+.. code-block:: python
+
+    # Special ("old style") negation
+    [
+        {"foo": "bar", "platform": "!linux"},
+        {"foo": "bar", "platform": "!windows"},
+    ]
+
+Depending on how you think this should work, this may have a surprising behavior. In particular this is **not** equivalent to:
+
+.. code-block:: python
+
+    # Regular ("new style") negation (this is intentionally WRONG, see below)
+    [
+        {"foo": "bar", "platform": {"$not": "linux"}},
+        {"foo": "bar", "platform": {"$not": "windows"}},
+    ]
+
+That's because negated "old style" filters are handled in a very special way, but :code:`$not` is not. Let's use the following task as an example:
+
+.. code-block:: python
+
+    {
+        "foo": "bar",
+        "platform": "linux"
+    }
+
+Recall that filters are checked top to bottom, and if at least one pattern matches, the task will be accepted by a consumer.
+Using regular ("new style") patterns, the matching will proceed as follows:
+
+- Check against the first filter: :code:`foo` matches, but the filter explicitly rejects tasks with :code:`platform: linux`. 
+- Check against the second filter: :code:`foo` matches, and the platform - :code:`linux` - is not equal to to :code:`windows`, so the task is accepted.
+
+Whoops! This is probably not what the programmer intended. In comparison, "old style" filters will always reject a task if it matches at least one negated filter.
+This sounds nice, but as every special case may cause unpleasant surprised. This is especially true when combining "old style" and "new style" patterns.
+That's why it's currently recommended to only use "new style" filters - they do everything "old style" filters can, and much more.
+
+In this case, the proper way to get the desired behavior with "new-style" filters is:
+
+.. code-block:: python
+
+    # Regular ("new style") negation
+    [
+        {
+            "foo": "bar",
+            "platform": {"$not": {"$or": ["linux", "windows"]}},,
+        }
+    ]
+
+It's a bit more verbose, but at least it should be very clear what is happening: We want :code:`foo` equal to :code:`bar`, and :code:`platform` **not** equal to either :code:`windows` or :code:`linux`.
+In this case there are no special cases, and matching checks every filter top to bottom independently, as usual.
+
+.. warning::
+
+    "Old style" negations are only supported at the top-level! Combining them with "new style" filters will not work. Exclamation mark is not considered a special character in this case.
+
+    In fact, we're not even sure how :code:`{"$or": ["!windows", "!linux"]}` *should* behave.
+
+.. note::
+    
+    Since "new style" patterns were introduced in Karton version 5.4.1, "old style" negations are not recommended and should be considered deprecated.
+
+    Nevertheless, Karton still supports them and they will keep working indefinitely. So don't worry, there are no breaking changes here.

@@ -1,5 +1,4 @@
 import enum
-import fnmatch
 import json
 import time
 import uuid
@@ -16,6 +15,7 @@ from typing import (
     Union,
 )
 
+from . import query
 from .resource import RemoteResource, ResourceBase
 from .utils import recursive_iter, recursive_iter_with_keys, recursive_map
 
@@ -223,75 +223,8 @@ class Task(object):
         return new_task
 
     def matches_filters(self, filters: List[Dict[str, Any]]) -> bool:
-        """
-        Checks whether provided task headers match filters
-
-        :param filters: Task header filters
-        :return: True if task headers match specific filters
-
-        :meta private:
-        """
-
-        def test_filter(headers: Dict[str, Any], filter: Dict[str, Any]) -> int:
-            """
-            Filter match follows AND logic, but it's non-boolean because filters may be
-            negated (task:!platform).
-
-            Result values are as follows:
-            - 1  - positive match, no mismatched values in headers
-                   (all matched)
-            - 0  - no match, found value that doesn't match to the filter
-                   (some are not matched)
-            - -1 - negative match, found value that matches negated filter value
-                   (all matched but found negative matches)
-            """
-            matches = 1
-            for filter_key, filter_value in filter.items():
-                # Coerce filter value to string
-                filter_value_str = str(filter_value)
-                negated = False
-                if filter_value_str.startswith("!"):
-                    negated = True
-                    filter_value_str = filter_value_str[1:]
-
-                # If expected key doesn't exist in headers
-                if filter_key not in headers:
-                    # Negated filter ignores non-existent values
-                    if negated:
-                        continue
-                    # But positive filter doesn't
-                    return 0
-
-                # Coerce header value to string
-                header_value_str = str(headers[filter_key])
-                # fnmatch is great for handling simple wildcard patterns (?, *, [abc])
-                match = fnmatch.fnmatchcase(header_value_str, filter_value_str)
-                # If matches, but it's negated: it's negative match
-                if match and negated:
-                    matches = -1
-                # If doesn't match but filter is not negated: it's not a match
-                if not match and not negated:
-                    return 0
-            # If there are no mismatched values: filter is matched
-            return matches
-
-        # List of filter matches follow OR logic, but -1 is special
-        # If there is any -1, result is False
-        #   (any matched, but it's negative match)
-        # If there is any 1, but no -1's: result is True
-        #   (any matched, no negative match)
-        # If there are only 0's: result is False
-        #   (none matched)
-        matches = False
-        for task_filter in filters:
-            match_result = test_filter(self.headers, task_filter)
-            if match_result == -1:
-                # Any negative match results in False
-                return False
-            if match_result == 1:
-                # Any positive match but without negative matches results in True
-                matches = True
-        return matches
+        """Check if a task matches the given filters"""
+        return query.convert(filters).match(self.headers)
 
     def set_task_parent(self, parent: "Task"):
         """

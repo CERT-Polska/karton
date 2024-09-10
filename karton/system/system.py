@@ -3,6 +3,7 @@ import json
 import time
 from typing import List, Optional
 
+from karton.core import query
 from karton.core.__version__ import __version__
 from karton.core.backend import (
     KARTON_OPERATIONS_QUEUE,
@@ -175,7 +176,12 @@ class SystemService(KartonServiceBase):
         pipe = self.backend.make_pipeline()
         for bind in binds:
             identity = bind.identity
-            if task.matches_filters(bind.filters):
+            try:
+                is_match = task.matches_filters(bind.filters)
+            except query.QueryError:
+                self.log.error("Task matching failed - invalid filters?")
+                continue
+            if is_match:
                 routed_task = task.fork_task()
                 routed_task.status = TaskState.SPAWNED
                 routed_task.last_update = time.time()

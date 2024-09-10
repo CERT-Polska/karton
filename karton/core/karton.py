@@ -8,6 +8,7 @@ import time
 import traceback
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
+from . import query
 from .__version__ import __version__
 from .backend import KartonBackend, KartonBind, KartonMetrics
 from .base import KartonBase, KartonServiceBase
@@ -121,6 +122,9 @@ class Consumer(KartonServiceBase):
 
         if self.filters is None:
             raise ValueError("Cannot bind consumer on Empty binds")
+
+        # Dummy conversion to make sure the filters are well-formed.
+        query.convert(self.filters)
 
         self.persistent = (
             self.config.getboolean("karton", "persistent", self.persistent)
