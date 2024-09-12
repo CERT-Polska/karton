@@ -251,7 +251,7 @@ You can enable it by setting:
 Negated filter patterns
 -----------------------
 
-.. versionadded:: 5.4.1
+.. versionadded:: 5.5.0
 
 There is one more pattern syntax, not documented in the :code:`Filter Patterns` section anymore.
 It is possible to define a negated filter, and they are handled in a special way. For example let's consider following filters:
@@ -316,6 +316,6 @@ In this case there are no special cases, and matching checks every filter top to
 
 .. note::
     
-    Since "new style" patterns were introduced in Karton version 5.4.1, "old style" negations are not recommended and should be considered deprecated.
+    Since "new style" patterns were introduced in Karton version 5.5.0, "old style" negations are not recommended and should be considered deprecated.
 
     Nevertheless, Karton still supports them and they will keep working indefinitely. So don't worry, there are no breaking changes here.
