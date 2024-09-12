@@ -104,7 +104,7 @@ Filter logic can be used to fulfill specific use-cases:
 ``[{"foo": "bar"}, {"foo": "baz"}]``  'foo' header is required and must have 'bar' or 'baz' value.
 ====================================  ==============================================================================
 
-.. versionadded:: 5.4.1
+.. versionadded:: 5.5.0
 
 Sometimes a more flexible behavior is necessary. This should be done with caution, as Karton can handle quite complex
 workflows without resorting to this. The need to use complex task filtering rules may mean that one is doing something not in the "spirit" of Karton.
