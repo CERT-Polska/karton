@@ -25,8 +25,15 @@ def is_non_string_sequence(entry):
 class Query(object):
     """The Query class is used to match an object against a MongoDB-like query"""
 
-    def __init__(self, definition):
+    def __init__(self, definition, _type_coercion=False):
+        """
+        If _type_coercion is enabled: header values are coerced to string
+        when condition is also a string. It's implemented for compatibility
+        with old syntax e.g. {"execute": "!False"} filter vs {"execute": False}
+        header value.
+        """
         self._definition = definition
+        self._type_coercion = _type_coercion
 
     def match(self, entry):
         """Matches the entry object against the query specified on instanciation"""
@@ -40,7 +47,7 @@ class Query(object):
             )
         if is_non_string_sequence(entry):
             return condition in entry
-        return condition == entry
+        return self._eq(condition, entry)
 
     def _extract(self, entry, path):
         if not path:
@@ -108,9 +115,14 @@ class Query(object):
     def _noop(*_):
         return True
 
-    @staticmethod
-    def _eq(condition, entry):
+    def _eq(self, condition, entry):
         try:
+            if (
+                self._type_coercion
+                and type(condition) is str
+                and type(entry) is not str
+            ):
+                return str(entry) == condition
             return entry == condition
         except TypeError:
             return False
@@ -155,9 +167,8 @@ class Query(object):
         except TypeError:
             return False
 
-    @staticmethod
-    def _ne(condition, entry):
-        return entry != condition
+    def _ne(self, condition, entry):
+        return not self._eq(condition, entry)
 
     def _nin(self, condition, entry):
         return not self._in(condition, entry)
@@ -346,5 +357,6 @@ def convert(filters):
                 {"$not": {"$or": negative_filter}},
                 {"$or": regular_filter},
             ]
-        }
+        },
+        _type_coercion=True,
     )

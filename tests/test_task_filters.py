@@ -226,6 +226,39 @@ class TestTaskFilters(unittest.TestCase):
         })
         self.assertFalse(task_different_value.matches_filters(filters))
 
+    def test_negated_non_string_headers(self):
+        filters = [
+            {
+                "block": True,
+                "execute": "!False"
+            }
+        ]
+
+        task_non_block = Task(headers={
+            "block": False,
+            "execute": False,
+        })
+        self.assertFalse(task_non_block.matches_filters(filters))
+
+        task_non_block_execute = Task(headers={
+            "block": False,
+            "execute": True,
+        })
+        self.assertFalse(task_non_block_execute.matches_filters(filters))
+
+        task_block_non_execute = Task(headers={
+            "block": True,
+            "execute": False,
+        })
+        self.assertFalse(task_block_non_execute.matches_filters(filters))
+
+        task_block_execute = Task(headers={
+            "block": True,
+            "execute": True,
+        })
+        self.assertTrue(task_block_execute.matches_filters(filters))
+
+
     def test_negated_filter_for_different_type(self):
         filters = [
             {
