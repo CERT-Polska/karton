@@ -190,10 +190,10 @@ class SystemService(KartonServiceBase):
                 task.headers.get("receiver", "unknown") for task in to_crash
             ]
             for task in to_crash:
-                task.error = (
+                task.error = [
                     "This task was STARTED too long (TASK_STARTED_TIMEOUT), "
                     "so status was changes to CRASHED."
-                )
+                ]
                 self.backend.set_task_status(task, TaskState.CRASHED)
             self.backend.increment_metrics_list(
                 KartonMetrics.TASK_CRASHED, to_increment
