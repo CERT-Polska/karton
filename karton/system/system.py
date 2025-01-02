@@ -46,10 +46,12 @@ class SystemService(KartonServiceBase):
         )
         self.enable_gc = self.config.getboolean("system", "enable_gc", True)
         self.enable_router = self.config.getboolean("system", "enable_router", True)
-        self.crash_started_tasks_on_timeout = self.config.getboolean("system", "crash_started_tasks_on_timeout", False)
+        self.crash_started_tasks_on_timeout = self.config.getboolean(
+            "system", "crash_started_tasks_on_timeout", False
+        )
 
-
-        self.log.info("Effective config:\n"
+        self.log.info(
+            "Effective config:\n"
             " gc_interval:\t%s\n"
             " task_dispatched_timeout:\t%s\n"
             " task_started_timeout:\t%s\n"
@@ -63,8 +65,8 @@ class SystemService(KartonServiceBase):
             self.task_crashed_timeout,
             self.enable_gc,
             self.enable_router,
-            self.crash_started_tasks_on_timeout)
-
+            self.crash_started_tasks_on_timeout,
+        )
 
         self.last_gc_trigger = time.time()
 
@@ -211,7 +213,7 @@ class SystemService(KartonServiceBase):
 
     def route_task(self, task: Task, binds: List[KartonBind]) -> None:
         # Performs routing of task
-        #self.log.info("[%s] Processing task %s", task.root_uid, task.task_uid)
+        # self.log.info("[%s] Processing task %s", task.root_uid, task.task_uid)
         # store the producer-task relationship in redis for task tracking
         self.backend.log_identity_output(
             task.headers.get("origin", "unknown"), task.headers
@@ -358,7 +360,7 @@ class SystemService(KartonServiceBase):
     @classmethod
     def config_from_args(cls, config: Config, args: argparse.Namespace):
         super().config_from_args(config, args)
-        
+
         config.load_from_dict(
             {
                 "system": {
