@@ -190,7 +190,10 @@ class SystemService(KartonServiceBase):
                 task.headers.get("receiver", "unknown") for task in to_crash
             ]
             for task in to_crash:
-                task.error = "This task was STARTED too long (TASK_STARTED_TIMEOUT), so status was changes to CRASHED."
+                task.error = (
+                    "This task was STARTED too long (TASK_STARTED_TIMEOUT), "
+                    "so status was changes to CRASHED."
+                )
                 self.backend.set_task_status(task, TaskState.CRASHED)
             self.backend.increment_metrics_list(
                 KartonMetrics.TASK_CRASHED, to_increment
@@ -352,7 +355,7 @@ class SystemService(KartonServiceBase):
         parser.add_argument(
             "--crash-started-task-on-timeout",
             action="store_const",
-            dest="crash_started_tasks_on_timeout",
+            dest="crash_started_tasks",
             help="Crash Started tasks on timeout instead of deleting",
         )
         return parser
@@ -366,7 +369,7 @@ class SystemService(KartonServiceBase):
                 "system": {
                     "enable_gc": args.enable_gc,
                     "enable_router": args.enable_router,
-                    "crash_started_tasks_on_timeout": args.crash_started_tasks_on_timeout,
+                    "crash_started_tasks_on_timeout": args.crash_started_tasks,
                     "gc_interval": args.gc_interval,
                     "task_dispatched_timeout": args.task_dispatched_timeout,
                     "task_started_timeout": args.task_started_timeout,
