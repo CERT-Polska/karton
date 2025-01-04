@@ -106,7 +106,9 @@ class Consumer(KartonServiceBase):
     :param config: Karton config to use for service configuration
     :param identity: Karton service identity
     :param backend: Karton backend to use
-    :param task_timeout: The maximum time, in seconds, this consumer will wait for a task to finish processing before being CRASHED on timeout. Set 0 for unlimited, and None for using global value
+    :param task_timeout: The maximum time, in seconds, this consumer will wait for
+                         a task to finish processing before being CRASHED on timeout.
+                         Set 0 for unlimited, and None for using global value
     """
 
     filters: List[Dict[str, Any]] = []
