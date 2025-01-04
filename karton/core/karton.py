@@ -106,11 +106,13 @@ class Consumer(KartonServiceBase):
     :param config: Karton config to use for service configuration
     :param identity: Karton service identity
     :param backend: Karton backend to use
+    :param task_timeout: The maximum time, in seconds, this consumer will wait for a task to finish processing before being CRASHED on timeout
     """
 
     filters: List[Dict[str, Any]] = []
     persistent: bool = True
     version: Optional[str] = None
+    task_timeout = None
 
     def __init__(
         self,
@@ -130,7 +132,7 @@ class Consumer(KartonServiceBase):
             self.config.getboolean("karton", "persistent", self.persistent)
             and not self.debug
         )
-        self.task_timeout = self.config.getint("karton", "task_timeout")
+        self.task_timeout = self.task_timeout or self.config.getint("karton", "task_timeout")
         self.current_task: Optional[Task] = None
         self._pre_hooks: List[Tuple[Optional[str], Callable[[Task], None]]] = []
         self._post_hooks: List[
