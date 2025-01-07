@@ -389,7 +389,7 @@ class Consumer(KartonServiceBase):
 
                 try:
                     self.log.info("Received new task - %s", self.current_task.uid)
-                    #self.backend.set_task_status(self.current_task, TaskState.STARTED)
+                    # self.backend.set_task_status(self.current_task, TaskState.STARTED)
 
                     self._run_pre_hooks()
 
