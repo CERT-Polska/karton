@@ -74,7 +74,7 @@ class SystemService(KartonServiceBase):
     def gc_collect_resources(self) -> None:
         # Collects unreferenced resources left in object storage
         karton_bucket = self.backend.default_bucket_name
-        resources_to_remove = set(self.backend.list_objects(karton_bucket))
+        resources_to_remove = self.backend.list_object_versions(karton_bucket)
         # Note: it is important to get list of resources before getting list of tasks!
         # Task is created before resource upload to lock the reference to the resource.
         tasks = self.backend.iter_all_tasks()
@@ -85,10 +85,10 @@ class SystemService(KartonServiceBase):
                     resource.bucket == karton_bucket
                     and resource.uid in resources_to_remove
                 ):
-                    resources_to_remove.remove(resource.uid)
+                    del resources_to_remove[resource.uid]
         # Remove unreferenced resources
         if resources_to_remove:
-            self.backend.remove_objects(karton_bucket, resources_to_remove)
+            self.backend.remove_object_versions(karton_bucket, resources_to_remove)
 
     def gc_collect_tasks(self) -> None:
         self.log.debug("GC: gc_collect_tasks started")
