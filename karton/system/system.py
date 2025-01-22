@@ -50,6 +50,9 @@ class SystemService(KartonServiceBase):
             "system", "crash_started_tasks_on_timeout", False
         )
 
+        self.last_gc_trigger = time.time()
+
+    def _log_config(self):
         self.log.info(
             "Effective config:\n"
             " gc_interval:\t%s\n"
@@ -67,8 +70,6 @@ class SystemService(KartonServiceBase):
             self.enable_router,
             self.crash_started_tasks_on_timeout,
         )
-
-        self.last_gc_trigger = time.time()
 
     def gc_collect_resources(self) -> None:
         # Collects unreferenced resources left in object storage
@@ -216,7 +217,7 @@ class SystemService(KartonServiceBase):
 
     def route_task(self, task: Task, binds: List[KartonBind]) -> None:
         # Performs routing of task
-        # self.log.info("[%s] Processing task %s", task.root_uid, task.task_uid)
+        self.log.info("[%s] Processing task %s", task.root_uid, task.task_uid)
         # store the producer-task relationship in redis for task tracking
         self.backend.log_identity_output(
             task.headers.get("origin", "unknown"), task.headers
@@ -300,6 +301,7 @@ class SystemService(KartonServiceBase):
                 self.handle_operations(bodies)
 
     def loop(self) -> None:
+        self._log_config()
         self.log.info("Manager %s started", self.identity)
 
         with self.graceful_killer():
