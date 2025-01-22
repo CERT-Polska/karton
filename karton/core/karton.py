@@ -328,7 +328,7 @@ class Consumer(KartonServiceBase):
         """
         self.log.info("Service %s started", self.identity)
 
-        if self.task_timeout is not None:
+        if self.task_timeout:
             self.log.info(f"Task timeout is set to {self.task_timeout} seconds")
 
         # Get the old binds and set the new ones atomically
