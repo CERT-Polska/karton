@@ -17,10 +17,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        minor: [7, 8, 9]
+        minor: [9, 10, 11, 12]
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v1
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: 3.${{ matrix.minor }}
       - run: pip install -r requirements.txt
@@ -28,7 +28,7 @@ jobs:
   docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: ammaraskar/sphinx-action@master
         with:
           # Install karton package
