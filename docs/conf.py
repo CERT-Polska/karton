@@ -22,7 +22,7 @@ from karton.core.__version__ import __version__  # noqa: E402
 # -- Project information -----------------------------------------------------
 
 project = "karton"
-copyright = "2023, CERT Polska"
+copyright = "2025, CERT Polska"
 author = "CERT Polska"
 
 # The short X.Y version
