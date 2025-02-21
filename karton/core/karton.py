@@ -1,6 +1,7 @@
 """
 Base library for karton subsystems.
 """
+
 import abc
 import argparse
 import sys
@@ -377,7 +378,7 @@ class Consumer(KartonServiceBase):
 
                 task: Task
                 for task in self.backend.iter_all_tasks(parse_resources=False):
-                    if task.headers["receiver"] == self.identity:
+                    if task.headers.get("receiver") == self.identity:
                         break
                 else:
                     self.log.warning(
