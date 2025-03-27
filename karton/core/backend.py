@@ -1029,13 +1029,14 @@ class KartonBackend:
         :param bucket: Bucket name
         :param object_versions: Object version identifiers
         """
-        versions = iter(
-            (uid, version_id)
-            for uid, versions in object_versions.items()
-            for version_id in versions
-        )
         deletion_chunks = chunks(
-            [{"Key": uid, "VersionId": version_id} for uid, version_id in versions],
+            [
+                {"Key": uid, "VersionId": version_id}
+                if version_id != "null"
+                else {"Key": uid}
+                for uid, versions in object_versions.items()
+                for version_id in versions
+            ],
             100,
         )
         for delete_objects in deletion_chunks:
