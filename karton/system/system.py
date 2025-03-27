@@ -49,6 +49,9 @@ class SystemService(KartonServiceBase):
         self.crash_started_tasks_on_timeout = self.config.getboolean(
             "system", "crash_started_tasks_on_timeout", False
         )
+        self.enable_null_version_deletion = self.config.getboolean(
+            "system", "enable_null_version_deletion", False
+        )
 
         self.last_gc_trigger = time.time()
 
@@ -61,6 +64,7 @@ class SystemService(KartonServiceBase):
             " task_crashed_timeout:\t%s\n"
             " enable_gc:\t%s\n"
             " enable_router:\t%s\n"
+            " enable_null_version_deletion:\t%s\n"
             " crash_started_tasks_on_timeout:\t%s",
             self.gc_interval,
             self.task_dispatched_timeout,
@@ -68,6 +72,7 @@ class SystemService(KartonServiceBase):
             self.task_crashed_timeout,
             self.enable_gc,
             self.enable_router,
+            self.enable_null_version_deletion,
             self.crash_started_tasks_on_timeout,
         )
 
@@ -88,7 +93,11 @@ class SystemService(KartonServiceBase):
                     del resources_to_remove[resource.uid]
         # Remove unreferenced resources
         if resources_to_remove:
-            self.backend.remove_object_versions(karton_bucket, resources_to_remove)
+            self.backend.remove_object_versions(
+                karton_bucket,
+                resources_to_remove,
+                explicit_version_null=self.enable_null_version_deletion,
+            )
 
     def gc_collect_tasks(self) -> None:
         self.log.debug("GC: gc_collect_tasks started")
