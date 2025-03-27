@@ -1021,18 +1021,27 @@ class KartonBackend:
             self.s3.delete_objects(Bucket=bucket, Delete={"Objects": delete_objects})
 
     def remove_object_versions(
-        self, bucket: str, object_versions: Dict[str, List[str]]
+        self,
+        bucket: str,
+        object_versions: Dict[str, List[str]],
+        explicit_version_null: bool = False,
     ) -> None:
         """
         Bulk remove resource object versions from object storage
 
         :param bucket: Bucket name
         :param object_versions: Object version identifiers
+        :param explicit_version_null: |
+            Some S3 providers (e.g. MinIO) need a reference
+            to "null" version explicitly when versioning is in suspended state. On the
+            other hand, some providers refuse to delete "null" versions when bucket
+            versioning is disabled.
+            See also: https://github.com/CERT-Polska/karton/issues/273.
         """
         deletion_chunks = chunks(
             [
                 {"Key": uid, "VersionId": version_id}
-                if version_id != "null"
+                if version_id != "null" or explicit_version_null
                 else {"Key": uid}
                 for uid, versions in object_versions.items()
                 for version_id in versions
