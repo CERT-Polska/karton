@@ -65,16 +65,18 @@ Most core services can be tuned depending on your needs. Custom service configur
 
 Good example is Karton System:
 
-============   =========================   =======================================================================================================================================
- Section        Option                       Description
-============   =========================   =======================================================================================================================================
- [system]       gc_interval                  Spawn interval for garbage collection tasks in seconds. Default is 3 minutes.
- [system]       task_dispatched_timeout      Timeout for tasks that are stuck in DISPATCHED state (e.g. Producer crashed during upload of resources). Default is 24 hours.
- [system]       task_started_timeout         Timeout for tasks that are stuck in STARTED state (e.g. non-graceful crash of Consumer during task processing). Default is 24 hours.
- [system]       task_crashed_timeout         Timeout for removal of crashed tasks. Default is 3 days.
- [system]       enable_gc                    Enable garbage collection. GC can be turned off if you want to scale up routing using several Karton System instances.
- [system]       enable_router                Enable task routing. Routing can be turned off if you want to use dedicated Karton System instance for GC.
-============   =========================   =======================================================================================================================================
+============   ===============================  ================================================================================================================================================================================
+ Section        Option                           Description
+============   ===============================  ================================================================================================================================================================================
+ [system]       gc_interval                       Spawn interval for garbage collection tasks in seconds. Default is 3 minutes.
+ [system]       task_dispatched_timeout           Timeout for tasks that are stuck in DISPATCHED state (e.g. Producer crashed during upload of resources). Default is 24 hours.
+ [system]       task_started_timeout              Timeout for tasks that are stuck in STARTED state (e.g. non-graceful crash of Consumer during task processing). Default is 24 hours.
+ [system]       task_crashed_timeout              Timeout for removal of crashed tasks. Default is 3 days.
+ [system]       enable_gc                         Enable garbage collection. GC can be turned off if you want to scale up routing using several Karton System instances.
+ [system]       enable_router                     Enable task routing. Routing can be turned off if you want to use dedicated Karton System instance for GC.
+ [system]       crash_started_tasks_on_timeout    Enable crashing started tasks when task_started_timeout is reached instead of finishing them (introduced in v5.6.0).
+ [system]       enable_null_version_deletion      Enable deletion of "null" version from S3, which is needed in some S3 providers (e.g. MinIO) to correctly remove resources when versioning is suspended (introduced in v5.6.1)
+============   ================================  ================================================================================================================================================================================
 
 All settings can be set using command-line.
 
