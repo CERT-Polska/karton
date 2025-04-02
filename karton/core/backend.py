@@ -986,6 +986,21 @@ class KartonBackend:
                 objs.append(obj["Key"])
         return objs
 
+    def list_object_versions(self, bucket: str) -> Dict[str, List[str]]:
+        """
+        List version identifiers of stored resource objects
+        :param bucket: Bucket name
+        :return: Dictionary of object version identifiers {key: [version_ids, ...]}
+        """
+        objs = defaultdict(list)
+        paginator = self.s3.get_paginator("list_object_versions")
+        for page in paginator.paginate(Bucket=bucket):
+            for obj in page.get("Versions", list()):
+                objs[obj["Key"]].append(obj["VersionId"])
+            for obj in page.get("DeleteMarkers", list()):
+                objs[obj["Key"]].append(obj["VersionId"])
+        return dict(objs)
+
     def remove_object(self, bucket: str, object_uid: str) -> None:
         """
         Remove resource object from object storage
@@ -1002,7 +1017,38 @@ class KartonBackend:
         :param bucket: Bucket name
         :param object_uids: Object identifiers
         """
-        for delete_objects in chunks([{"Key": uid} for uid in object_uids], 1000):
+        for delete_objects in chunks([{"Key": uid} for uid in object_uids], 100):
+            self.s3.delete_objects(Bucket=bucket, Delete={"Objects": delete_objects})
+
+    def remove_object_versions(
+        self,
+        bucket: str,
+        object_versions: Dict[str, List[str]],
+        explicit_version_null: bool = False,
+    ) -> None:
+        """
+        Bulk remove resource object versions from object storage
+
+        :param bucket: Bucket name
+        :param object_versions: Object version identifiers
+        :param explicit_version_null: |
+            Some S3 providers (e.g. MinIO) need a reference
+            to "null" version explicitly when versioning is in suspended state. On the
+            other hand, some providers refuse to delete "null" versions when bucket
+            versioning is disabled.
+            See also: https://github.com/CERT-Polska/karton/issues/273.
+        """
+        deletion_chunks = chunks(
+            [
+                {"Key": uid, "VersionId": version_id}
+                if version_id != "null" or explicit_version_null
+                else {"Key": uid}
+                for uid, versions in object_versions.items()
+                for version_id in versions
+            ],
+            100,
+        )
+        for delete_objects in deletion_chunks:
             self.s3.delete_objects(Bucket=bucket, Delete={"Objects": delete_objects})
 
     def check_bucket_exists(self, bucket: str, create: bool = False) -> bool:
