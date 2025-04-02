@@ -378,6 +378,8 @@ class Consumer(KartonServiceBase):
 
                 task: Task
                 for task in self.backend.iter_all_tasks(parse_resources=False):
+                    if task.status != TaskState.CRASHED:
+                        continue
                     if task.headers.get("receiver") == self.identity:
                         break
                 else:
