@@ -31,6 +31,7 @@ class SystemService(KartonServiceBase):
     TASK_DISPATCHED_TIMEOUT = 24 * 3600
     TASK_STARTED_TIMEOUT = 24 * 3600
     TASK_CRASHED_TIMEOUT = 3 * 24 * 3600
+    TASK_TRACKING_TTL = 60 * 60 * 24 * 30
 
     def __init__(self, config: Optional[Config]) -> None:
         super().__init__(config=config)
@@ -52,6 +53,12 @@ class SystemService(KartonServiceBase):
         self.enable_null_version_deletion = self.config.getboolean(
             "system", "enable_null_version_deletion", False
         )
+        self.enable_task_tracking = self.config.getboolean(
+            "system", "enable_task_tracking", True
+        )
+        self.task_tracking_ttl = self.config.getint(
+            "system", "task_tracking_ttl", self.TASK_TRACKING_TTL
+        )
 
         self.last_gc_trigger = time.time()
 
@@ -65,6 +72,8 @@ class SystemService(KartonServiceBase):
             " enable_gc:\t%s\n"
             " enable_router:\t%s\n"
             " enable_null_version_deletion:\t%s\n"
+            " enable_task_tracking:\t%s\n"
+            " task_tracking_ttl:\t%s\n"
             " crash_started_tasks_on_timeout:\t%s",
             self.gc_interval,
             self.task_dispatched_timeout,
@@ -73,6 +82,8 @@ class SystemService(KartonServiceBase):
             self.enable_gc,
             self.enable_router,
             self.enable_null_version_deletion,
+            self.enable_task_tracking,
+            self.task_tracking_ttl,
             self.crash_started_tasks_on_timeout,
         )
 
@@ -227,10 +238,13 @@ class SystemService(KartonServiceBase):
     def route_task(self, task: Task, binds: List[KartonBind]) -> None:
         # Performs routing of task
         self.log.info("[%s] Processing task %s", task.root_uid, task.task_uid)
-        # store the producer-task relationship in redis for task tracking
-        self.backend.log_identity_output(
-            task.headers.get("origin", "unknown"), task.headers
-        )
+        # if enabled, store the producer-task relationship in redis for task tracking
+        if self.enable_task_tracking:
+            self.backend.log_identity_output(
+                task.headers.get("origin", "unknown"),
+                task.headers,
+                self.task_tracking_ttl,
+            )
 
         pipe = self.backend.make_pipeline()
         for bind in binds:
@@ -285,9 +299,10 @@ class SystemService(KartonServiceBase):
             operation_bodies.append(operation_body)
 
         self.backend.register_tasks(tasks)
-        self.backend.produce_logs(
-            operation_bodies, logger_name=KARTON_OPERATIONS_QUEUE, level="INFO"
-        )
+        if self.enable_publish_log:
+            self.backend.produce_logs(
+                operation_bodies, logger_name=KARTON_OPERATIONS_QUEUE, level="INFO"
+            )
 
     def process_routing(self) -> None:
         # Order does matter! task dispatching must be before
