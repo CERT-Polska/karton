@@ -36,6 +36,9 @@ class KartonBase(abc.ABC):
         backend: Optional[KartonBackend] = None,
     ) -> None:
         self.config = config or Config()
+        self.enable_publish_log = self.config.getboolean(
+            "logging", "enable_publish", True
+        )
 
         # If not passed via constructor - get it from class
         if identity is not None:
@@ -63,7 +66,9 @@ class KartonBase(abc.ABC):
         )
 
         self._log_handler = KartonLogHandler(
-            backend=self.backend, channel=self.identity
+            backend=self.backend,
+            channel=self.identity,
+            enable_publish_log=self.enable_publish_log,
         )
         self.current_task: Optional[Task] = None
 

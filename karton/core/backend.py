@@ -1070,17 +1070,20 @@ class KartonBackend:
                 raise e
         return False
 
-    def log_identity_output(self, identity: str, headers: Dict[str, Any]) -> None:
+    def log_identity_output(
+        self, identity: str, headers: Dict[str, Any], task_tracking_ttl: int
+    ) -> None:
         """
         Store the type of task outputted for given producer to
         be used in tracking karton service connections.
 
         :param identity: producer identity
         :param headers: outputted headers
+        :param task_tracking_ttl: expire time (in seconds)
         """
 
         self.redis.sadd(f"{KARTON_OUTPUTS_NAMESPACE}:{identity}", json.dumps(headers))
-        self.redis.expire(f"{KARTON_OUTPUTS_NAMESPACE}:{identity}", 60 * 60 * 24 * 30)
+        self.redis.expire(f"{KARTON_OUTPUTS_NAMESPACE}:{identity}", task_tracking_ttl)
 
     def get_outputs(self) -> List[KartonOutputs]:
         """
