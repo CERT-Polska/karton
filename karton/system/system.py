@@ -31,7 +31,7 @@ class SystemService(KartonServiceBase):
     TASK_DISPATCHED_TIMEOUT = 24 * 3600
     TASK_STARTED_TIMEOUT = 24 * 3600
     TASK_CRASHED_TIMEOUT = 3 * 24 * 3600
-    TASK_TRACKING_TTL = 60 * 60 * 24 * 30
+    TASK_TRACKING_TTL = 30 * 24 * 3600
 
     def __init__(self, config: Optional[Config]) -> None:
         super().__init__(config=config)
