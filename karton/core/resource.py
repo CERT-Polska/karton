@@ -69,7 +69,7 @@ class ResourceBase(object):
                 sha256 = sha256_hash.hexdigest()
         elif fd:
             if calculate_hash:
-                # we need to calculate the whole hash and also return everything as it was
+                # we need to calculate the whole hash and return pos as it was
                 sha256_hash = hashlib.sha256()
                 last_position = fd.seek(0, os.SEEK_CUR)
                 fd.seek(0)
