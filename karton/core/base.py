@@ -66,9 +66,7 @@ class KartonBase(abc.ABC):
         )
 
         self._log_handler = KartonLogHandler(
-            backend=self.backend,
-            channel=self.identity,
-            enable_publish_log=self.enable_publish_log,
+            backend=self.backend, channel=self.identity
         )
         self.current_task: Optional[Task] = None
 
@@ -113,7 +111,7 @@ class KartonBase(abc.ABC):
         )
         logger.addHandler(stream_handler)
 
-        if not self.debug:
+        if not self.debug and self.enable_publish_log:
             logger.addHandler(self._log_handler)
 
     @property

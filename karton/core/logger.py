@@ -15,22 +15,17 @@ class KartonLogHandler(logging.Handler):
     logging.Handler that passes logs to the Karton backend.
     """
 
-    def __init__(
-        self, backend: KartonBackend, channel: str, enable_publish_log: bool = True
-    ) -> None:
+    def __init__(self, backend: KartonBackend, channel: str) -> None:
         logging.Handler.__init__(self)
         self.backend = backend
         self.task: Optional[Task] = None
         self.is_consumer_active: bool = True
         self.channel: str = channel
-        self.enable_publish_log: bool = enable_publish_log
 
     def set_task(self, task: Task) -> None:
         self.task = task
 
     def emit(self, record: logging.LogRecord) -> None:
-        if not self.enable_publish_log:
-            return None
         ignore_fields = [
             "args",
             "asctime",
