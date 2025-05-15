@@ -67,11 +67,11 @@ class ResourceBase(object):
                     for byte_block in iter(lambda: f.read(4096), b""):
                         sha256_hash.update(byte_block)
                 sha256 = sha256_hash.hexdigest()
-        elif fd:
+        elif fd is not None:
             if calculate_hash:
                 # we need to calculate the whole hash and return pos as it was
                 sha256_hash = hashlib.sha256()
-                last_position = fd.seek(0, os.SEEK_CUR)
+                last_position = fd.tell()
                 fd.seek(0)
                 for byte_block in iter(lambda: fd.read(4096), b""):
                     sha256_hash.update(byte_block)
