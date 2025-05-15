@@ -1,11 +1,12 @@
 """
 Test stubs for karton subsystem unit tests
 """
+
 import hashlib
 import logging
 import unittest
 from collections import defaultdict
-from typing import Any, BinaryIO, Dict, List, Union, cast
+from typing import Any, BinaryIO, Dict, List, Optional, Union, cast
 from unittest import mock
 
 from .backend import KartonBackend, KartonMetrics
@@ -66,7 +67,7 @@ class BackendMock:
         bucket: str,
         object_uid: str,
         content: Union[bytes, BinaryIO],
-        length: int = None,
+        length: Optional[int] = None,
     ) -> None:
         log.debug("Uploading object %s to bucket %s", object_uid, bucket)
         if isinstance(content, bytes):

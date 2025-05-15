@@ -111,12 +111,10 @@ class Config(object):
         return True
 
     @overload
-    def getint(self, section_name: str, option_name: str, fallback: int) -> int:
-        ...
+    def getint(self, section_name: str, option_name: str, fallback: int) -> int: ...
 
     @overload
-    def getint(self, section_name: str, option_name: str) -> Optional[int]:
-        ...
+    def getint(self, section_name: str, option_name: str) -> Optional[int]: ...
 
     def getint(
         self, section_name: str, option_name: str, fallback: Optional[int] = None
@@ -131,12 +129,12 @@ class Config(object):
         return int(value)
 
     @overload
-    def getboolean(self, section_name: str, option_name: str, fallback: bool) -> bool:
-        ...
+    def getboolean(
+        self, section_name: str, option_name: str, fallback: bool
+    ) -> bool: ...
 
     @overload
-    def getboolean(self, section_name: str, option_name: str) -> Optional[bool]:
-        ...
+    def getboolean(self, section_name: str, option_name: str) -> Optional[bool]: ...
 
     def getboolean(
         self, section_name: str, option_name: str, fallback: Optional[bool] = None

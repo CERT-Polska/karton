@@ -1040,9 +1040,11 @@ class KartonBackend:
         """
         deletion_chunks = chunks(
             [
-                {"Key": uid, "VersionId": version_id}
-                if version_id != "null" or explicit_version_null
-                else {"Key": uid}
+                (
+                    {"Key": uid, "VersionId": version_id}
+                    if version_id != "null" or explicit_version_null
+                    else {"Key": uid}
+                )
                 for uid, versions in object_versions.items()
                 for version_id in versions
             ],
