@@ -1,4 +1,4 @@
 redis
 orjson
-# https://github.com/boto/boto3/issues/4392
-boto3<1.36.0
+boto3
+aioboto3

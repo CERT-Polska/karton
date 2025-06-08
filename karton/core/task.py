@@ -3,6 +3,7 @@ import json
 import time
 import uuid
 import warnings
+from contextvars import ContextVar
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -23,6 +24,16 @@ if TYPE_CHECKING:
     from .backend import KartonBackend  # noqa
 
 import orjson
+
+current_task: ContextVar[Optional["Task"]] = ContextVar("current_task")
+
+
+def get_current_task() -> Optional["Task"]:
+    return current_task.get(None)
+
+
+def set_current_task(task: Optional["Task"]):
+    current_task.set(task)
 
 
 class TaskState(enum.Enum):

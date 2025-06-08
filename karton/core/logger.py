@@ -2,10 +2,9 @@ import logging
 import platform
 import traceback
 import warnings
-from typing import Optional
 
 from .backend import KartonBackend
-from .task import Task
+from .task import get_current_task
 
 HOSTNAME = platform.node()
 
@@ -18,12 +17,8 @@ class KartonLogHandler(logging.Handler):
     def __init__(self, backend: KartonBackend, channel: str) -> None:
         logging.Handler.__init__(self)
         self.backend = backend
-        self.task: Optional[Task] = None
         self.is_consumer_active: bool = True
         self.channel: str = channel
-
-    def set_task(self, task: Task) -> None:
-        self.task = task
 
     def emit(self, record: logging.LogRecord) -> None:
         ignore_fields = [
@@ -54,8 +49,9 @@ class KartonLogHandler(logging.Handler):
         log_line["type"] = "log"
         log_line["message"] = self.format(record)
 
-        if self.task is not None:
-            log_line["task"] = self.task.serialize()
+        current_task = get_current_task()
+        if current_task is not None:
+            log_line["task"] = current_task.serialize()
 
         log_line["hostname"] = HOSTNAME
 

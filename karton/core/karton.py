@@ -170,19 +170,18 @@ class Consumer(KartonServiceBase):
         """
 
         self.current_task = task
-        self.log_handler.set_task(self.current_task)
 
-        if not self.current_task.matches_filters(self.filters):
+        if not task.matches_filters(self.filters):
             self.log.info("Task rejected because binds are no longer valid.")
-            self.backend.set_task_status(self.current_task, TaskState.FINISHED)
+            self.backend.set_task_status(task, TaskState.FINISHED)
             # Task rejected: end of processing
             return
 
         exception_str = None
 
         try:
-            self.log.info("Received new task - %s", self.current_task.uid)
-            self.backend.set_task_status(self.current_task, TaskState.STARTED)
+            self.log.info("Received new task - %s", task.uid)
+            self.backend.set_task_status(task, TaskState.STARTED)
 
             self._run_pre_hooks()
 
@@ -190,22 +189,22 @@ class Consumer(KartonServiceBase):
             try:
                 if self.task_timeout:
                     with timeout(self.task_timeout):
-                        self.process(self.current_task)
+                        self.process(task)
                 else:
-                    self.process(self.current_task)
+                    self.process(task)
             except (Exception, TaskTimeoutError) as exc:
                 saved_exception = exc
                 raise
             finally:
                 self._run_post_hooks(saved_exception)
 
-            self.log.info("Task done - %s", self.current_task.uid)
+            self.log.info("Task done - %s", task.uid)
         except (Exception, TaskTimeoutError):
             exc_info = sys.exc_info()
             exception_str = traceback.format_exception(*exc_info)
 
             self.backend.increment_metrics(KartonMetrics.TASK_CRASHED, self.identity)
-            self.log.exception("Failed to process task - %s", self.current_task.uid)
+            self.log.exception("Failed to process task - %s", task.uid)
         finally:
             self.backend.increment_metrics(KartonMetrics.TASK_CONSUMED, self.identity)
 
@@ -215,9 +214,10 @@ class Consumer(KartonServiceBase):
             # if an exception was caught while processing
             if exception_str is not None:
                 task_state = TaskState.CRASHED
-                self.current_task.error = exception_str
+                task.error = exception_str
 
-            self.backend.set_task_status(self.current_task, task_state)
+            self.backend.set_task_status(task, task_state)
+            self.current_task = None
 
     @property
     def _bind(self) -> KartonBind:

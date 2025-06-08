@@ -38,7 +38,7 @@ KartonBind = namedtuple(
 
 
 KartonOutputs = namedtuple("KartonOutputs", ["identity", "outputs"])
-logger = logging.getLogger("karton.core.backend")
+logger = logging.getLogger(__name__)
 
 
 class KartonMetrics(enum.Enum):
@@ -103,13 +103,13 @@ class KartonServiceInfo:
         )
 
 
-class KartonBackend:
+class KartonBackendBase:
     def __init__(
         self,
         config: Config,
         identity: Optional[str] = None,
         service_info: Optional[KartonServiceInfo] = None,
-    ) -> None:
+    ):
         self.config = config
 
         if identity is not None:
@@ -117,59 +117,6 @@ class KartonBackend:
         self.identity = identity
 
         self.service_info = service_info
-        self.redis = self.make_redis(
-            config, identity=identity, service_info=service_info
-        )
-
-        endpoint = config.get("s3", "address")
-        access_key = config.get("s3", "access_key")
-        secret_key = config.get("s3", "secret_key")
-        iam_auth = config.getboolean("s3", "iam_auth")
-
-        if not endpoint:
-            raise RuntimeError("Attempting to get S3 client without an endpoint set")
-
-        if access_key and secret_key and iam_auth:
-            logger.warning(
-                "Warning: iam is turned on and both S3 access key and secret key are"
-                " provided"
-            )
-
-        if iam_auth:
-            s3_client = self.iam_auth_s3(endpoint)
-            if s3_client:
-                self.s3 = s3_client
-                return
-
-        if access_key is None or secret_key is None:
-            raise RuntimeError(
-                "Attempting to get S3 client without an access_key/secret_key set"
-            )
-
-        self.s3 = boto3.client(
-            "s3",
-            endpoint_url=endpoint,
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
-        )
-
-    def iam_auth_s3(self, endpoint: str):
-        boto_session = get_session()
-        iam_providers = [
-            ContainerProvider(),
-            InstanceMetadataProvider(
-                iam_role_fetcher=InstanceMetadataFetcher(timeout=1000, num_attempts=2)
-            ),
-        ]
-
-        for provider in iam_providers:
-            creds = provider.load()
-            if creds:
-                boto_session._credentials = creds  # type: ignore
-                return boto3.Session(botocore_session=boto_session).client(
-                    "s3",
-                    endpoint_url=endpoint,
-                )
 
     @staticmethod
     def _validate_identity(identity: str):
@@ -178,48 +125,6 @@ class KartonBackend:
             raise InvalidIdentityError(
                 f"Karton identity should not contain {disallowed_chars}"
             )
-
-    @staticmethod
-    def make_redis(
-        config,
-        identity: Optional[str] = None,
-        service_info: Optional[KartonServiceInfo] = None,
-    ) -> StrictRedis:
-        """
-        Create and test a Redis connection.
-
-        :param config: The karton configuration
-        :param identity: Karton service identity
-        :param service_info: Additional service identity metadata
-        :return: Redis connection
-        """
-        if service_info is not None:
-            client_name: Optional[str] = service_info.make_client_name()
-        else:
-            client_name = identity
-
-        redis_args = {
-            "host": config["redis"]["host"],
-            "port": config.getint("redis", "port", 6379),
-            "db": config.getint("redis", "db", 0),
-            "username": config.get("redis", "username"),
-            "password": config.get("redis", "password"),
-            "client_name": client_name,
-            # set socket_timeout to None if set to 0
-            "socket_timeout": config.getint("redis", "socket_timeout", 30) or None,
-            "decode_responses": True,
-        }
-        try:
-            redis = StrictRedis(**redis_args)
-            redis.ping()
-        except AuthenticationError:
-            # Maybe we've sent a wrong password.
-            # Or maybe the server is not (yet) password protected
-            # To make smooth transition possible, try to login insecurely
-            del redis_args["password"]
-            redis = StrictRedis(**redis_args)
-            redis.ping()
-        return redis
 
     @property
     def default_bucket_name(self) -> str:
@@ -315,6 +220,111 @@ class KartonBackend:
         """
         output = [json.loads(output_type) for output_type in output_data]
         return KartonOutputs(identity=identity, outputs=output)
+
+
+class KartonBackend(KartonBackendBase):
+    def __init__(
+        self,
+        config: Config,
+        identity: Optional[str] = None,
+        service_info: Optional[KartonServiceInfo] = None,
+    ) -> None:
+        super().__init__(config, identity, service_info)
+        self.redis = self.make_redis(
+            config, identity=identity, service_info=service_info
+        )
+
+        endpoint = config.get("s3", "address")
+        access_key = config.get("s3", "access_key")
+        secret_key = config.get("s3", "secret_key")
+        iam_auth = config.getboolean("s3", "iam_auth")
+
+        if not endpoint:
+            raise RuntimeError("Attempting to get S3 client without an endpoint set")
+
+        if access_key and secret_key and iam_auth:
+            logger.warning(
+                "Warning: iam is turned on and both S3 access key and secret key are"
+                " provided"
+            )
+
+        if iam_auth:
+            s3_client = self.iam_auth_s3(endpoint)
+            if s3_client:
+                self.s3 = s3_client
+                return
+
+        if access_key is None or secret_key is None:
+            raise RuntimeError(
+                "Attempting to get S3 client without an access_key/secret_key set"
+            )
+
+        self.s3 = boto3.client(
+            "s3",
+            endpoint_url=endpoint,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+        )
+
+    def iam_auth_s3(self, endpoint: str):
+        boto_session = get_session()
+        iam_providers = [
+            ContainerProvider(),
+            InstanceMetadataProvider(
+                iam_role_fetcher=InstanceMetadataFetcher(timeout=1000, num_attempts=2)
+            ),
+        ]
+
+        for provider in iam_providers:
+            creds = provider.load()
+            if creds:
+                boto_session._credentials = creds  # type: ignore
+                return boto3.Session(botocore_session=boto_session).client(
+                    "s3",
+                    endpoint_url=endpoint,
+                )
+
+    @staticmethod
+    def make_redis(
+        config,
+        identity: Optional[str] = None,
+        service_info: Optional[KartonServiceInfo] = None,
+    ) -> StrictRedis:
+        """
+        Create and test a Redis connection.
+
+        :param config: The karton configuration
+        :param identity: Karton service identity
+        :param service_info: Additional service identity metadata
+        :return: Redis connection
+        """
+        if service_info is not None:
+            client_name: Optional[str] = service_info.make_client_name()
+        else:
+            client_name = identity
+
+        redis_args = {
+            "host": config["redis"]["host"],
+            "port": config.getint("redis", "port", 6379),
+            "db": config.getint("redis", "db", 0),
+            "username": config.get("redis", "username"),
+            "password": config.get("redis", "password"),
+            "client_name": client_name,
+            # set socket_timeout to None if set to 0
+            "socket_timeout": config.getint("redis", "socket_timeout", 30) or None,
+            "decode_responses": True,
+        }
+        try:
+            redis = StrictRedis(**redis_args)
+            redis.ping()
+        except AuthenticationError:
+            # Maybe we've sent a wrong password.
+            # Or maybe the server is not (yet) password protected
+            # To make smooth transition possible, try to login insecurely
+            del redis_args["password"]
+            redis = StrictRedis(**redis_args)
+            redis.ping()
+        return redis
 
     def get_bind(self, identity: str) -> KartonBind:
         """
