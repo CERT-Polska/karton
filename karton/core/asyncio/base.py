@@ -115,8 +115,7 @@ class KartonAsyncServiceBase(KartonAsyncBase):
             for sig in (signal.SIGTERM, signal.SIGINT):
                 event_loop.remove_signal_handler(sig)
             if self.enable_publish_log and hasattr(self.log_handler, "stop_consuming"):
-                # This is blocking
-                self.log_handler.stop_consuming()
+                await self.log_handler.stop_consuming()
 
     @StrictClassMethod
     def main(cls) -> None:

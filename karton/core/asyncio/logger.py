@@ -1,16 +1,10 @@
 """
 asyncio implementation of KartonLogHandler
-
-Logging methods must be non-blocking, so Redis forwarder must be
-scheduled on separate thread. We assume here that KartonAsyncBackend.produce_log
-is thread-safe when Redis client is shared by two asyncio loops.
 """
 
 import asyncio
 import logging
 import platform
-import threading
-from queue import SimpleQueue
 from typing import Any, Dict, Optional, Tuple
 
 from karton.core.logger import LogLineFormatterMixin
@@ -22,21 +16,15 @@ HOSTNAME = platform.node()
 QueuedRecord = Optional[Tuple[Dict[str, Any], str]]
 
 
-def async_log_consumer(
-    queue: SimpleQueue[QueuedRecord], backend: KartonAsyncBackend, channel: str
+async def async_log_consumer(
+    queue: asyncio.Queue[QueuedRecord], backend: KartonAsyncBackend, channel: str
 ) -> None:
-    loop = asyncio.new_event_loop()
-    try:
-        while True:
-            item = queue.get()
-            if not item:
-                break
-            log_line, levelname = item
-            loop.run_until_complete(
-                backend.produce_log(log_line, logger_name=channel, level=levelname)
-            )
-    finally:
-        loop.close()
+    while True:
+        item = await queue.get()
+        if not item:
+            break
+        log_line, levelname = item
+        await backend.produce_log(log_line, logger_name=channel, level=levelname)
 
 
 class KartonAsyncLogHandler(logging.Handler, LogLineFormatterMixin):
@@ -46,23 +34,24 @@ class KartonAsyncLogHandler(logging.Handler, LogLineFormatterMixin):
 
     def __init__(self, backend: KartonAsyncBackend, channel: str) -> None:
         logging.Handler.__init__(self)
-        self._queue: SimpleQueue[QueuedRecord] = SimpleQueue()
-        self._consumer = threading.Thread(
-            target=async_log_consumer,
-            args=(
-                self._queue,
-                backend,
-                channel,
-            ),
-        )
+        self._consumer: Optional[asyncio.Task] = None
+        self._queue: asyncio.Queue[QueuedRecord] = asyncio.Queue()
+        self._backend = backend
+        self._channel = channel
 
     def emit(self, record: logging.LogRecord) -> None:
         log_line = self.prepare_log_line(record)
         self._queue.put_nowait((log_line, record.levelname))
 
     def start_consuming(self):
-        self._consumer.start()
+        if self._consumer is not None:
+            raise RuntimeError("Consumer already started")
+        self._consumer = asyncio.create_task(
+            async_log_consumer(self._queue, self._backend, self._channel)
+        )
 
-    def stop_consuming(self):
+    async def stop_consuming(self):
+        if self._consumer is None:
+            raise RuntimeError("Consumer is not started")
         self._queue.put_nowait(None)  # Signal that queue is finished
-        self._consumer.join()
+        await self._consumer

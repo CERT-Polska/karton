@@ -6,11 +6,13 @@ import time
 import traceback
 from typing import Any, Dict, List, Optional
 
-from karton.core import Config, Task, __version__, query
+from karton.core import query
+from karton.core.__version__ import __version__
 from karton.core.backend import KartonBind, KartonMetrics
+from karton.core.config import Config
 from karton.core.exceptions import TaskTimeoutError
 from karton.core.resource import LocalResource as SyncLocalResource
-from karton.core.task import TaskState
+from karton.core.task import Task, TaskState
 
 from .backend import KartonAsyncBackend
 from .base import KartonAsyncBase, KartonAsyncServiceBase
