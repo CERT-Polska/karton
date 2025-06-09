@@ -51,6 +51,9 @@ class KartonAsyncBackend(KartonBackendBase):
         return self._s3
 
     async def connect(self):
+        if self._redis is not None or self._s3 is not None:
+            # Already connected
+            return
         self._redis = await self.make_redis(
             self.config, identity=self.identity, service_info=self.service_info
         )

@@ -164,6 +164,19 @@ class RemoteResource(ResourceBase):
         """
         return self._content is not None
 
+    @property
+    def content(self) -> bytes:
+        """
+        Resource content. Performs download when resource was not loaded before.
+
+        :return: Content bytes
+        """
+        if self._content is None:
+            raise RuntimeError(
+                "Resource object needs to be explicitly downloaded first"
+            )
+        return self._content
+
     @classmethod
     def from_dict(
         cls, dict: Dict[str, Any], backend: Optional["KartonAsyncBackend"]
@@ -226,8 +239,7 @@ class RemoteResource(ResourceBase):
                 "Resource object can't be downloaded because its bucket is not set"
             )
 
-        if self._content is None:
-            self._content = await self.backend.download_object(self.bucket, self.uid)
+        self._content = await self.backend.download_object(self.bucket, self.uid)
         return self._content
 
     async def download_to_file(self, path: str) -> None:
@@ -366,6 +378,7 @@ class RemoteResource(ResourceBase):
         tmpdir = tempfile.mkdtemp()
         try:
             await self.extract_to_directory(tmpdir)
+            yield tmpdir
             yield tmpdir
         finally:
             shutil.rmtree(tmpdir)

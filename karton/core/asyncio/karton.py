@@ -335,3 +335,17 @@ class Consumer(KartonAsyncServiceBase):
                     coro_task.cancel()
             # Then gather all tasks to finalize them
             await asyncio.gather(*concurrent_tasks)
+
+
+class Karton(Consumer, Producer):
+    """
+    This glues together Consumer and Producer - which is the most common use case
+    """
+
+    def __init__(
+        self,
+        config: Optional[Config] = None,
+        identity: Optional[str] = None,
+        backend: Optional[KartonAsyncBackend] = None,
+    ) -> None:
+        super().__init__(config=config, identity=identity, backend=backend)

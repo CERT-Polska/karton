@@ -53,6 +53,9 @@ class KartonAsyncBase(abc.ABC, ConfigMixin, LoggingMixin):
         log_handler = KartonAsyncLogHandler(backend=self.backend, channel=self.identity)
         LoggingMixin.__init__(self, log_handler)
 
+    async def connect(self) -> None:
+        await self.backend.connect()
+
     @property
     def current_task(self) -> Optional[Task]:
         return get_current_task()
@@ -101,6 +104,7 @@ class KartonAsyncServiceBase(KartonAsyncBase):
     async def loop(self) -> None:
         if self.enable_publish_log and hasattr(self.log_handler, "start_consuming"):
             self.log_handler.start_consuming()
+        await self.connect()
         event_loop = asyncio.get_event_loop()
         for sig in (signal.SIGTERM, signal.SIGINT):
             event_loop.add_signal_handler(sig, self._do_shutdown)
