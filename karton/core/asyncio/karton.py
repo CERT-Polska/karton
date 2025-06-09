@@ -30,9 +30,10 @@ class Producer(KartonAsyncBase):
 
     .. code-block:: python
 
-        from karton.core import Producer
+        from karton.core.asyncio import Producer
 
         producer = Producer(identity="karton.mwdb")
+        await producer.connect()
         task = Task(
             headers={
                 "type": "sample",
@@ -42,7 +43,7 @@ class Producer(KartonAsyncBase):
                 "sample": Resource("sample.exe", b"put content here")
             }
         )
-        producer.send_task(task)
+        await producer.send_task(task)
 
     :param config: Karton config to use for service configuration
     :param identity: Karton producer identity
