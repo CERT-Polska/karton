@@ -12,7 +12,6 @@ jobs:
     steps:
       - uses: CERT-Polska/lint-python-action@v2
         with:
-          python-version: '3.11'
           source: karton/
   unittest:
     runs-on: ubuntu-latest
