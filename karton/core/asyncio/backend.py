@@ -1,5 +1,7 @@
+import json
 import logging
-from typing import IO, Optional, Union
+import time
+from typing import IO, Any, Dict, List, Optional, Tuple, Union
 
 import aioboto3
 from aiobotocore.credentials import ContainerProvider, InstanceMetadataProvider
@@ -10,13 +12,17 @@ from redis.asyncio.client import Pipeline
 from redis.exceptions import AuthenticationError
 
 from karton.core import Config, Task
+from karton.core.asyncio.resource import RemoteResource
 from karton.core.backend import (
+    KARTON_BINDS_HSET,
     KARTON_TASK_NAMESPACE,
     KARTON_TASKS_QUEUE,
     KartonBackendBase,
+    KartonBind,
     KartonMetrics,
     KartonServiceInfo,
 )
+from karton.core.task import TaskState
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +148,15 @@ class KartonAsyncBackend(KartonBackendBase):
             await rs.ping()
         return rs
 
+    def unserialize_resource(self, resource_spec: Dict[str, Any]) -> RemoteResource:
+        """
+        Unserializes resource into a RemoteResource object bound with current backend
+
+        :param resource_spec: Resource specification
+        :return: RemoteResource object
+        """
+        return RemoteResource.from_dict(resource_spec, backend=self)
+
     async def register_task(self, task: Task, pipe: Optional[Pipeline] = None) -> None:
         """
         Register or update task in Redis.
@@ -152,6 +167,50 @@ class KartonAsyncBackend(KartonBackendBase):
         rs = pipe or self.redis
         await rs.set(f"{KARTON_TASK_NAMESPACE}:{task.uid}", task.serialize())
 
+    async def set_task_status(
+        self, task: Task, status: TaskState, pipe: Optional[Pipeline] = None
+    ) -> None:
+        """
+        Request task status change to be applied by karton-system
+
+        :param task: Task object
+        :param status: New task status (TaskState)
+        :param pipe: Optional pipeline object if operation is a part of pipeline
+        """
+        if task.status == status:
+            return
+        task.status = status
+        task.last_update = time.time()
+        await self.register_task(task, pipe=pipe)
+
+    async def register_bind(self, bind: KartonBind) -> Optional[KartonBind]:
+        """
+        Register bind for Karton service and return the old one
+
+        :param bind: KartonBind object with bind definition
+        :return: Old KartonBind that was registered under this identity
+        """
+        async with self.redis.pipeline(transaction=True) as pipe:
+            await pipe.hget(KARTON_BINDS_HSET, bind.identity)
+            await pipe.hset(KARTON_BINDS_HSET, bind.identity, self.serialize_bind(bind))
+            old_serialized_bind, _ = await pipe.execute()
+
+        if old_serialized_bind:
+            return self.unserialize_bind(bind.identity, old_serialized_bind)
+        else:
+            return None
+
+    async def get_bind(self, identity: str) -> KartonBind:
+        """
+        Get bind object for given identity
+
+        :param identity: Karton service identity
+        :return: KartonBind object
+        """
+        return self.unserialize_bind(
+            identity, await self.redis.hget(KARTON_BINDS_HSET, identity)
+        )
+
     async def produce_unrouted_task(self, task: Task) -> None:
         """
         Add given task to unrouted task (``karton.tasks``) queue
@@ -161,6 +220,54 @@ class KartonAsyncBackend(KartonBackendBase):
         :param task: Task object
         """
         await self.redis.rpush(KARTON_TASKS_QUEUE, task.uid)
+
+    async def consume_queues(
+        self, queues: Union[str, List[str]], timeout: int = 0
+    ) -> Optional[Tuple[str, str]]:
+        """
+        Get item from queues (ordered from the most to the least prioritized)
+        If there are no items, wait until one appear.
+
+        :param queues: Redis queue name or list of names
+        :param timeout: Waiting for item timeout (default: 0 = wait forever)
+        :return: Tuple of [queue_name, item] objects or None if timeout has been reached
+        """
+        return await self.redis.blpop(queues, timeout=timeout)
+
+    async def get_task(self, task_uid: str) -> Optional[Task]:
+        """
+        Get task object with given identifier
+
+        :param task_uid: Task identifier
+        :return: Task object
+        """
+        task_data = await self.redis.get(f"{KARTON_TASK_NAMESPACE}:{task_uid}")
+        if not task_data:
+            return None
+        return Task.unserialize(
+            task_data, resource_unserializer=self.unserialize_resource
+        )
+
+    async def consume_routed_task(
+        self, identity: str, timeout: int = 5
+    ) -> Optional[Task]:
+        """
+        Get routed task for given consumer identity.
+
+        If there are no tasks, blocks until new one appears or timeout is reached.
+
+        :param identity: Karton service identity
+        :param timeout: Waiting for task timeout (default: 5)
+        :return: Task object
+        """
+        item = await self.consume_queues(
+            self.get_queue_names(identity),
+            timeout=timeout,
+        )
+        if not item:
+            return None
+        queue, data = item
+        return await self.get_task(data)
 
     async def increment_metrics(
         self, metric: KartonMetrics, identity: str, pipe: Optional[Pipeline] = None
@@ -229,3 +336,24 @@ class KartonAsyncBackend(KartonBackendBase):
         """
         async with self.s3 as client:
             await client.download_file(Bucket=bucket, Key=object_uid, Filename=path)
+
+    async def produce_log(
+        self,
+        log_record: Dict[str, Any],
+        logger_name: str,
+        level: str,
+    ) -> bool:
+        """
+        Push new log record to the logs channel
+
+        :param log_record: Dict with log record
+        :param logger_name: Logger name
+        :param level: Log level
+        :return: True if any active log consumer received log record
+        """
+        return (
+            await self.redis.publish(
+                self._log_channel(logger_name, level), json.dumps(log_record)
+            )
+            > 0
+        )

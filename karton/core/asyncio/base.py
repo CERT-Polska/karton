@@ -1,6 +1,6 @@
 import abc
 import asyncio
-from contextlib import contextmanager
+import signal
 from typing import Optional
 
 from karton.core import Task
@@ -8,9 +8,8 @@ from karton.core.__version__ import __version__
 from karton.core.backend import KartonServiceInfo
 from karton.core.base import ConfigMixin, LoggingMixin
 from karton.core.config import Config
-from karton.core.exceptions import HardShutdownInterrupt
 from karton.core.task import get_current_task, set_current_task
-from karton.core.utils import StrictClassMethod, graceful_killer
+from karton.core.utils import StrictClassMethod
 
 from .backend import KartonAsyncBackend
 from .logger import KartonAsyncLogHandler
@@ -63,7 +62,7 @@ class KartonAsyncBase(abc.ABC, ConfigMixin, LoggingMixin):
         set_current_task(task)
 
 
-class KartonServiceBase(KartonAsyncBase):
+class KartonAsyncServiceBase(KartonAsyncBase):
     """
     Karton base class for looping services.
 
@@ -87,30 +86,33 @@ class KartonServiceBase(KartonAsyncBase):
             backend=backend,
         )
         self.setup_logger()
-        self._shutdown = False
+        self._loop_coro: Optional[asyncio.Task] = None
 
     def _do_shutdown(self) -> None:
         self.log.info("Got signal, shutting down...")
-        self._shutdown = True
+        if self._loop_coro is not None:
+            self._loop_coro.cancel()
 
-    @property
-    def shutdown(self):
-        return self._shutdown
-
-    @contextmanager
-    def graceful_killer(self):
-        try:
-            with graceful_killer(self._do_shutdown):
-                yield
-        except HardShutdownInterrupt:
-            self.log.info("Hard shutting down!")
-            raise
+    @abc.abstractmethod
+    async def _loop(self) -> None:
+        raise NotImplementedError
 
     # Base class for Karton services
-    @abc.abstractmethod
     async def loop(self) -> None:
-        # Karton service entrypoint
-        raise NotImplementedError
+        if self.enable_publish_log and hasattr(self.log_handler, "start_consuming"):
+            self.log_handler.start_consuming()
+        event_loop = asyncio.get_event_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            event_loop.add_signal_handler(sig, self._do_shutdown)
+        self._loop_coro = asyncio.create_task(self._loop())
+        try:
+            await self._loop_coro
+        finally:
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                event_loop.remove_signal_handler(sig)
+            if self.enable_publish_log and hasattr(self.log_handler, "stop_consuming"):
+                # This is blocking
+                self.log_handler.stop_consuming()
 
     @StrictClassMethod
     def main(cls) -> None:

@@ -137,7 +137,7 @@ class Consumer(KartonServiceBase):
         )
         if self.task_timeout is None:
             self.task_timeout = self.config.getint("karton", "task_timeout")
-        self.current_task: Optional[Task] = None
+
         self._pre_hooks: List[Tuple[Optional[str], Callable[[Task], None]]] = []
         self._post_hooks: List[
             Tuple[
@@ -228,6 +228,7 @@ class Consumer(KartonServiceBase):
             filters=self.filters,
             persistent=self.persistent,
             service_version=self.__class__.version,
+            is_async=False,
         )
 
     @classmethod

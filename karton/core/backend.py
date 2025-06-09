@@ -21,6 +21,7 @@ from urllib3.response import HTTPResponse
 
 from .config import Config
 from .exceptions import InvalidIdentityError
+from .resource import RemoteResource
 from .task import Task, TaskPriority, TaskState
 from .utils import chunks, chunks_iter
 
@@ -33,7 +34,15 @@ KARTON_OUTPUTS_NAMESPACE = "karton.outputs"
 
 KartonBind = namedtuple(
     "KartonBind",
-    ["identity", "info", "version", "persistent", "filters", "service_version"],
+    [
+        "identity",
+        "info",
+        "version",
+        "persistent",
+        "filters",
+        "service_version",
+        "is_async",
+    ],
 )
 
 
@@ -175,6 +184,7 @@ class KartonBackendBase:
                 "filters": bind.filters,
                 "persistent": bind.persistent,
                 "service_version": bind.service_version,
+                "is_async": bind.is_async,
             },
             sort_keys=True,
         )
@@ -199,6 +209,7 @@ class KartonBackendBase:
                 persistent=not identity.endswith(".test"),
                 filters=bind,
                 service_version=None,
+                is_async=False,
             )
         return KartonBind(
             identity=identity,
@@ -207,6 +218,7 @@ class KartonBackendBase:
             persistent=bind["persistent"],
             filters=bind["filters"],
             service_version=bind.get("service_version"),
+            is_async=bind.get("is_async", False),
         )
 
     @staticmethod
@@ -220,6 +232,12 @@ class KartonBackendBase:
         """
         output = [json.loads(output_type) for output_type in output_data]
         return KartonOutputs(identity=identity, outputs=output)
+
+    @staticmethod
+    def _log_channel(logger_name: Optional[str], level: Optional[str]) -> str:
+        return ".".join(
+            [KARTON_LOG_CHANNEL, (level or "*").lower(), logger_name or "*"]
+        )
 
 
 class KartonBackend(KartonBackendBase):
@@ -325,6 +343,15 @@ class KartonBackend(KartonBackendBase):
             redis = StrictRedis(**redis_args)
             redis.ping()
         return redis
+
+    def unserialize_resource(self, resource_spec: Dict[str, Any]) -> RemoteResource:
+        """
+        Unserializes resource into a RemoteResource object bound with current backend
+
+        :param resource_spec: Resource specification
+        :return: RemoteResource object
+        """
+        return RemoteResource.from_dict(resource_spec, backend=self)
 
     def get_bind(self, identity: str) -> KartonBind:
         """
@@ -436,7 +463,9 @@ class KartonBackend(KartonBackendBase):
         task_data = self.redis.get(f"{KARTON_TASK_NAMESPACE}:{task_uid}")
         if not task_data:
             return None
-        return Task.unserialize(task_data, backend=self)
+        return Task.unserialize(
+            task_data, resource_unserializer=self.unserialize_resource
+        )
 
     def get_tasks(
         self,
@@ -459,7 +488,11 @@ class KartonBackend(KartonBackendBase):
             chunk_size,
         )
         return [
-            Task.unserialize(task_data, backend=self, parse_resources=parse_resources)
+            Task.unserialize(
+                task_data,
+                parse_resources=parse_resources,
+                resource_unserializer=self.unserialize_resource,
+            )
             for chunk in keys
             for task_data in self.redis.mget(chunk)
             if task_data is not None
@@ -474,7 +507,9 @@ class KartonBackend(KartonBackendBase):
         for chunk in chunks_iter(task_keys, chunk_size):
             yield from (
                 Task.unserialize(
-                    task_data, backend=self, parse_resources=parse_resources
+                    task_data,
+                    parse_resources=parse_resources,
+                    resource_unserializer=self.unserialize_resource,
                 )
                 for task_data in self.redis.mget(chunk)
                 if task_data is not None
@@ -560,7 +595,9 @@ class KartonBackend(KartonBackendBase):
                 lambda task: task.root_uid == root_uid,
                 (
                     Task.unserialize(
-                        task_data, backend=self, parse_resources=parse_resources
+                        task_data,
+                        parse_resources=parse_resources,
+                        resource_unserializer=self.unserialize_resource,
                     )
                     for task_data in self.redis.mget(chunk)
                     if task_data is not None
@@ -807,12 +844,6 @@ class KartonBackend(KartonBackendBase):
         self.set_task_status(task, status=TaskState.FINISHED, pipe=p)
         p.execute()
         return new_task
-
-    @staticmethod
-    def _log_channel(logger_name: Optional[str], level: Optional[str]) -> str:
-        return ".".join(
-            [KARTON_LOG_CHANNEL, (level or "*").lower(), logger_name or "*"]
-        )
 
     def produce_log(
         self,
