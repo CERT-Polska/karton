@@ -70,6 +70,7 @@ Task routing and data exchange is achieved with the help of **Karton-System** - 
    service_configuration
    advanced_concepts
    unit_tests
+   asyncio
    karton_api
 
 Indices and tables

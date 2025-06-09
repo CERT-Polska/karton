@@ -21,6 +21,7 @@ from urllib3.response import HTTPResponse
 
 from .config import Config
 from .exceptions import InvalidIdentityError
+from .resource import RemoteResource
 from .task import Task, TaskPriority, TaskState
 from .utils import chunks, chunks_iter
 
@@ -33,12 +34,20 @@ KARTON_OUTPUTS_NAMESPACE = "karton.outputs"
 
 KartonBind = namedtuple(
     "KartonBind",
-    ["identity", "info", "version", "persistent", "filters", "service_version"],
+    [
+        "identity",
+        "info",
+        "version",
+        "persistent",
+        "filters",
+        "service_version",
+        "is_async",
+    ],
 )
 
 
 KartonOutputs = namedtuple("KartonOutputs", ["identity", "outputs"])
-logger = logging.getLogger("karton.core.backend")
+logger = logging.getLogger(__name__)
 
 
 class KartonMetrics(enum.Enum):
@@ -103,13 +112,13 @@ class KartonServiceInfo:
         )
 
 
-class KartonBackend:
+class KartonBackendBase:
     def __init__(
         self,
         config: Config,
         identity: Optional[str] = None,
         service_info: Optional[KartonServiceInfo] = None,
-    ) -> None:
+    ):
         self.config = config
 
         if identity is not None:
@@ -117,6 +126,128 @@ class KartonBackend:
         self.identity = identity
 
         self.service_info = service_info
+
+    @staticmethod
+    def _validate_identity(identity: str):
+        disallowed_chars = [" ", "?"]
+        if any(disallowed_char in identity for disallowed_char in disallowed_chars):
+            raise InvalidIdentityError(
+                f"Karton identity should not contain {disallowed_chars}"
+            )
+
+    @property
+    def default_bucket_name(self) -> str:
+        bucket_name = self.config.get("s3", "bucket")
+        if not bucket_name:
+            raise RuntimeError("S3 default bucket is not defined in configuration")
+        return bucket_name
+
+    @staticmethod
+    def get_queue_name(identity: str, priority: TaskPriority) -> str:
+        """
+        Return Redis routed task queue name for given identity and priority
+
+        :param identity: Karton service identity
+        :param priority: Queue priority (TaskPriority enum value)
+        :return: Queue name
+        """
+        return f"karton.queue.{priority.value}:{identity}"
+
+    @staticmethod
+    def get_queue_names(identity: str) -> List[str]:
+        """
+        Return all Redis routed task queue names for given identity,
+        ordered by priority (descending). Used internally by Consumer.
+
+        :param identity: Karton service identity
+        :return: List of queue names
+        """
+        return [
+            identity,  # Backwards compatibility (2.x.x)
+            KartonBackend.get_queue_name(identity, TaskPriority.HIGH),
+            KartonBackend.get_queue_name(identity, TaskPriority.NORMAL),
+            KartonBackend.get_queue_name(identity, TaskPriority.LOW),
+        ]
+
+    @staticmethod
+    def serialize_bind(bind: KartonBind) -> str:
+        """
+        Serialize KartonBind object (Karton service registration)
+
+        :param bind: KartonBind object with bind definition
+        :return: Serialized bind data
+        """
+        return json.dumps(
+            {
+                "info": bind.info,
+                "version": bind.version,
+                "filters": bind.filters,
+                "persistent": bind.persistent,
+                "service_version": bind.service_version,
+                "is_async": bind.is_async,
+            },
+            sort_keys=True,
+        )
+
+    @staticmethod
+    def unserialize_bind(identity: str, bind_data: str) -> KartonBind:
+        """
+        Deserialize KartonBind object for given identity.
+        Compatible with Karton 2.x.x and 3.x.x
+
+        :param identity: Karton service identity
+        :param bind_data: Serialized bind data
+        :return: KartonBind object with bind definition
+        """
+        bind = json.loads(bind_data)
+        if isinstance(bind, list):
+            # Backwards compatibility (v2.x.x)
+            return KartonBind(
+                identity=identity,
+                info=None,
+                version="2.x.x",
+                persistent=not identity.endswith(".test"),
+                filters=bind,
+                service_version=None,
+                is_async=False,
+            )
+        return KartonBind(
+            identity=identity,
+            info=bind["info"],
+            version=bind["version"],
+            persistent=bind["persistent"],
+            filters=bind["filters"],
+            service_version=bind.get("service_version"),
+            is_async=bind.get("is_async", False),
+        )
+
+    @staticmethod
+    def unserialize_output(identity: str, output_data: Set[str]) -> KartonOutputs:
+        """
+        Deserialize KartonOutputs object for given identity.
+
+        :param identity: Karton service identity
+        :param output_data: Serialized output data
+        :return: KartonOutputs object with outputs definition
+        """
+        output = [json.loads(output_type) for output_type in output_data]
+        return KartonOutputs(identity=identity, outputs=output)
+
+    @staticmethod
+    def _log_channel(logger_name: Optional[str], level: Optional[str]) -> str:
+        return ".".join(
+            [KARTON_LOG_CHANNEL, (level or "*").lower(), logger_name or "*"]
+        )
+
+
+class KartonBackend(KartonBackendBase):
+    def __init__(
+        self,
+        config: Config,
+        identity: Optional[str] = None,
+        service_info: Optional[KartonServiceInfo] = None,
+    ) -> None:
+        super().__init__(config, identity, service_info)
         self.redis = self.make_redis(
             config, identity=identity, service_info=service_info
         )
@@ -172,14 +303,6 @@ class KartonBackend:
                 )
 
     @staticmethod
-    def _validate_identity(identity: str):
-        disallowed_chars = [" ", "?"]
-        if any(disallowed_char in identity for disallowed_char in disallowed_chars):
-            raise InvalidIdentityError(
-                f"Karton identity should not contain {disallowed_chars}"
-            )
-
-    @staticmethod
     def make_redis(
         config,
         identity: Optional[str] = None,
@@ -221,100 +344,14 @@ class KartonBackend:
             redis.ping()
         return redis
 
-    @property
-    def default_bucket_name(self) -> str:
-        bucket_name = self.config.get("s3", "bucket")
-        if not bucket_name:
-            raise RuntimeError("S3 default bucket is not defined in configuration")
-        return bucket_name
-
-    @staticmethod
-    def get_queue_name(identity: str, priority: TaskPriority) -> str:
+    def unserialize_resource(self, resource_spec: Dict[str, Any]) -> RemoteResource:
         """
-        Return Redis routed task queue name for given identity and priority
+        Unserializes resource into a RemoteResource object bound with current backend
 
-        :param identity: Karton service identity
-        :param priority: Queue priority (TaskPriority enum value)
-        :return: Queue name
+        :param resource_spec: Resource specification
+        :return: RemoteResource object
         """
-        return f"karton.queue.{priority.value}:{identity}"
-
-    @staticmethod
-    def get_queue_names(identity: str) -> List[str]:
-        """
-        Return all Redis routed task queue names for given identity,
-        ordered by priority (descending). Used internally by Consumer.
-
-        :param identity: Karton service identity
-        :return: List of queue names
-        """
-        return [
-            identity,  # Backwards compatibility (2.x.x)
-            KartonBackend.get_queue_name(identity, TaskPriority.HIGH),
-            KartonBackend.get_queue_name(identity, TaskPriority.NORMAL),
-            KartonBackend.get_queue_name(identity, TaskPriority.LOW),
-        ]
-
-    @staticmethod
-    def serialize_bind(bind: KartonBind) -> str:
-        """
-        Serialize KartonBind object (Karton service registration)
-
-        :param bind: KartonBind object with bind definition
-        :return: Serialized bind data
-        """
-        return json.dumps(
-            {
-                "info": bind.info,
-                "version": bind.version,
-                "filters": bind.filters,
-                "persistent": bind.persistent,
-                "service_version": bind.service_version,
-            },
-            sort_keys=True,
-        )
-
-    @staticmethod
-    def unserialize_bind(identity: str, bind_data: str) -> KartonBind:
-        """
-        Deserialize KartonBind object for given identity.
-        Compatible with Karton 2.x.x and 3.x.x
-
-        :param identity: Karton service identity
-        :param bind_data: Serialized bind data
-        :return: KartonBind object with bind definition
-        """
-        bind = json.loads(bind_data)
-        if isinstance(bind, list):
-            # Backwards compatibility (v2.x.x)
-            return KartonBind(
-                identity=identity,
-                info=None,
-                version="2.x.x",
-                persistent=not identity.endswith(".test"),
-                filters=bind,
-                service_version=None,
-            )
-        return KartonBind(
-            identity=identity,
-            info=bind["info"],
-            version=bind["version"],
-            persistent=bind["persistent"],
-            filters=bind["filters"],
-            service_version=bind.get("service_version"),
-        )
-
-    @staticmethod
-    def unserialize_output(identity: str, output_data: Set[str]) -> KartonOutputs:
-        """
-        Deserialize KartonOutputs object for given identity.
-
-        :param identity: Karton service identity
-        :param output_data: Serialized output data
-        :return: KartonOutputs object with outputs definition
-        """
-        output = [json.loads(output_type) for output_type in output_data]
-        return KartonOutputs(identity=identity, outputs=output)
+        return RemoteResource.from_dict(resource_spec, backend=self)
 
     def get_bind(self, identity: str) -> KartonBind:
         """
@@ -426,7 +463,9 @@ class KartonBackend:
         task_data = self.redis.get(f"{KARTON_TASK_NAMESPACE}:{task_uid}")
         if not task_data:
             return None
-        return Task.unserialize(task_data, backend=self)
+        return Task.unserialize(
+            task_data, resource_unserializer=self.unserialize_resource
+        )
 
     def get_tasks(
         self,
@@ -449,7 +488,11 @@ class KartonBackend:
             chunk_size,
         )
         return [
-            Task.unserialize(task_data, backend=self, parse_resources=parse_resources)
+            Task.unserialize(
+                task_data,
+                parse_resources=parse_resources,
+                resource_unserializer=self.unserialize_resource,
+            )
             for chunk in keys
             for task_data in self.redis.mget(chunk)
             if task_data is not None
@@ -464,7 +507,9 @@ class KartonBackend:
         for chunk in chunks_iter(task_keys, chunk_size):
             yield from (
                 Task.unserialize(
-                    task_data, backend=self, parse_resources=parse_resources
+                    task_data,
+                    parse_resources=parse_resources,
+                    resource_unserializer=self.unserialize_resource,
                 )
                 for task_data in self.redis.mget(chunk)
                 if task_data is not None
@@ -550,7 +595,9 @@ class KartonBackend:
                 lambda task: task.root_uid == root_uid,
                 (
                     Task.unserialize(
-                        task_data, backend=self, parse_resources=parse_resources
+                        task_data,
+                        parse_resources=parse_resources,
+                        resource_unserializer=self.unserialize_resource,
                     )
                     for task_data in self.redis.mget(chunk)
                     if task_data is not None
@@ -797,12 +844,6 @@ class KartonBackend:
         self.set_task_status(task, status=TaskState.FINISHED, pipe=p)
         p.execute()
         return new_task
-
-    @staticmethod
-    def _log_channel(logger_name: Optional[str], level: Optional[str]) -> str:
-        return ".".join(
-            [KARTON_LOG_CHANNEL, (level or "*").lower(), logger_name or "*"]
-        )
 
     def produce_log(
         self,

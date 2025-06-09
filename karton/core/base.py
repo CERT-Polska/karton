@@ -10,31 +10,15 @@ from .__version__ import __version__
 from .backend import KartonBackend, KartonServiceInfo
 from .config import Config
 from .logger import KartonLogHandler
-from .task import Task
+from .task import Task, get_current_task, set_current_task
 from .utils import HardShutdownInterrupt, StrictClassMethod, graceful_killer
 
 
-class KartonBase(abc.ABC):
-    """
-    Base class for all Karton services
+class ConfigMixin:
+    identity: Optional[str]
+    version: Optional[str]
 
-    You can set an informative version information by setting the ``version`` class
-    attribute.
-    """
-
-    #: Karton service identity
-    identity: str = ""
-    #: Karton service version
-    version: Optional[str] = None
-    #: Include extended service information for non-consumer services
-    with_service_info: bool = False
-
-    def __init__(
-        self,
-        config: Optional[Config] = None,
-        identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
-    ) -> None:
+    def __init__(self, config: Optional[Config] = None, identity: Optional[str] = None):
         self.config = config or Config()
         self.enable_publish_log = self.config.getboolean(
             "logging", "enable_publish", True
@@ -50,96 +34,8 @@ class KartonBase(abc.ABC):
 
         self.debug = self.config.getboolean("karton", "debug", False)
 
-        if self.debug:
+        if self.debug and self.identity:
             self.identity += "-" + os.urandom(4).hex() + "-dev"
-
-        self.service_info = None
-        if self.identity is not None and self.with_service_info:
-            self.service_info = KartonServiceInfo(
-                identity=self.identity,
-                karton_version=__version__,
-                service_version=self.version,
-            )
-
-        self.backend = backend or KartonBackend(
-            self.config, identity=self.identity, service_info=self.service_info
-        )
-
-        self._log_handler = KartonLogHandler(
-            backend=self.backend, channel=self.identity
-        )
-        self.current_task: Optional[Task] = None
-
-    def setup_logger(self, level: Optional[Union[str, int]] = None) -> None:
-        """
-        Setup logger for Karton service (StreamHandler and `karton.logs` handler)
-
-        Called by :py:meth:`Consumer.loop`. If you want to use logger for Producer,
-        you need to call it yourself, but remember to set the identity.
-
-        :param level: Logging level. Default is logging.INFO \
-                      (unless different value is set in Karton config)
-        """
-        if level is None:
-            level = self.config.get("logging", "level", logging.INFO)
-
-        if type(level) is str and cast(str, level).isdigit():
-            log_level: Union[str, int] = int(level)
-        else:
-            log_level = level
-
-        if not self.identity:
-            raise ValueError("Can't setup logger without identity")
-
-        self._log_handler.setFormatter(logging.Formatter())
-
-        logger = logging.getLogger(self.identity)
-
-        if logger.handlers:
-            # If logger already have handlers set: clear them
-            logger.handlers.clear()
-
-        # Turn off propagation to parent loggers to avoid double logging
-        # We set up StreamHandler directly on logger, so it may be needed
-        # in case basicConfig was called at some point.
-        logger.propagate = False
-
-        logger.setLevel(log_level)
-        stream_handler = logging.StreamHandler()
-        stream_handler.setFormatter(
-            logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s")
-        )
-        logger.addHandler(stream_handler)
-
-        if not self.debug and self.enable_publish_log:
-            logger.addHandler(self._log_handler)
-
-    @property
-    def log_handler(self) -> KartonLogHandler:
-        """
-        Return KartonLogHandler bound to this Karton service.
-
-        Can be used to setup logging on your own by adding this handler
-        to the chosen loggers.
-        """
-        return self._log_handler
-
-    @property
-    def log(self) -> logging.Logger:
-        """
-        Return Logger instance for Karton service
-
-        If you want to use it in code that is outside of the Consumer class,
-        use :func:`logging.getLogger`:
-
-        .. code-block:: python
-
-            import logging
-            logging.getLogger("<identity>")
-
-        :return: :py:meth:`Logging.Logger` instance
-        """
-        return logging.getLogger(self.identity)
 
     @classmethod
     def args_description(cls) -> str:
@@ -202,6 +98,134 @@ class KartonBase(abc.ABC):
         config = Config(path=args.config_file)
         cls.config_from_args(config, args)
         return cls(config=config)
+
+
+class LoggingMixin:
+    config: Config
+    identity: Optional[str]
+    debug: bool
+    enable_publish_log: bool
+
+    def __init__(self, log_handler: logging.Handler):
+        self._log_handler = log_handler
+
+    def setup_logger(self, level: Optional[Union[str, int]] = None) -> None:
+        """
+        Setup logger for Karton service (StreamHandler and `karton.logs` handler)
+
+        Called by :py:meth:`Consumer.loop`. If you want to use logger for Producer,
+        you need to call it yourself, but remember to set the identity.
+
+        :param level: Logging level. Default is logging.INFO \
+                      (unless different value is set in Karton config)
+        """
+        if level is None:
+            level = self.config.get("logging", "level", logging.INFO)
+
+        if type(level) is str and cast(str, level).isdigit():
+            log_level: Union[str, int] = int(level)
+        else:
+            log_level = level
+
+        if not self.identity:
+            raise ValueError("Can't setup logger without identity")
+
+        self._log_handler.setFormatter(logging.Formatter())
+
+        logger = logging.getLogger(self.identity)
+
+        if logger.handlers:
+            # If logger already have handlers set: clear them
+            logger.handlers.clear()
+
+        # Turn off propagation to parent loggers to avoid double logging
+        # We set up StreamHandler directly on logger, so it may be needed
+        # in case basicConfig was called at some point.
+        logger.propagate = False
+
+        logger.setLevel(log_level)
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(
+            logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s")
+        )
+        logger.addHandler(stream_handler)
+
+        if not self.debug and self.enable_publish_log:
+            logger.addHandler(self._log_handler)
+
+    @property
+    def log_handler(self) -> logging.Handler:
+        """
+        Return KartonLogHandler bound to this Karton service.
+
+        Can be used to setup logging on your own by adding this handler
+        to the chosen loggers.
+        """
+        return self._log_handler
+
+    @property
+    def log(self) -> logging.Logger:
+        """
+        Return Logger instance for Karton service
+
+        If you want to use it in code that is outside of the Consumer class,
+        use :func:`logging.getLogger`:
+
+        .. code-block:: python
+
+            import logging
+            logging.getLogger("<identity>")
+
+        :return: :py:meth:`Logging.Logger` instance
+        """
+        return logging.getLogger(self.identity)
+
+
+class KartonBase(abc.ABC, ConfigMixin, LoggingMixin):
+    """
+    Base class for all Karton services
+
+    You can set an informative version information by setting the ``version`` class
+    attribute.
+    """
+
+    #: Karton service identity
+    identity: str = ""
+    #: Karton service version
+    version: Optional[str] = None
+    #: Include extended service information for non-consumer services
+    with_service_info: bool = False
+
+    def __init__(
+        self,
+        config: Optional[Config] = None,
+        identity: Optional[str] = None,
+        backend: Optional[KartonBackend] = None,
+    ) -> None:
+        ConfigMixin.__init__(self, config, identity)
+
+        self.service_info = None
+        if self.identity is not None and self.with_service_info:
+            self.service_info = KartonServiceInfo(
+                identity=self.identity,
+                karton_version=__version__,
+                service_version=self.version,
+            )
+
+        self.backend = backend or KartonBackend(
+            self.config, identity=self.identity, service_info=self.service_info
+        )
+
+        log_handler = KartonLogHandler(backend=self.backend, channel=self.identity)
+        LoggingMixin.__init__(self, log_handler)
+
+    @property
+    def current_task(self) -> Optional[Task]:
+        return get_current_task()
+
+    @current_task.setter
+    def current_task(self, task: Optional[Task]):
+        set_current_task(task)
 
 
 class KartonServiceBase(KartonBase):
