@@ -10,4 +10,4 @@ line_length = 88
 lint-version = "2"
 source = "karton/"
 # Temporary workaround for Union[Awaitable[T]], T] mess in Redis typing
-extra-requirements = "redis<5.0.0 botocore-stubs"
+extra-requirements = "botocore-stubs"
