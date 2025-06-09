@@ -36,7 +36,8 @@ class KartonAsyncBackend(KartonBackendBase):
     ) -> None:
         super().__init__(config, identity, service_info)
         self._redis: Optional[Redis] = None
-        self._s3: Optional[ClientCreatorContext] = None
+        self._s3_session: Optional[aioboto3.Session] = None
+        self._s3_iam_auth = False
 
     @property
     def redis(self) -> Redis:
@@ -46,12 +47,26 @@ class KartonAsyncBackend(KartonBackendBase):
 
     @property
     def s3(self) -> ClientCreatorContext:
-        if not self._s3:
+        if not self._s3_session:
             raise RuntimeError("Call connect() first before using KartonAsyncBackend")
-        return self._s3
+        endpoint = self.config.get("s3", "address")
+        if self._s3_iam_auth:
+            return self._s3_session.client(
+                "s3",
+                endpoint_url=endpoint,
+            )
+        else:
+            access_key = self.config.get("s3", "access_key")
+            secret_key = self.config.get("s3", "secret_key")
+            return self._s3_session.client(
+                "s3",
+                endpoint_url=endpoint,
+                aws_access_key_id=access_key,
+                aws_secret_access_key=secret_key,
+            )
 
     async def connect(self):
-        if self._redis is not None or self._s3 is not None:
+        if self._redis is not None or self._s3_session is not None:
             # Already connected
             return
         self._redis = await self.make_redis(
@@ -73,9 +88,10 @@ class KartonAsyncBackend(KartonBackendBase):
             )
 
         if iam_auth:
-            s3_client_creator = await self.iam_auth_s3(endpoint)
+            s3_client_creator = await self.iam_auth_s3()
             if s3_client_creator:
-                self._s3 = s3_client_creator
+                self._s3_iam_auth = True
+                self._s3_session = s3_client_creator
                 return
 
         if access_key is None or secret_key is None:
@@ -84,14 +100,9 @@ class KartonAsyncBackend(KartonBackendBase):
             )
 
         session = aioboto3.Session()
-        self._s3 = session.client(
-            "s3",
-            endpoint_url=endpoint,
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
-        )
+        self._s3_session = session
 
-    async def iam_auth_s3(self, endpoint: str):
+    async def iam_auth_s3(self):
         boto_session = get_session()
         iam_providers = [
             ContainerProvider(),
@@ -104,10 +115,7 @@ class KartonAsyncBackend(KartonBackendBase):
             creds = await provider.load()
             if creds:
                 boto_session._credentials = creds  # type: ignore
-                return aioboto3.Session(botocore_session=boto_session).client(
-                    "s3",
-                    endpoint_url=endpoint,
-                )
+                return aioboto3.Session(botocore_session=boto_session)
 
     @staticmethod
     async def make_redis(

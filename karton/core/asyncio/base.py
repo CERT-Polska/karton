@@ -1,6 +1,7 @@
 import abc
 import asyncio
 import signal
+from asyncio import CancelledError
 from typing import Optional
 
 from karton.core import Task
@@ -121,4 +122,8 @@ class KartonAsyncServiceBase(KartonAsyncBase):
     def main(cls) -> None:
         """Main method invoked from CLI."""
         service = cls.karton_from_args()
-        asyncio.run(service.loop())
+        try:
+            asyncio.run(service.loop())
+        except CancelledError:
+            # Swallow cancellation, we're done!
+            pass

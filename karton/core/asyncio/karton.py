@@ -4,6 +4,7 @@ import asyncio
 import sys
 import time
 import traceback
+from asyncio import CancelledError
 from typing import Any, Dict, List, Optional
 
 from karton.core import query
@@ -184,7 +185,7 @@ class Consumer(KartonAsyncServiceBase):
             else:
                 await self.process(task)
             self.log.info("Task done - %s", task.uid)
-        except (Exception, TaskTimeoutError):
+        except (Exception, TaskTimeoutError, CancelledError):
             exc_info = sys.exc_info()
             exception_str = traceback.format_exception(*exc_info)
 
