@@ -112,6 +112,14 @@ if they want to gracefully terminate their operations in case of ``SIGINT``/``SI
 
 Asynchronous Karton can't interrupt blocking/hanged operations.
 
+Known issues: reported number of replicas
+-----------------------------------------
+
+When using asyncio-based Karton consumers, be aware that the reported number of replicas may not accurately reflect
+the actual number of running consumer instances.
+
+This is due to how the Karton framework determines the replica count — it relies on counting active Redis connections.
+
 Missing features
 ----------------
 
