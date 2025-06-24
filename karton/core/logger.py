@@ -10,6 +10,20 @@ from .task import get_current_task
 HOSTNAME = platform.node()
 
 
+class TaskContextFilter(logging.Filter):
+    """
+    This is a filter which injects information about current task ID to the log.
+    """
+
+    def filter(self, record):
+        current_task = get_current_task()
+        if current_task is not None:
+            record.task_id = current_task.task_uid
+        else:
+            record.task_id = "(no task)"
+        return True
+
+
 class LogLineFormatterMixin:
     format: Callable[[logging.LogRecord], str]
 

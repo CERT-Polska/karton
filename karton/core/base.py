@@ -9,7 +9,7 @@ from typing import Optional, Union, cast
 from .__version__ import __version__
 from .backend import KartonBackend, KartonServiceInfo
 from .config import Config
-from .logger import KartonLogHandler
+from .logger import KartonLogHandler, TaskContextFilter
 from .task import Task, get_current_task, set_current_task
 from .utils import HardShutdownInterrupt, StrictClassMethod, graceful_killer
 
@@ -133,6 +133,7 @@ class LoggingMixin:
         self._log_handler.setFormatter(logging.Formatter())
 
         logger = logging.getLogger(self.identity)
+        logger.addFilter(TaskContextFilter())
 
         if logger.handlers:
             # If logger already have handlers set: clear them
@@ -146,7 +147,7 @@ class LoggingMixin:
         logger.setLevel(log_level)
         stream_handler = logging.StreamHandler()
         stream_handler.setFormatter(
-            logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s")
+            logging.Formatter("[%(asctime)s][%(levelname)s][%(task_id)s] %(message)s")
         )
         logger.addHandler(stream_handler)
 

@@ -124,7 +124,7 @@ class Consumer(KartonAsyncServiceBase):
     persistent: bool = True
     version: Optional[str] = None
     task_timeout = None
-    concurrency_limit: Optional[int] = None
+    concurrency_limit: Optional[int] = 1
 
     def __init__(
         self,
@@ -147,8 +147,9 @@ class Consumer(KartonAsyncServiceBase):
         if self.task_timeout is None:
             self.task_timeout = self.config.getint("karton", "task_timeout")
 
-        if self.concurrency_limit is None:
-            self.concurrency_limit = self.config.getint("karton", "concurrency_limit")
+        self.concurrency_limit = self.config.getint(
+            "karton", "concurrency_limit", self.concurrency_limit
+        )
 
         self.concurrency_semaphore: Optional[asyncio.Semaphore] = None
         if self.concurrency_limit is not None:
@@ -319,6 +320,9 @@ class Consumer(KartonAsyncServiceBase):
                 if task:
                     coro_task = asyncio.create_task(self.internal_process(task))
                     concurrent_tasks.append(coro_task)
+                else:
+                    if self.concurrency_semaphore is not None:
+                        self.concurrency_semaphore.release()
                 # Garbage collection and exception propagation
                 # for finished concurrent tasks
                 unfinished_tasks: List[asyncio.Task] = []
