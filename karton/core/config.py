@@ -116,6 +116,11 @@ class Config(object):
     @overload
     def getint(self, section_name: str, option_name: str) -> Optional[int]: ...
 
+    @overload
+    def getint(
+        self, section_name: str, option_name: str, fallback: Optional[int]
+    ) -> Optional[int]: ...
+
     def getint(
         self, section_name: str, option_name: str, fallback: Optional[int] = None
     ) -> Optional[int]:
