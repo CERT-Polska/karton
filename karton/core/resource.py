@@ -150,34 +150,7 @@ class ResourceBase(object):
         }
 
 
-class LocalResource(ResourceBase):
-    """
-    Represents local resource with arbitrary binary data e.g. file contents.
-
-    Local resources will be uploaded to object hub (S3) during
-    task dispatching.
-
-    .. code-block:: python
-
-        # Creating resource from bytes
-        sample = Resource("original_name.exe", content=b"X5O!P%@AP[4\\
-        PZX54(P^)7CC)7}$EICAR-STANDARD-ANT...")
-
-        # Creating resource from path
-        sample = Resource("original_name.exe", path="sample/original_name.exe")
-
-    :param name: Name of the resource (e.g. name of file)
-    :param content: Resource content
-    :param path: Path of file with resource content
-    :param bucket: Alternative S3 bucket for resource
-    :param metadata: Resource metadata
-    :param uid: Alternative S3 resource id
-    :param sha256: Resource sha256 hash
-    :param fd: Seekable file descriptor
-    :param _flags: Resource flags
-    :param _close_fd: Close file descriptor after upload (default: False)
-    """
-
+class LocalResourceBase(ResourceBase):
     def __init__(
         self,
         name: str,
@@ -194,7 +167,7 @@ class LocalResource(ResourceBase):
         if len(list(filter(None, [path, content, fd]))) != 1:
             raise ValueError("You must exclusively provide a path, content or fd")
 
-        super(LocalResource, self).__init__(
+        super().__init__(
             name,
             content=content,
             path=path,
@@ -247,7 +220,7 @@ class LocalResource(ResourceBase):
         bucket: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
         uid: Optional[str] = None,
-    ) -> "LocalResource":
+    ) -> "LocalResourceBase":
         """
         Resource extension, allowing to pass whole directory as a zipped resource.
 
@@ -304,6 +277,35 @@ class LocalResource(ResourceBase):
                 _flags=flags,
                 _close_fd=True,
             )
+
+
+class LocalResource(LocalResourceBase):
+    """
+    Represents local resource with arbitrary binary data e.g. file contents.
+
+    Local resources will be uploaded to object hub (S3) during
+    task dispatching.
+
+    .. code-block:: python
+
+        # Creating resource from bytes
+        sample = Resource("original_name.exe", content=b"X5O!P%@AP[4\\
+        PZX54(P^)7CC)7}$EICAR-STANDARD-ANT...")
+
+        # Creating resource from path
+        sample = Resource("original_name.exe", path="sample/original_name.exe")
+
+    :param name: Name of the resource (e.g. name of file)
+    :param content: Resource content
+    :param path: Path of file with resource content
+    :param bucket: Alternative S3 bucket for resource
+    :param metadata: Resource metadata
+    :param uid: Alternative S3 resource id
+    :param sha256: Resource sha256 hash
+    :param fd: Seekable file descriptor
+    :param _flags: Resource flags
+    :param _close_fd: Close file descriptor after upload (default: False)
+    """
 
     def _upload(self, backend: "KartonBackend") -> None:
         """Internal function for uploading resources

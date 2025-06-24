@@ -18,7 +18,7 @@ setup(
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     namespace_packages=["karton"],
-    packages=["karton.core", "karton.system"],
+    packages=["karton.core", "karton.core.asyncio", "karton.system"],
     package_data={"karton.core": ["py.typed"]},
     install_requires=open("requirements.txt").read().splitlines(),
     entry_points={

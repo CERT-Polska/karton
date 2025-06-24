@@ -3,6 +3,7 @@ import json
 import time
 import uuid
 import warnings
+from contextvars import ContextVar
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -23,6 +24,16 @@ if TYPE_CHECKING:
     from .backend import KartonBackend  # noqa
 
 import orjson
+
+current_task: ContextVar[Optional["Task"]] = ContextVar("current_task")
+
+
+def get_current_task() -> Optional["Task"]:
+    return current_task.get(None)
+
+
+def set_current_task(task: Optional["Task"]):
+    current_task.set(task)
 
 
 class TaskState(enum.Enum):
@@ -375,12 +386,15 @@ class Task(object):
         data: Union[str, bytes],
         backend: Optional["KartonBackend"] = None,
         parse_resources: bool = True,
+        resource_unserializer: Optional[Callable[[Dict], Any]] = None,
     ) -> "Task":
         """
         Unserialize Task instance from JSON string
 
         :param data: JSON-serialized task
-        :param backend: Backend instance to be bound to RemoteResource objects
+        :param backend: |
+            Backend instance to be bound to RemoteResource objects.
+            Deprecated: pass resource_unserializer instead.
         :param parse_resources: |
             If set to False (default is True), method doesn't
             deserialize '__karton_resource__' entries, which speeds up deserialization
@@ -388,6 +402,9 @@ class Task(object):
             filtering based on status.
             When resource deserialization is turned off, Task.unserialize will try
             to use faster 3rd-party JSON parser (orjson).
+        :param resource_unserializer: |
+            Resource factory used for deserialization of __karton_resource__
+            dictionary values.
         :return: Unserialized Task object
 
         :meta private:
@@ -399,7 +416,12 @@ class Task(object):
             RemoteResource object instances
             """
             if isinstance(value, dict) and "__karton_resource__" in value:
-                return RemoteResource.from_dict(value["__karton_resource__"], backend)
+                if resource_unserializer is None:
+                    return RemoteResource.from_dict(
+                        value["__karton_resource__"], backend
+                    )
+                else:
+                    return resource_unserializer(value["__karton_resource__"])
             return value
 
         if not isinstance(data, str):

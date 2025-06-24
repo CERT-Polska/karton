@@ -2,30 +2,18 @@ import logging
 import platform
 import traceback
 import warnings
-from typing import Optional
+from typing import Any, Callable, Dict
 
 from .backend import KartonBackend
-from .task import Task
+from .task import get_current_task
 
 HOSTNAME = platform.node()
 
 
-class KartonLogHandler(logging.Handler):
-    """
-    logging.Handler that passes logs to the Karton backend.
-    """
+class LogLineFormatterMixin:
+    format: Callable[[logging.LogRecord], str]
 
-    def __init__(self, backend: KartonBackend, channel: str) -> None:
-        logging.Handler.__init__(self)
-        self.backend = backend
-        self.task: Optional[Task] = None
-        self.is_consumer_active: bool = True
-        self.channel: str = channel
-
-    def set_task(self, task: Task) -> None:
-        self.task = task
-
-    def emit(self, record: logging.LogRecord) -> None:
+    def prepare_log_line(self, record: logging.LogRecord) -> Dict[str, Any]:
         ignore_fields = [
             "args",
             "asctime",
@@ -54,11 +42,27 @@ class KartonLogHandler(logging.Handler):
         log_line["type"] = "log"
         log_line["message"] = self.format(record)
 
-        if self.task is not None:
-            log_line["task"] = self.task.serialize()
+        current_task = get_current_task()
+        if current_task is not None:
+            log_line["task"] = current_task.serialize()
 
         log_line["hostname"] = HOSTNAME
+        return log_line
 
+
+class KartonLogHandler(logging.Handler, LogLineFormatterMixin):
+    """
+    logging.Handler that passes logs to the Karton backend.
+    """
+
+    def __init__(self, backend: KartonBackend, channel: str) -> None:
+        logging.Handler.__init__(self)
+        self.backend = backend
+        self.is_consumer_active: bool = True
+        self.channel: str = channel
+
+    def emit(self, record: logging.LogRecord) -> None:
+        log_line = self.prepare_log_line(record)
         log_consumed = self.backend.produce_log(
             log_line, logger_name=self.channel, level=record.levelname
         )
