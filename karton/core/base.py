@@ -9,7 +9,7 @@ from typing import Optional, Union, cast
 from .__version__ import __version__
 from .backend import KartonBackend, KartonServiceInfo
 from .config import Config
-from .logger import KartonLogHandler
+from .logger import KartonLogHandler, TaskContextFilter
 from .task import Task, get_current_task, set_current_task
 from .utils import HardShutdownInterrupt, StrictClassMethod, graceful_killer
 
@@ -106,8 +106,9 @@ class LoggingMixin:
     debug: bool
     enable_publish_log: bool
 
-    def __init__(self, log_handler: logging.Handler):
+    def __init__(self, log_handler: logging.Handler, log_format: str) -> None:
         self._log_handler = log_handler
+        self._log_format = log_format
 
     def setup_logger(self, level: Optional[Union[str, int]] = None) -> None:
         """
@@ -133,6 +134,7 @@ class LoggingMixin:
         self._log_handler.setFormatter(logging.Formatter())
 
         logger = logging.getLogger(self.identity)
+        logger.addFilter(TaskContextFilter())
 
         if logger.handlers:
             # If logger already have handlers set: clear them
@@ -145,9 +147,7 @@ class LoggingMixin:
 
         logger.setLevel(log_level)
         stream_handler = logging.StreamHandler()
-        stream_handler.setFormatter(
-            logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s")
-        )
+        stream_handler.setFormatter(logging.Formatter(self._log_format))
         logger.addHandler(stream_handler)
 
         if not self.debug and self.enable_publish_log:
@@ -217,7 +217,9 @@ class KartonBase(abc.ABC, ConfigMixin, LoggingMixin):
         )
 
         log_handler = KartonLogHandler(backend=self.backend, channel=self.identity)
-        LoggingMixin.__init__(self, log_handler)
+        LoggingMixin.__init__(
+            self, log_handler, log_format="[%(asctime)s][%(levelname)s] %(message)s"
+        )
 
     @property
     def current_task(self) -> Optional[Task]:

@@ -52,7 +52,11 @@ class KartonAsyncBase(abc.ABC, ConfigMixin, LoggingMixin):
         )
 
         log_handler = KartonAsyncLogHandler(backend=self.backend, channel=self.identity)
-        LoggingMixin.__init__(self, log_handler)
+        LoggingMixin.__init__(
+            self,
+            log_handler,
+            log_format="[%(asctime)s][%(levelname)s][%(task_id)s] %(message)s",
+        )
 
     async def connect(self) -> None:
         await self.backend.connect()
