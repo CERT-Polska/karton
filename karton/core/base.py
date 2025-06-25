@@ -106,7 +106,7 @@ class LoggingMixin:
     debug: bool
     enable_publish_log: bool
 
-    def __init__(self, log_handler: logging.Handler, log_format: str):
+    def __init__(self, log_handler: logging.Handler, log_format: str) -> None:
         self._log_handler = log_handler
         self._log_format = log_format
 
