@@ -106,8 +106,9 @@ class LoggingMixin:
     debug: bool
     enable_publish_log: bool
 
-    def __init__(self, log_handler: logging.Handler):
+    def __init__(self, log_handler: logging.Handler, log_format: str):
         self._log_handler = log_handler
+        self._log_format = log_format
 
     def setup_logger(self, level: Optional[Union[str, int]] = None) -> None:
         """
@@ -146,9 +147,7 @@ class LoggingMixin:
 
         logger.setLevel(log_level)
         stream_handler = logging.StreamHandler()
-        stream_handler.setFormatter(
-            logging.Formatter("[%(asctime)s][%(levelname)s][%(task_id)s] %(message)s")
-        )
+        stream_handler.setFormatter(logging.Formatter(self._log_format))
         logger.addHandler(stream_handler)
 
         if not self.debug and self.enable_publish_log:
@@ -218,7 +217,9 @@ class KartonBase(abc.ABC, ConfigMixin, LoggingMixin):
         )
 
         log_handler = KartonLogHandler(backend=self.backend, channel=self.identity)
-        LoggingMixin.__init__(self, log_handler)
+        LoggingMixin.__init__(
+            self, log_handler, log_format="[%(asctime)s][%(levelname)s] %(message)s"
+        )
 
     @property
     def current_task(self) -> Optional[Task]:
