@@ -222,7 +222,11 @@ class Consumer(KartonAsyncServiceBase):
             self.current_task = task
 
             if not task.matches_filters(self.filters):
-                self.log.info("Task rejected because binds are no longer valid.")
+                self.log.info(
+                    "Task rejected because binds are no longer valid.\n"
+                    "Rejected ask headers: %s",
+                    task.headers,
+                )
                 await self.backend.set_task_status(task, TaskState.FINISHED)
                 # Task rejected: end of processing
                 return
@@ -301,7 +305,13 @@ class Consumer(KartonAsyncServiceBase):
         if not old_bind:
             self.log.info("Service binds created.")
         elif old_bind != self._bind:
-            self.log.info("Binds changed, old service instances should exit soon.")
+            self.log.info(
+                "Binds changed, old service instances should exit soon.\n"
+                "Old binds: %s\n"
+                "New binds: %s",
+                old_bind,
+                self._bind,
+            )
 
         for task_filter in self.filters:
             self.log.info("Binding on: %s", task_filter)
@@ -312,7 +322,13 @@ class Consumer(KartonAsyncServiceBase):
             while True:
                 current_bind = await self.backend.get_bind(self.identity)
                 if current_bind != self._bind:
-                    self.log.info("Binds changed, shutting down.")
+                    self.log.info(
+                        "Binds changed, shutting down.\n"
+                        "Old binds: %s\n"
+                        "New binds: %s",
+                        old_bind,
+                        self._bind,
+                    )
                     break
                 if self.concurrency_semaphore is not None:
                     await self.concurrency_semaphore.acquire()
