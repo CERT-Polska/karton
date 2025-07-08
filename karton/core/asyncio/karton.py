@@ -326,8 +326,8 @@ class Consumer(KartonAsyncServiceBase):
                         "Binds changed, shutting down.\n"
                         "Old binds: %s\n"
                         "New binds: %s",
-                        old_bind,
                         self._bind,
+                        current_bind,
                     )
                     break
                 if self.concurrency_semaphore is not None:

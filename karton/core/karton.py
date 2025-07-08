@@ -356,13 +356,14 @@ class Consumer(KartonServiceBase):
 
         with self.graceful_killer():
             while not self.shutdown:
-                if self.backend.get_bind(self.identity) != self._bind:
+                current_bind = self.backend.get_bind(self.identity)
+                if current_bind != self._bind:
                     self.log.info(
                         "Binds changed, shutting down.\n"
                         "Old binds: %s\n"
                         "New binds: %s",
-                        old_bind,
                         self._bind,
+                        current_bind,
                     )
                     break
                 task = self.backend.consume_routed_task(self.identity)
