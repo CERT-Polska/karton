@@ -144,10 +144,20 @@ def configuration_wizard(config_filename: str) -> None:
     log.info("Saved the new configuration file in %s", os.path.abspath(config_filename))
 
 
-def print_bind_list(config: Config) -> None:
+def print_bind_list(config: Config, short: bool) -> None:
     backend = KartonBackend(config=config)
-    for bind in backend.get_binds():
-        print(bind)
+
+    if short:
+        # Print a human-readable table-like version
+        print(f"{'karton name':50} {'version':10} {'karton':10}")
+        print("-" * 72)
+        for bind in backend.get_binds():
+            print(
+                f"{bind.identity:50} {bind.service_version or "-":10} {bind.version:10}"
+            )
+    else:
+        for bind in backend.get_binds():
+            print(bind)
 
 
 def delete_bind(config: Config, karton_name: str) -> None:
@@ -180,7 +190,7 @@ def delete_bind(config: Config, karton_name: str) -> None:
 
 def main() -> None:
 
-    parser = argparse.ArgumentParser(description="Your red pill to the karton-verse")
+    parser = argparse.ArgumentParser(description="Karton-core management utility")
     parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("-c", "--config-file", help="Alternative configuration path")
     parser.add_argument(
@@ -189,7 +199,13 @@ def main() -> None:
 
     subparsers = parser.add_subparsers(dest="command", help="sub-command help")
 
-    subparsers.add_parser("list", help="List active karton binds")
+    list_parser = subparsers.add_parser("list", help="List active karton binds")
+    list_parser.add_argument(
+        "-s",
+        "--short",
+        help='Print names and versions only (human readable)"',
+        action="store_true",
+    )
 
     logs_parser = subparsers.add_parser("logs", help="Start streaming logs")
     logs_parser.add_argument(
@@ -253,7 +269,7 @@ def main() -> None:
         return
 
     if args.command == "list":
-        print_bind_list(config)
+        print_bind_list(config, args.short)
     elif args.command == "delete":
         karton_name = args.identity
         print(

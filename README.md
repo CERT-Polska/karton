@@ -66,6 +66,26 @@ if __name__ == "__main__":
     GenericUnpacker.main()
 ```
 
+## Command line
+
+This package also provies a command-line utility called "karton". You can use it for simple management tasks (but it's not designed as a fully capable management tool).
+
+```
+$ karton configure  # create a new configuration file
+
+$ karton list -s  # list current binds
+karton name                                        version    karton
+------------------------------------------------------------------------
+karton.yaramatcher                                 1.2.0      5.3.0
+karton.autoit-ripper                               1.2.1      5.3.3
+karton.mwdb-reporter                               1.3.0      5.3.2
+
+$ karton logs  # start streaming all system logs
+
+$ karton delete karton.something  # remove unused bind (will be GCed by system during the next operation)
+```
+
+
 ## Karton systems
 
 Some Karton systems are universal and useful to everyone. We decided to share them with the community.
