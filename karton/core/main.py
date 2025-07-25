@@ -201,9 +201,9 @@ def main() -> None:
 
     list_parser = subparsers.add_parser("list", help="List active karton binds")
     list_parser.add_argument(
-        "-s",
-        "--short",
-        help='Print names and versions only (human readable)"',
+        "-h",
+        "--human",
+        help='Short, human readable output, with names and versions only."',
         action="store_true",
     )
 
