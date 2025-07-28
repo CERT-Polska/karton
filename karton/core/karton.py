@@ -172,7 +172,11 @@ class Consumer(KartonServiceBase):
         self.current_task = task
 
         if not task.matches_filters(self.filters):
-            self.log.info("Task rejected because binds are no longer valid.")
+            self.log.info(
+                "Task rejected because binds are no longer valid. "
+                "Rejected ask headers: %s",
+                task.headers,
+            )
             self.backend.set_task_status(task, TaskState.FINISHED)
             # Task rejected: end of processing
             return
@@ -339,15 +343,28 @@ class Consumer(KartonServiceBase):
         if not old_bind:
             self.log.info("Service binds created.")
         elif old_bind != self._bind:
-            self.log.info("Binds changed, old service instances should exit soon.")
+            self.log.info(
+                "Binds changed, old service instances should exit soon. "
+                "Old binds: %s "
+                "New binds: %s",
+                old_bind,
+                self._bind,
+            )
 
         for task_filter in self.filters:
             self.log.info("Binding on: %s", task_filter)
 
         with self.graceful_killer():
             while not self.shutdown:
-                if self.backend.get_bind(self.identity) != self._bind:
-                    self.log.info("Binds changed, shutting down.")
+                current_bind = self.backend.get_bind(self.identity)
+                if current_bind != self._bind:
+                    self.log.info(
+                        "Binds changed, shutting down. "
+                        "Old binds: %s "
+                        "New binds: %s",
+                        self._bind,
+                        current_bind,
+                    )
                     break
                 task = self.backend.consume_routed_task(self.identity)
                 if task:
