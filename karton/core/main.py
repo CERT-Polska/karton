@@ -23,7 +23,6 @@ class CliLogger(LogConsumer):
             level = event.get("levelname")
             name = event.get("name")
             msg = event.get("message")
-            print(event)
             print(f"[{level}] {name}: {msg}")
 
 
