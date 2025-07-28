@@ -344,8 +344,8 @@ class Consumer(KartonServiceBase):
             self.log.info("Service binds created.")
         elif old_bind != self._bind:
             self.log.info(
-                "Binds changed, old service instances should exit soon.\n"
-                "Old binds: %s\n"
+                "Binds changed, old service instances should exit soon. "
+                "Old binds: %s "
                 "New binds: %s",
                 old_bind,
                 self._bind,
@@ -359,8 +359,8 @@ class Consumer(KartonServiceBase):
                 current_bind = self.backend.get_bind(self.identity)
                 if current_bind != self._bind:
                     self.log.info(
-                        "Binds changed, shutting down.\n"
-                        "Old binds: %s\n"
+                        "Binds changed, shutting down. "
+                        "Old binds: %s "
                         "New binds: %s",
                         self._bind,
                         current_bind,
