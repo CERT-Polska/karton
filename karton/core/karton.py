@@ -173,7 +173,7 @@ class Consumer(KartonServiceBase):
 
         if not task.matches_filters(self.filters):
             self.log.info(
-                "Task rejected because binds are no longer valid.\n"
+                "Task rejected because binds are no longer valid. "
                 "Rejected ask headers: %s",
                 task.headers,
             )
