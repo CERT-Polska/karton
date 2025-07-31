@@ -4,6 +4,7 @@ import time
 from typing import IO, Any, Dict, List, Optional, Tuple, Union
 
 import aioboto3
+from aiobotocore.config import AioConfig
 from aiobotocore.credentials import ContainerProvider, InstanceMetadataProvider
 from aiobotocore.session import ClientCreatorContext, get_session
 from aiobotocore.utils import InstanceMetadataFetcher
@@ -50,10 +51,22 @@ class KartonAsyncBackend(KartonBackendBase):
         if not self._s3_session:
             raise RuntimeError("Call connect() first before using KartonAsyncBackend")
         endpoint = self.config.get("s3", "address")
+        if not self.config.getboolean("s3", "aws_checksum_validation"):
+            # This default is more compliant with non-AWS S3 providers
+            # See also:
+            # - https://github.com/boto/boto3/issues/4392
+            # - https://github.com/fsspec/s3fs/issues/931
+            botocore_config = AioConfig(
+                request_checksum_calculation="when_required",
+                response_checksum_validation="when_required",
+            )
+        else:
+            botocore_config = AioConfig()
         if self._s3_iam_auth:
             return self._s3_session.client(
                 "s3",
                 endpoint_url=endpoint,
+                config=botocore_config,
             )
         else:
             access_key = self.config.get("s3", "access_key")
@@ -63,6 +76,7 @@ class KartonAsyncBackend(KartonBackendBase):
                 endpoint_url=endpoint,
                 aws_access_key_id=access_key,
                 aws_secret_access_key=secret_key,
+                config=botocore_config,
             )
 
     async def connect(self):

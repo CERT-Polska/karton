@@ -9,6 +9,7 @@ from collections import defaultdict, namedtuple
 from typing import IO, Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
 
 import boto3
+import botocore.config
 from botocore.credentials import (
     ContainerProvider,
     InstanceMetadataFetcher,
@@ -256,6 +257,17 @@ class KartonBackend(KartonBackendBase):
         access_key = config.get("s3", "access_key")
         secret_key = config.get("s3", "secret_key")
         iam_auth = config.getboolean("s3", "iam_auth")
+        if not config.getboolean("s3", "aws_checksum_validation"):
+            # This default is more compliant with non-AWS S3 providers
+            # See also:
+            # - https://github.com/boto/boto3/issues/4392
+            # - https://github.com/fsspec/s3fs/issues/931
+            botocore_config = botocore.config.Config(
+                request_checksum_calculation="when_required",
+                response_checksum_validation="when_required",
+            )
+        else:
+            botocore_config = botocore.config.Config()
 
         if not endpoint:
             raise RuntimeError("Attempting to get S3 client without an endpoint set")
@@ -267,7 +279,7 @@ class KartonBackend(KartonBackendBase):
             )
 
         if iam_auth:
-            s3_client = self.iam_auth_s3(endpoint)
+            s3_client = self.iam_auth_s3(endpoint, botocore_config=botocore_config)
             if s3_client:
                 self.s3 = s3_client
                 return
@@ -282,9 +294,10 @@ class KartonBackend(KartonBackendBase):
             endpoint_url=endpoint,
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
+            config=botocore_config,
         )
 
-    def iam_auth_s3(self, endpoint: str):
+    def iam_auth_s3(self, endpoint: str, botocore_config: botocore.config.Config):
         boto_session = get_session()
         iam_providers = [
             ContainerProvider(),
@@ -300,6 +313,7 @@ class KartonBackend(KartonBackendBase):
                 return boto3.Session(botocore_session=boto_session).client(
                     "s3",
                     endpoint_url=endpoint,
+                    config=botocore_config,
                 )
 
     @staticmethod
