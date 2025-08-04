@@ -1,5 +1,5 @@
 redis
 orjson
-# Required by aioboto3
-boto3>=1.37.2,<1.37.4
-aioboto3==14.3.0
+# See also https://github.com/CERT-Polska/karton/pull/270
+boto3<1.36.0
+aioboto3==13.3.0
