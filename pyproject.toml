@@ -1,3 +1,44 @@
+[build-system]
+requires = [
+    "setuptools >= 40.9.0"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "karton-core"
+description = "Distributed malware analysis orchestration framework"
+readme = "README.md"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent"
+]
+dependencies = [
+    "redis",
+    "orjson",
+    # See also https://github.com/CERT-Polska/karton/pull/270
+    "boto3<1.36.0",
+    "aioboto3==13.3.0"
+]
+dynamic = ["version"]
+requires-python = ">=3.9"
+
+[project.urls]
+Homepage = "https://github.com/CERT-Polska/karton"
+Documentation = "https://karton-core.readthedocs.io/"
+Repository = "https://github.com/CERT-Polska/karton"
+
+[project.scripts]
+karton-system = "karton.system:SystemService.main"
+karton = "karton.core.main:main"
+
+[tool.setuptools]
+packages = ["karton.core", "karton.core.asyncio", "karton.system"]
+
+[tool.setuptools.dynamic]
+version = {attr = "karton.core.__version__.__version__"}
+
 [tool.isort]
 multi_line_output = 3
 include_trailing_comma = true

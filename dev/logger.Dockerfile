@@ -1,7 +1,6 @@
 FROM python:3.11
 
-COPY requirements.txt /karton/
-COPY setup.py /karton/
+COPY pyproject.toml /karton/
 COPY karton/ /karton/karton/
 COPY README.md /karton/
 
