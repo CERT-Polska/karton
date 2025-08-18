@@ -65,12 +65,15 @@ class KartonAsyncBackend(KartonBackendBase):
                 aws_secret_access_key=secret_key,
             )
 
-    async def connect(self):
+    async def connect(self, single_connection_client: bool = False):
         if self._redis is not None or self._s3_session is not None:
             # Already connected
             return
         self._redis = await self.make_redis(
-            self.config, identity=self.identity, service_info=self.service_info
+            self.config,
+            identity=self.identity,
+            service_info=self.service_info,
+            single_connection_client=single_connection_client,
         )
 
         endpoint = self.config.get("s3", "address")
@@ -122,6 +125,7 @@ class KartonAsyncBackend(KartonBackendBase):
         config,
         identity: Optional[str] = None,
         service_info: Optional[KartonServiceInfo] = None,
+        single_connection_client: bool = False,
     ) -> Redis:
         """
         Create and test a Redis connection.
@@ -129,6 +133,7 @@ class KartonAsyncBackend(KartonBackendBase):
         :param config: The karton configuration
         :param identity: Karton service identity
         :param service_info: Additional service identity metadata
+        :param single_connection_client: Make single connection client (used internally)
         :return: Redis connection
         """
         if service_info is not None:
@@ -146,6 +151,7 @@ class KartonAsyncBackend(KartonBackendBase):
             # set socket_timeout to None if set to 0
             "socket_timeout": config.getint("redis", "socket_timeout", 30) or None,
             "decode_responses": True,
+            "single_connection_client": single_connection_client,
         }
         try:
             rs = Redis(**redis_args)
