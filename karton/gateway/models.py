@@ -2,9 +2,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, RootModel
 
+from karton.core.task import TaskPriority, TaskState
+
 
 class HelloResponseMessage(BaseModel):
     server_version: str
+    auth_required: bool
 
 
 class HelloResponse(BaseModel):
@@ -15,7 +18,6 @@ class HelloResponse(BaseModel):
 class ErrorResponseMessage(BaseModel):
     code: str
     error_message: str
-    details: dict
 
 
 class ErrorResponse(BaseModel):
@@ -76,7 +78,7 @@ class NewTaskParameters(BaseModel):
     payload: dict[str, Any]
     headers_persistent: dict[str, Any]
     payload_persistent: dict[str, Any]
-    priority: Literal["high"] | Literal["normal"] | Literal["low"]
+    priority: TaskPriority
 
 
 class DeclareTaskRequestMessage(BaseModel):
@@ -96,7 +98,7 @@ class ResourceUploadUrl(BaseModel):
 
 class TaskDeclaredResponseMessage(BaseModel):
     uid: str
-    resources: list[ResourceUploadUrl]
+    resources_to_upload: list[ResourceUploadUrl]
     token: str
 
 
@@ -116,8 +118,8 @@ class SendTaskRequest(BaseModel):
 
 class SetTaskStatusRequestMessage(BaseModel):
     token: str
-    status: str
-    error: dict[str, Any] | None = None
+    status: TaskState
+    error: list[str] | None = None
 
 
 class SetTaskStatusRequest(BaseModel):
@@ -131,13 +133,13 @@ class GetTaskRequest(BaseModel):
 
 class IncomingTask(BaseModel):
     uid: str
-    parent_uid: str
-    orig_uid: str
+    parent_uid: str | None
+    orig_uid: str | None
     headers: dict[str, Any]
     payload: dict[str, Any]
     headers_persistent: dict[str, Any]
     payload_persistent: dict[str, Any]
-    priority: Literal["high"] | Literal["normal"] | Literal["low"]
+    priority: TaskPriority
 
 
 class ResourceDownloadUrl(BaseModel):

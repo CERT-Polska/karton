@@ -1,8 +1,5 @@
 class KartonGatewayError(Exception):
-    def __init__(self, code: str, message: str, details: dict | None = None) -> None:
-        self.code = code
-        self.message = message
-        self.details = details or {}
+    code: str = "gateway_error"
 
 
 class KartonGatewayTaskError(KartonGatewayError):
@@ -13,97 +10,40 @@ class KartonGatewayTaskError(KartonGatewayError):
 
 
 class BadRequestError(KartonGatewayError):
-    def __init__(self, details: dict | None = None):
-        super().__init__(
-            code="bad_request", message="Incorrect request", details=details
-        )
+    code: str = "bad_request"
 
 
 class BadCredentialsError(KartonGatewayError):
-    def __init__(self):
-        super().__init__(code="bad_credentials", message="Incorrect credentials")
+    code: str = "bad_credentials"
 
 
 class AuthTimeoutError(KartonGatewayError):
-    def __init__(self):
-        super().__init__(
-            code="auth_timeout", message="Client has not authenticated in required time"
-        )
-
-
-class UnsupportedVersionError(KartonGatewayError):
-    def __init__(self, client_version: str, required_version: str) -> None:
-        super().__init__(
-            code="unsupported_version",
-            message=f"Client's library version ({client_version}) is unsupported by the gateway (required {required_version})",
-        )
-
-
-class DisallowedIdentityError(KartonGatewayError):
-    def __init__(self, details: dict | None = None):
-        super().__init__(
-            code="disallowed_identity",
-            message="Requested identity can't be used by current user",
-            details=details,
-        )
-
-
-class DisallowedOutputsError(KartonGatewayTaskError):
-    def __init__(self, details: dict | None = None):
-        super().__init__(
-            code="disallowed_outputs",
-            message="Requested outputs can't be used by current user",
-            details=details,
-        )
-
-
-class DisallowedTaskError(KartonGatewayTaskError):
-    def __init__(self, details: dict | None = None):
-        super().__init__(
-            code="disallowed_task",
-            message="Task headers doesn't match to declared outputs",
-            details=details,
-        )
+    code: str = "auth_timeout"
 
 
 class InvalidBindError(KartonGatewayError):
-    def __init__(self):
-        super().__init__(
-            code="invalid_bind",
-            message="Incorrect or missing bind for this type of operation",
-        )
+    code: str = "invalid_bind"
 
 
 class ExpiredBindError(KartonGatewayError):
-    def __init__(self):
-        super().__init__(
-            code="expired_bind",
-            message="There is a newer version of consumer bind registered",
-        )
+    code: str = "expired_bind"
 
 
 class AlreadyBoundError(KartonGatewayError):
-    def __init__(self):
-        super().__init__(
-            code="already_bound",
-            message="Client is already bound",
-        )
+    code: str = "already_bound"
 
 
 class InvalidTaskTokenError(KartonGatewayTaskError):
-    def __init__(self, details: dict | None = None):
-        super().__init__(
-            code="invalid_task_token", message="Incorrect task token", details=details
-        )
+    code: str = "invalid_task_token"
+
+
+class InvalidTaskError(KartonGatewayTaskError):
+    code: str = "invalid_task"
 
 
 class NoTaskError(KartonGatewayTaskError):
-    def __init__(self):
-        super().__init__(
-            code="no_task", message="Timeout waiting for a task, try again"
-        )
+    code: str = "no_task"
 
 
 class InternalError(KartonGatewayError):
-    def __init__(self):
-        super().__init__(code="internal_error", message="Internal server error")
+    code: str = "internal_error"

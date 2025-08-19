@@ -1,10 +1,10 @@
 import dataclasses
 import datetime
-from typing import Any, Callable, Dict, Iterator
+from typing import Any, Callable, Iterator
 
 import jwt
+from pydantic import BaseModel
 
-from karton.core import Task
 from karton.gateway.errors import InvalidTaskTokenError
 
 
@@ -12,6 +12,22 @@ from karton.gateway.errors import InvalidTaskTokenError
 class TaskTokenInfo:
     task_uid: str
     resources: list[str]
+
+
+class DeclaredResourceSpec(BaseModel):
+    """
+    Gateway-specific resource schema for __karton_resource__ keys. Partially
+    compatible with karton.core.resource scheme but doesn't support "bucket"
+    key (we don't support references to other buckets) and contains "to_upload"
+    mark to distinguish LocalResource from RemoteResource.
+    """
+
+    uid: str
+    name: str
+    size: int
+    metadata: dict[str, Any]
+    sha256: str
+    to_upload: bool = False
 
 
 def parse_task_token(token: str, secret_key: str, username: str) -> TaskTokenInfo:
@@ -30,13 +46,13 @@ def parse_task_token(token: str, secret_key: str, username: str) -> TaskTokenInf
         task_uid = token_data["sub"][len("karton.task:") :]
         return TaskTokenInfo(task_uid=task_uid, resources=token_data["resources"])
     except jwt.InvalidTokenError as e:
-        raise InvalidTaskTokenError(details={"reason": str(e)})
+        raise InvalidTaskTokenError(f"Invalid task token: {type(e)} - {str(e)}")
 
 
 def make_task_token(
     task_token_info: TaskTokenInfo, secret_key: str, username: str
 ) -> str:
-    issued_at = datetime.datetime.now(datetime.UTC)
+    issued_at = datetime.datetime.now(datetime.timezone.utc)
     payload = {
         "sub": f"karton.task:{task_token_info.task_uid}",
         "exp": issued_at + datetime.timedelta(days=1),
@@ -48,24 +64,19 @@ def make_task_token(
     return jwt.encode(payload, secret_key, algorithm="HS256")
 
 
-def _iter_resource_uids(obj: Any) -> Iterator[str]:
+def iter_resources(obj: Any) -> Iterator[dict[str, Any]]:
     if type(obj) is dict:
         if obj.keys() == {"__karton_resource__"}:
-            yield obj["__karton_resource__"]["uid"]
+            yield obj["__karton_resource__"]
         else:
             for v in obj.values():
-                yield from _iter_resource_uids(v)
+                yield from iter_resources(v)
     elif type(obj) is list:
         for el in obj:
-            yield from _iter_resource_uids(el)
+            yield from iter_resources(el)
 
 
-def get_task_resources(task: Task) -> list[str]:
-    uids = set(resource for resource in _iter_resource_uids(task.payload))
-    return list(uids)
-
-
-def map_resources(obj: Any, mapper: Callable[[dict[str, Any]], dict[str, Any]]) -> Any:
+def map_resources(obj: Any, mapper: Callable[[dict[str, Any]], Any]) -> Any:
     if type(obj) is dict:
         if obj.keys() == {"__karton_resource__"}:
             return {"__karton_resource__": mapper(obj["__karton_resource__"])}
