@@ -174,6 +174,26 @@ class TaskResponse(BaseModel):
     message: TaskResponseMessage
 
 
+class SendLogRequestMessage(BaseModel):
+    log_record: dict[str, Any]
+    logger_name: str
+    level: str
+
+
+class SendLogRequest(BaseModel):
+    request: Literal["send_log"] = "send_log"
+    message: SendLogRequestMessage
+
+
+class LogSentResponseMessage(BaseModel):
+    was_received: bool
+
+
+class LogSentResponse(BaseModel):
+    response: Literal["log_sent"] = "log_sent"
+    message: LogSentResponseMessage
+
+
 class Request(RootModel):
     root: (
         BindRequest
@@ -181,4 +201,5 @@ class Request(RootModel):
         | SendTaskRequest
         | SetTaskStatusRequest
         | GetTaskRequest
+        | SendLogRequest
     ) = Field(discriminator="request")

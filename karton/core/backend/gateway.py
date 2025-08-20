@@ -326,7 +326,20 @@ class KartonGatewayBackend(SupportsServiceOperations):
     def produce_log(
         self, log_record: Dict[str, Any], logger_name: str, level: str
     ) -> bool:
-        raise NotImplementedError
+        with self._get_connection() as connection:
+            self._send(
+                connection,
+                {
+                    "request": "send_log",
+                    "message": {
+                        "log_record": log_record,
+                        "logger_name": logger_name,
+                        "level": level,
+                    },
+                },
+            )
+            status = self._recv(connection, expected_response="log_sent")
+            return status["was_received"]
 
     def remove_object(self, bucket: str, object_uid: str) -> None:
         raise NotImplementedError

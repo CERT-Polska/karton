@@ -37,10 +37,13 @@ from .models import (
     HelloResponseMessage,
     IncomingTask,
     LogConsumerBindRequestMessage,
+    LogSentResponse,
+    LogSentResponseMessage,
     ProducerBindRequestMessage,
     Request,
     ResourceDownloadUrl,
     ResourceUploadUrl,
+    SendLogRequest,
     SendTaskRequest,
     SetTaskStatusRequest,
     SuccessResponse,
@@ -440,6 +443,20 @@ async def handle_get_task_request(
         raise
 
 
+async def handle_send_log_request(
+    websocket: WebSocket, request: SendLogRequest, session: UserSession
+) -> None:
+    service_backend = await session.get_service_backend()
+    was_received = await service_backend.produce_log(
+        request.message.log_record,
+        request.message.logger_name,
+        request.message.level,
+    )
+    log_sent_message = LogSentResponseMessage(was_received=was_received)
+    log_sent_response = LogSentResponse(message=log_sent_message)
+    await websocket.send_json(log_sent_response.model_dump(mode="json"))
+
+
 TRequest = TypeVar("TRequest", bound=Request)
 RequestHandler = Callable[[WebSocket, TRequest, UserSession], Awaitable[None]]
 
@@ -449,6 +466,7 @@ REQUEST_HANDLERS: dict[Type, RequestHandler] = {
     SendTaskRequest: handle_send_task_request,
     SetTaskStatusRequest: handle_set_task_status_request,
     GetTaskRequest: handle_get_task_request,
+    SendLogRequest: handle_send_log_request,
 }
 
 
