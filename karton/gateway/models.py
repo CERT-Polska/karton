@@ -42,9 +42,9 @@ class AuthRequest(BaseModel):
 class ConsumerBindRequestMessage(BaseModel):
     service_type: Literal["consumer"] = "consumer"
     identity: str
-    info: str
+    info: str | None
     library_version: str
-    service_version: str
+    service_version: str | None
     filters: list[dict[str, Any]]
     persistent: bool
     is_async: bool
@@ -54,14 +54,14 @@ class ProducerBindRequestMessage(BaseModel):
     service_type: Literal["producer"] = "producer"
     identity: str
     library_version: str
-    service_version: str
+    service_version: str | None
 
 
 class LogConsumerBindRequestMessage(BaseModel):
     service_type: Literal["log_consumer"] = "log_consumer"
     identity: str
     library_version: str
-    service_version: str
+    service_version: str | None
 
 
 class BindRequest(BaseModel):

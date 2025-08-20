@@ -208,7 +208,7 @@ class KartonBase(abc.ABC, ConfigMixin, LoggingMixin):
     backend: SupportsServiceOperations
 
     _service_type = KartonServiceType.OTHER
-    _backend_factory: KartonBackendFactory = get_backend
+    _backend_factory: KartonBackendFactory = staticmethod(get_backend)
 
     def __init__(
         self,

@@ -15,7 +15,7 @@ from karton.core.resource import (
     RemoteResource,
     ResourceBase,
 )
-from karton.core.task import Task, TaskState, root_uid_from_task_uid
+from karton.core.task import Task, TaskPriority, TaskState, root_uid_from_task_uid
 from karton.core.utils import recursive_map
 
 from .base import (
@@ -98,7 +98,7 @@ class KartonGatewayBackend(SupportsServiceOperations):
 
     def _recv(
         self, connection: ClientConnection, expected_response: str, timeout: int = 10
-    ) -> Dict[str, Any]:
+    ) -> Optional[Dict[str, Any]]:
         data = connection.recv(timeout=timeout)
         message = json.loads(data)
         if "response" not in message:
@@ -110,10 +110,10 @@ class KartonGatewayBackend(SupportsServiceOperations):
             raise make_gateway_error(code, error_message)
         if message["response"] != expected_response:
             raise RuntimeError(
-                f"Got unexpected gateway response: {message["response"]}, "
+                f"Got unexpected gateway response: {message['response']}, "
                 f"expected {expected_response}"
             )
-        return message["message"]
+        return message.get("message")
 
     def _send(self, connection: ClientConnection, message: Dict[str, Any]) -> None:
         data = json.dumps(message)
@@ -285,7 +285,7 @@ class KartonGatewayBackend(SupportsServiceOperations):
             headers_persistent=task_data["headers_persistent"],
             payload=payload,
             payload_persistent=payload_persistent,
-            priority=task_data["priority"],
+            priority=TaskPriority(task_data["priority"]),
             _status=TaskState.SPAWNED,
             _token=response["token"],
         )
