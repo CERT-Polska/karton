@@ -28,6 +28,7 @@ from .errors import (
 from .models import (
     BindRequest,
     ConsumerBindRequestMessage,
+    DeclaredResourceSpec,
     DeclareTaskRequest,
     ErrorResponse,
     ErrorResponseMessage,
@@ -48,13 +49,7 @@ from .models import (
     TaskResponse,
     TaskResponseMessage,
 )
-from .task import (
-    DeclaredResourceSpec,
-    TaskTokenInfo,
-    make_task_token,
-    map_resources,
-    parse_task_token,
-)
+from .task import TaskTokenInfo, make_task_token, map_resources, parse_task_token
 
 gateway_service_info = KartonServiceInfo(
     identity="karton.gateway", karton_version=__version__, service_version=__version__
@@ -374,6 +369,7 @@ async def handle_set_task_status_request(
         task.error = request.message.error
 
     await service_backend.set_task_status(task, new_task_status)
+    await send_success(websocket)
 
 
 async def generate_resource_download_urls(

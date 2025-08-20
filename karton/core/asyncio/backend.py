@@ -13,15 +13,15 @@ from redis.exceptions import AuthenticationError
 
 from karton.core import Config, Task
 from karton.core.asyncio.resource import LocalResource, RemoteResource
-from karton.core.backend import (
+from karton.core.backend import KartonBind, KartonMetrics, KartonServiceInfo
+from karton.core.backend.direct import (
     KARTON_BINDS_HSET,
     KARTON_TASK_NAMESPACE,
     KARTON_TASKS_QUEUE,
     KartonBackendBase,
-    KartonBind,
-    KartonMetrics,
-    KartonServiceInfo,
+    make_redis_client_name,
 )
+from karton.core.exceptions import BindExpiredError
 from karton.core.resource import LocalResource as SyncLocalResource
 from karton.core.task import TaskState
 
@@ -32,10 +32,9 @@ class KartonAsyncBackend(KartonBackendBase):
     def __init__(
         self,
         config: Config,
-        identity: Optional[str] = None,
         service_info: Optional[KartonServiceInfo] = None,
     ) -> None:
-        super().__init__(config, identity, service_info)
+        super().__init__(config, service_info)
         self._redis: Optional[Redis] = None
         self._s3_session: Optional[aioboto3.Session] = None
         self._s3_iam_auth = False
@@ -145,7 +144,7 @@ class KartonAsyncBackend(KartonBackendBase):
         :return: Redis connection
         """
         if service_info is not None:
-            client_name: Optional[str] = service_info.make_client_name()
+            client_name: Optional[str] = make_redis_client_name(service_info)
         else:
             client_name = identity
 
@@ -227,22 +226,16 @@ class KartonAsyncBackend(KartonBackendBase):
         task.last_update = time.time()
         await self.register_task(task, pipe=pipe)
 
-    async def register_bind(self, bind: KartonBind) -> Optional[KartonBind]:
+    async def register_bind(self, bind: KartonBind) -> None:
         """
         Register bind for Karton service and return the old one
 
         :param bind: KartonBind object with bind definition
         :return: Old KartonBind that was registered under this identity
         """
-        async with self.redis.pipeline(transaction=True) as pipe:
-            await pipe.hget(KARTON_BINDS_HSET, bind.identity)
-            await pipe.hset(KARTON_BINDS_HSET, bind.identity, self.serialize_bind(bind))
-            old_serialized_bind, _ = await pipe.execute()
-
-        if old_serialized_bind:
-            return self.unserialize_bind(bind.identity, old_serialized_bind)
-        else:
-            return None
+        await self.redis.hset(
+            KARTON_BINDS_HSET, bind.identity, self.serialize_bind(bind)
+        )
 
     async def get_bind(self, identity: str) -> KartonBind:
         """
@@ -293,7 +286,7 @@ class KartonAsyncBackend(KartonBackendBase):
         )
 
     async def consume_routed_task(
-        self, identity: str, timeout: int = 5
+        self, identity: str, timeout: int = 5, _bind: Optional[KartonBind] = None
     ) -> Optional[Task]:
         """
         Get routed task for given consumer identity.
@@ -302,8 +295,13 @@ class KartonAsyncBackend(KartonBackendBase):
 
         :param identity: Karton service identity
         :param timeout: Waiting for task timeout (default: 5)
+        :param _bind: Optional KartonBind object for bind expiration verification
         :return: Task object
         """
+        if _bind is not None:
+            current_bind = self.get_bind(self.identity)
+            if current_bind != _bind:
+                raise BindExpiredError("Binds changed, shutting down")
         item = await self.consume_queues(
             self.get_queue_names(identity),
             timeout=timeout,
@@ -328,58 +326,57 @@ class KartonAsyncBackend(KartonBackendBase):
 
     async def upload_object(
         self,
-        bucket: str,
-        object_uid: str,
+        resource: LocalResource,
         content: Union[bytes, IO[bytes]],
     ) -> None:
         """
         Upload resource object to underlying object storage (S3)
 
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
+        :param resource: Resource object to upload
         :param content: Object content as bytes or file-like stream
         """
         async with self.s3 as client:
-            await client.put_object(Bucket=bucket, Key=object_uid, Body=content)
+            await client.put_object(
+                Bucket=resource.bucket, Key=resource.uid, Body=content
+            )
 
-    async def upload_object_from_file(
-        self, bucket: str, object_uid: str, path: str
-    ) -> None:
+    async def upload_object_from_file(self, resource: LocalResource, path: str) -> None:
         """
         Upload resource object file to underlying object storage
 
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
+        :param resource: Resource object to upload
         :param path: Path to the object content
         """
         async with self.s3 as client:
             with open(path, "rb") as f:
-                await client.put_object(Bucket=bucket, Key=object_uid, Body=f)
+                await client.put_object(
+                    Bucket=resource.bucket, Key=resource.uid, Body=f
+                )
 
-    async def download_object(self, bucket: str, object_uid: str) -> bytes:
+    async def download_object(self, resource: RemoteResource) -> bytes:
         """
         Download resource object from object storage.
 
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
+        :param resource: Resource object to download
         :return: Content bytes
         """
         async with self.s3 as client:
-            obj = await client.get_object(Bucket=bucket, Key=object_uid)
+            obj = await client.get_object(Bucket=resource.bucket, Key=resource.uid)
             return await obj["Body"].read()
 
     async def download_object_to_file(
-        self, bucket: str, object_uid: str, path: str
+        self, resource: RemoteResource, path: str
     ) -> None:
         """
         Download resource object from object storage to file
 
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
+        :param resource: Resource object to download
         :param path: Target file path
         """
         async with self.s3 as client:
-            await client.download_file(Bucket=bucket, Key=object_uid, Filename=path)
+            await client.download_file(
+                Bucket=resource.bucket, Key=resource.uid, Filename=path
+            )
 
     async def produce_log(
         self,

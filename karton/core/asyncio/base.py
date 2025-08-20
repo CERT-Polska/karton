@@ -6,7 +6,7 @@ from typing import Optional
 
 from karton.core import Task
 from karton.core.__version__ import __version__
-from karton.core.backend import KartonServiceInfo
+from karton.core.backend import KartonServiceInfo, KartonServiceType
 from karton.core.base import ConfigMixin, LoggingMixin
 from karton.core.config import Config
 from karton.core.task import get_current_task, set_current_task
@@ -28,8 +28,8 @@ class KartonAsyncBase(abc.ABC, ConfigMixin, LoggingMixin):
     identity: str = ""
     #: Karton service version
     version: Optional[str] = None
-    #: Include extended service information for non-consumer services
-    with_service_info: bool = False
+
+    _service_type = KartonServiceType.OTHER
 
     def __init__(
         self,
@@ -39,16 +39,15 @@ class KartonAsyncBase(abc.ABC, ConfigMixin, LoggingMixin):
     ) -> None:
         ConfigMixin.__init__(self, config, identity)
 
-        self.service_info = None
-        if self.identity is not None and self.with_service_info:
-            self.service_info = KartonServiceInfo(
-                identity=self.identity,
-                karton_version=__version__,
-                service_version=self.version,
-            )
+        self.service_info = KartonServiceInfo(
+            identity=self.identity,
+            karton_version=__version__,
+            service_version=self.version,
+            service_type=self._service_type,
+        )
 
         self.backend = backend or KartonAsyncBackend(
-            self.config, identity=self.identity, service_info=self.service_info
+            self.config, service_info=self.service_info
         )
 
         log_handler = KartonAsyncLogHandler(backend=self.backend, channel=self.identity)

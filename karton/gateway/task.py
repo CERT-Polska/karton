@@ -3,7 +3,6 @@ import datetime
 from typing import Any, Callable, Iterator
 
 import jwt
-from pydantic import BaseModel
 
 from karton.gateway.errors import InvalidTaskTokenError
 
@@ -12,22 +11,6 @@ from karton.gateway.errors import InvalidTaskTokenError
 class TaskTokenInfo:
     task_uid: str
     resources: list[str]
-
-
-class DeclaredResourceSpec(BaseModel):
-    """
-    Gateway-specific resource schema for __karton_resource__ keys. Partially
-    compatible with karton.core.resource scheme but doesn't support "bucket"
-    key (we don't support references to other buckets) and contains "to_upload"
-    mark to distinguish LocalResource from RemoteResource.
-    """
-
-    uid: str
-    name: str
-    size: int
-    metadata: dict[str, Any]
-    sha256: str
-    to_upload: bool = False
 
 
 def parse_task_token(token: str, secret_key: str, username: str) -> TaskTokenInfo:

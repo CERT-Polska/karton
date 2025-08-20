@@ -23,6 +23,7 @@ from .operations import (
     gateway_backend,
     send_error,
     send_hello,
+    send_success,
 )
 
 logger = logging.getLogger(__name__)
@@ -56,6 +57,7 @@ async def authorize(websocket: WebSocket) -> User:
     )
     if user is None:
         raise BadCredentialsError("Wrong username or password")
+    await send_success(websocket)
     return user
 
 

@@ -81,6 +81,22 @@ class NewTaskParameters(BaseModel):
     priority: TaskPriority
 
 
+class DeclaredResourceSpec(BaseModel):
+    """
+    Gateway-specific resource schema for __karton_resource__ keys. Partially
+    compatible with karton.core.resource schema but doesn't support "bucket"
+    key (we don't support references to other buckets) and contains "to_upload"
+    mark to distinguish LocalResource from RemoteResource.
+    """
+
+    uid: str
+    name: str
+    size: int
+    metadata: dict[str, Any]
+    sha256: str
+    to_upload: bool = False
+
+
 class DeclareTaskRequestMessage(BaseModel):
     task: NewTaskParameters
     token: str | None = None

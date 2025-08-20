@@ -20,7 +20,8 @@ dependencies = [
     # See also https://github.com/CERT-Polska/karton/pull/270
     "boto3<1.36.0",
     "aioboto3==13.3.0",
-    "websockets"
+    "websockets",
+    "httpx"
 ]
 dynamic = ["version"]
 requires-python = ">=3.9"

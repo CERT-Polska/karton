@@ -5,12 +5,8 @@ from typing import List, Optional
 
 from karton.core import query
 from karton.core.__version__ import __version__
-from karton.core.backend import (
-    KARTON_OPERATIONS_QUEUE,
-    KARTON_TASKS_QUEUE,
-    KartonBind,
-    KartonMetrics,
-)
+from karton.core.backend import KartonBackend, KartonBind, KartonMetrics
+from karton.core.backend.direct import KARTON_OPERATIONS_QUEUE, KARTON_TASKS_QUEUE
 from karton.core.base import KartonServiceBase
 from karton.core.config import Config
 from karton.core.task import Task, TaskState
@@ -24,7 +20,9 @@ class SystemService(KartonServiceBase):
 
     identity = "karton.system"
     version = __version__
-    with_service_info = True
+
+    _backend_factory = KartonBackend
+    backend: KartonBackend
 
     CRASH_STARTED_TASKS_ON_TIMEOUT = False
     GC_INTERVAL = 3 * 60

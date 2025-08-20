@@ -11,10 +11,15 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from . import query
 from .__version__ import __version__
-from .backend import KartonBackend, KartonBind, KartonMetrics
+from .backend import (
+    KartonBind,
+    KartonMetrics,
+    KartonServiceType,
+    SupportsServiceOperations,
+)
 from .base import KartonBase, KartonServiceBase
 from .config import Config
-from .exceptions import TaskTimeoutError
+from .exceptions import BindExpiredError, TaskTimeoutError
 from .resource import LocalResource
 from .task import Task, TaskState
 from .utils import timeout
@@ -52,11 +57,14 @@ class Producer(KartonBase):
     :param backend: Karton backend to use
     """
 
+    #: Karton service type (internal)
+    _service_type = KartonServiceType.PRODUCER
+
     def __init__(
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[SupportsServiceOperations] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -109,13 +117,16 @@ class Consumer(KartonServiceBase):
     filters: List[Dict[str, Any]] = []
     persistent: bool = True
     version: Optional[str] = None
-    task_timeout = None
+    task_timeout: Optional[int] = None
+
+    #: Karton service type (internal)
+    _service_type = KartonServiceType.CONSUMER
 
     def __init__(
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[SupportsServiceOperations] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -332,35 +343,21 @@ class Consumer(KartonServiceBase):
             self.log.info(f"Task timeout is set to {self.task_timeout} seconds")
 
         # Get the old binds and set the new ones atomically
-        old_bind = self.backend.register_bind(self._bind)
-
-        if not old_bind:
-            self.log.info("Service binds created.")
-        elif old_bind != self._bind:
-            self.log.info(
-                "Binds changed, old service instances should exit soon. "
-                "Old binds: %s "
-                "New binds: %s",
-                old_bind,
-                self._bind,
-            )
+        self.backend.register_bind(self._bind)
+        self.log.info("Service binds created.")
 
         for task_filter in self.filters:
             self.log.info("Binding on: %s", task_filter)
 
         with self.graceful_killer():
             while not self.shutdown:
-                current_bind = self.backend.get_bind(self.identity)
-                if current_bind != self._bind:
-                    self.log.info(
-                        "Binds changed, shutting down. "
-                        "Old binds: %s "
-                        "New binds: %s",
-                        self._bind,
-                        current_bind,
+                try:
+                    task = self.backend.consume_routed_task(
+                        self.identity, _bind=self._bind
                     )
+                except BindExpiredError:
+                    self.log.info("Binds expired, shutting down.")
                     break
-                task = self.backend.consume_routed_task(self.identity)
                 if task:
                     self.internal_process(task)
 
@@ -382,13 +379,15 @@ class LogConsumer(KartonServiceBase):
 
     logger_filter: Optional[str] = None
     level: Optional[str] = None
-    with_service_info = True
+
+    #: Karton service type (internal)
+    _service_type = KartonServiceType.LOG_CONSUMER
 
     def __init__(
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[SupportsServiceOperations] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -436,11 +435,13 @@ class Karton(Consumer, Producer):
     This glues together Consumer and Producer - which is the most common use case
     """
 
+    _service_type = KartonServiceType.CONSUMER
+
     def __init__(
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[SupportsServiceOperations] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
