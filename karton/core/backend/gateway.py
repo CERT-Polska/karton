@@ -98,7 +98,7 @@ class KartonGatewayBackend(SupportsServiceOperations):
 
     def _recv(
         self, connection: ClientConnection, expected_response: str, timeout: int = 10
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any]:
         data = connection.recv(timeout=timeout)
         message = json.loads(data)
         if "response" not in message:
@@ -113,7 +113,7 @@ class KartonGatewayBackend(SupportsServiceOperations):
                 f"Got unexpected gateway response: {message['response']}, "
                 f"expected {expected_response}"
             )
-        return message.get("message")
+        return message.get("message", {})
 
     def _send(self, connection: ClientConnection, message: Dict[str, Any]) -> None:
         data = json.dumps(message)
