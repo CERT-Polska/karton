@@ -29,9 +29,6 @@ from .operations import (
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-AUTH_TIMEOUT = 10
-GATEWAY_SERVER_SECRET_KEY = "secretkey"
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
