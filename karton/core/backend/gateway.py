@@ -6,7 +6,6 @@ from io import BytesIO
 from typing import IO, Any, Callable, Dict, Iterator, Optional, Tuple, Union
 
 import httpx
-from httpx import Response
 from websockets.protocol import CLOSED
 from websockets.sync.client import ClientConnection, connect
 
@@ -197,22 +196,21 @@ class KartonGatewayBackend(SupportsServiceOperations):
 
     @contextlib.contextmanager
     def _get_connection(self) -> Iterator[ClientConnection]:
+        if self._connection_used:
+            # There are corner cases where Karton tries to send command
+            # while connection is used for handling another one.
+            # One of them is self.log.info("Got signal, shutting down...")
+            # that is called on CTRL-C during waiting in consume_routed_task
+            # This causes ConcurrencyError. Let's initiate another temporary
+            # connection without bind in that case.
+            _connection = connect(self.gateway_url)
+            self._init_connection(_connection, service_bind=False)
+            try:
+                yield _connection
+                return
+            finally:
+                _connection.close()
         try:
-            if self._connection_used:
-                # There are corner cases where Karton tries to send command
-                # while connection is used for handling another one.
-                # One of them is self.log.info("Got signal, shutting down...")
-                # that is called on CTRL-C during waiting in consume_routed_task
-                # This causes ConcurrencyError. Let's initiate another temporary
-                # connection without bind in that case.
-                _connection = connect(self.gateway_url)
-                self._init_connection(_connection, service_bind=False)
-                try:
-                    yield _connection
-                    return
-                finally:
-                    _connection.close()
-
             self._connection_used = True
             if self._connection is not None and self._connection.state is not CLOSED:
                 yield self._connection
@@ -221,6 +219,16 @@ class KartonGatewayBackend(SupportsServiceOperations):
             self._init_connection(self._connection)
             yield self._connection
             return
+        except Exception:
+            raise
+        except BaseException:
+            # On BaseException we forcefully close connection
+            # to immediately interrupt blocking operations
+            # (e.g. HardShutdownInterrupt during task recv)
+            if self._connection:
+                self._connection.close()
+                self._connection = None
+            raise
         finally:
             self._connection_used = False
             if self._connection is not None and self._connection.state is CLOSED:
@@ -256,7 +264,6 @@ class KartonGatewayBackend(SupportsServiceOperations):
         task.uid = response["uid"]
         task.root_uid = root_uid_from_task_uid(response["uid"])
         task.bind_token(response["token"])
-        print("response", response)
         for upload_url in response["resources_to_upload"]:
             resources[upload_url["uid"]].bind_upload_url(upload_url["upload_url"])
 
@@ -369,7 +376,7 @@ class KartonGatewayBackend(SupportsServiceOperations):
 
     def _get_download_stream(
         self, resource: RemoteResource
-    ) -> contextlib.AbstractContextManager[Response]:
+    ) -> contextlib.AbstractContextManager[httpx.Response]:
         if self.gateway_s3_hostname_override is not None:
             host, download_url = override_presigned_url(
                 resource.download_url, self.gateway_s3_hostname_override
@@ -409,6 +416,8 @@ class KartonGatewayBackend(SupportsServiceOperations):
             return status["was_received"]
 
     def remove_object(self, bucket: str, object_uid: str) -> None:
+        # This method is called by RemoteResource.remove,
+        # but we don't implement this function in gateway
         raise NotImplementedError
 
     def consume_log(
