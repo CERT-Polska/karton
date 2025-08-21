@@ -334,15 +334,6 @@ class LocalResource(LocalResourceBase):
 
         :meta private:
         """
-
-        # Note: never transform resource into Remote
-        # Multiple task dispatching with same local, in that case resource
-        # can be deleted between tasks.
-        if self.bucket is None:
-            raise RuntimeError(
-                "Resource object can't be uploaded because its bucket is not set"
-            )
-
         if self._content:
             # Upload contents
             backend.upload_object(self, self._content)

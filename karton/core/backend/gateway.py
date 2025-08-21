@@ -1,9 +1,12 @@
 import contextlib
 import json
+import time
+import urllib.parse
 from io import BytesIO
 from typing import IO, Any, Callable, Dict, Iterator, Optional, Tuple, Union
 
 import httpx
+from httpx import Response
 from websockets.protocol import CLOSED
 from websockets.sync.client import ClientConnection, connect
 
@@ -50,6 +53,16 @@ def make_gateway_error(code: str, message: str) -> GatewayError:
     return GatewayError(code, message)
 
 
+def override_presigned_url(presigned_url: str, override_host: str) -> Tuple[str, str]:
+    """
+    Overrides presigned URL with new hostname.
+    Returns URL netloc (to be put in Host header) and new URL
+    """
+    parsed_url = urllib.parse.urlparse(presigned_url)
+    url_host = parsed_url.netloc
+    return url_host, parsed_url._replace(netloc=override_host).geturl()
+
+
 def serialize_resources(
     payload: Dict[str, Any]
 ) -> Tuple[Dict[str, Any], Dict[str, LocalResourceBase]]:
@@ -60,12 +73,14 @@ def serialize_resources(
             if to_upload := isinstance(obj, LocalResourceBase):
                 local_resources[obj.uid] = obj
             return {
-                "uid": obj.uid,
-                "name": obj.name,
-                "size": obj.size,
-                "metadata": obj.metadata,
-                "sha256": obj.sha256,
-                "to_upload": to_upload,
+                "__karton_resource__": {
+                    "uid": obj.uid,
+                    "name": obj.name,
+                    "size": obj.size,
+                    "metadata": obj.metadata,
+                    "sha256": obj.sha256,
+                    "to_upload": to_upload,
+                }
             }
         return obj
 
@@ -91,10 +106,14 @@ class KartonGatewayBackend(SupportsServiceOperations):
 
         self._connection: Optional[ClientConnection] = None
         self._karton_bind: Optional[KartonBind] = None
+        self._connection_used: bool = False
 
         self.gateway_url = self.config.get("gateway", "url")
         self.gateway_username = self.config.get("gateway", "username")
         self.gateway_password = self.config.get("gateway", "password")
+        self.gateway_s3_hostname_override = self.config.get(
+            "gateway", "s3_hostname_override"
+        )
 
     def _recv(
         self, connection: ClientConnection, expected_response: str, timeout: int = 10
@@ -159,7 +178,7 @@ class KartonGatewayBackend(SupportsServiceOperations):
             )
             self._recv(connection, expected_response="success")
 
-    def _init_connection(self, connection: ClientConnection) -> None:
+    def _init_connection(self, connection: ClientConnection, service_bind=True) -> None:
         hello_message = self._recv(connection, expected_response="hello")
         if hello_message["auth_required"]:
             self._send(
@@ -173,11 +192,28 @@ class KartonGatewayBackend(SupportsServiceOperations):
                 },
             )
             self._recv(connection, expected_response="success")
-        self._bind(connection)
+        if service_bind:
+            self._bind(connection)
 
     @contextlib.contextmanager
     def _get_connection(self) -> Iterator[ClientConnection]:
         try:
+            if self._connection_used:
+                # There are corner cases where Karton tries to send command
+                # while connection is used for handling another one.
+                # One of them is self.log.info("Got signal, shutting down...")
+                # that is called on CTRL-C during waiting in consume_routed_task
+                # This causes ConcurrencyError. Let's initiate another temporary
+                # connection without bind in that case.
+                _connection = connect(self.gateway_url)
+                self._init_connection(_connection, service_bind=False)
+                try:
+                    yield _connection
+                    return
+                finally:
+                    _connection.close()
+
+            self._connection_used = True
             if self._connection is not None and self._connection.state is not CLOSED:
                 yield self._connection
                 return
@@ -186,6 +222,7 @@ class KartonGatewayBackend(SupportsServiceOperations):
             yield self._connection
             return
         finally:
+            self._connection_used = False
             if self._connection is not None and self._connection.state is CLOSED:
                 self._connection = None
 
@@ -196,6 +233,7 @@ class KartonGatewayBackend(SupportsServiceOperations):
             task.payload_persistent
         )
         resources.update(resources_persistent)
+        print("payload", payload)
         with self._get_connection() as connection:
             self._send(
                 connection,
@@ -218,10 +256,15 @@ class KartonGatewayBackend(SupportsServiceOperations):
         task.uid = response["uid"]
         task.root_uid = root_uid_from_task_uid(response["uid"])
         task.bind_token(response["token"])
+        print("response", response)
         for upload_url in response["resources_to_upload"]:
             resources[upload_url["uid"]].bind_upload_url(upload_url["upload_url"])
 
     def set_task_status(self, task: Task, status: TaskState) -> None:
+        if task.status == status:
+            return
+        task.status = status
+        task.last_update = time.time()
         with self._get_connection() as connection:
             message: Dict[str, Any] = {"token": task.token, "status": status.value}
             if status is TaskState.CRASHED:
@@ -304,20 +347,44 @@ class KartonGatewayBackend(SupportsServiceOperations):
             while data := content.read(32768):
                 yield data
 
-        response = httpx.put(resource.upload_url, content=streamer())
+        headers = {"Content-Length": str(resource.size)}
+
+        if self.gateway_s3_hostname_override is not None:
+            host, upload_url = override_presigned_url(
+                resource.upload_url, self.gateway_s3_hostname_override
+            )
+            response = httpx.put(
+                upload_url, content=streamer(), headers={**headers, "Host": host}
+            )
+        else:
+            response = httpx.put(
+                resource.upload_url, content=streamer(), headers=headers
+            )
+
         response.raise_for_status()
 
     def upload_object_from_file(self, resource: LocalResource, path: str) -> None:
         with open(path, "rb") as f:
             self.upload_object(resource, f)
 
+    def _get_download_stream(
+        self, resource: RemoteResource
+    ) -> contextlib.AbstractContextManager[Response]:
+        if self.gateway_s3_hostname_override is not None:
+            host, download_url = override_presigned_url(
+                resource.download_url, self.gateway_s3_hostname_override
+            )
+            return httpx.stream("GET", download_url, headers={"Host": host})
+        else:
+            return httpx.stream("GET", resource.download_url)
+
     def download_object(self, resource: RemoteResource) -> bytes:
-        with httpx.stream("GET", resource.download_url) as response:
+        with self._get_download_stream(resource) as response:
             response.raise_for_status()
             return response.read()
 
     def download_object_to_file(self, resource: RemoteResource, path: str) -> None:
-        with httpx.stream("GET", resource.download_url) as response:
+        with self._get_download_stream(resource) as response:
             response.raise_for_status()
             with open(path, "wb") as f:
                 for chunk in response.iter_bytes():

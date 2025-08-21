@@ -54,7 +54,7 @@ def iter_resources(obj: Any) -> Iterator[dict[str, Any]]:
         else:
             for v in obj.values():
                 yield from iter_resources(v)
-    elif type(obj) is list:
+    elif type(obj) in (list, tuple):
         for el in obj:
             yield from iter_resources(el)
 
@@ -62,10 +62,10 @@ def iter_resources(obj: Any) -> Iterator[dict[str, Any]]:
 def map_resources(obj: Any, mapper: Callable[[dict[str, Any]], Any]) -> Any:
     if type(obj) is dict:
         if obj.keys() == {"__karton_resource__"}:
-            return {"__karton_resource__": mapper(obj["__karton_resource__"])}
+            return mapper(obj["__karton_resource__"])
         else:
             return {k: map_resources(v, mapper) for k, v in obj.items()}
-    elif type(obj) is list:
+    elif type(obj) in (list, tuple):
         return [map_resources(el, mapper) for el in obj]
     else:
         return obj

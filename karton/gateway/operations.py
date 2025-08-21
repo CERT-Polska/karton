@@ -220,7 +220,7 @@ def process_declared_task_resources(
             raise InvalidTaskError(
                 f"Service is not allowed to reference resource '{resource_spec.uid}'"
             )
-        if resource_spec.uid in resources:
+        if resource_spec.uid not in resources:
             resources[resource_spec.uid] = resource_spec
         return ResourceBase(
             _uid=resource_spec.uid,
@@ -388,7 +388,7 @@ async def generate_resource_download_urls(
                 "Got task that references different bucket than the configured one "
                 "which is unsupported"
             )
-        download_url = await service_backend.get_presigned_object_upload_url(
+        download_url = await service_backend.get_presigned_object_download_url(
             bucket=service_backend.default_bucket_name, object_uid=resource.uid
         )
         resources[resource.uid] = ResourceDownloadUrl(
@@ -418,15 +418,16 @@ async def handle_get_task_request(
         task_token = make_task_token(
             task_token_info, gateway_config.secret_key, session.user.username
         )
+        task_data = task.to_dict()
         incoming_task = IncomingTask(
-            uid=task.uid,
-            parent_uid=task.parent_uid,
-            orig_uid=task.orig_uid,
-            headers=task.headers,
-            payload=task.payload,
-            headers_persistent=task.headers_persistent,
-            payload_persistent=task.payload_persistent,
-            priority=task.priority,
+            uid=task_data["uid"],
+            parent_uid=task_data["parent_uid"],
+            orig_uid=task_data["orig_uid"],
+            headers=task_data["headers"],
+            payload=task_data["payload"],
+            headers_persistent=task_data["headers_persistent"],
+            payload_persistent=task_data["payload_persistent"],
+            priority=task_data["priority"],
         )
         task_response_message = TaskResponseMessage(
             task=incoming_task,
