@@ -1,11 +1,11 @@
 from karton.core.config import Config
 
 from .base import (
+    KartonBackendProtocol,
     KartonBind,
     KartonMetrics,
     KartonServiceInfo,
     KartonServiceType,
-    SupportsServiceOperations,
 )
 from .direct import KartonBackend
 from .gateway import KartonGatewayBackend
@@ -13,7 +13,7 @@ from .gateway import KartonGatewayBackend
 
 def get_backend(
     config: Config, service_info: KartonServiceInfo
-) -> SupportsServiceOperations:
+) -> KartonBackendProtocol:
     if config.has_section("gateway"):
         return KartonGatewayBackend(config, service_info=service_info)
     else:
@@ -27,6 +27,6 @@ __all__ = [
     "KartonMetrics",
     "KartonServiceInfo",
     "KartonServiceType",
-    "SupportsServiceOperations",
+    "KartonBackendProtocol",
     "get_backend",
 ]

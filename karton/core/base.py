@@ -8,9 +8,9 @@ from typing import Optional, Protocol, Union, cast
 
 from .__version__ import __version__
 from .backend import (
+    KartonBackendProtocol,
     KartonServiceInfo,
     KartonServiceType,
-    SupportsServiceOperations,
     get_backend,
 )
 from .config import Config
@@ -189,7 +189,7 @@ class LoggingMixin:
 class KartonBackendFactory(Protocol):
     def __call__(
         self, config: Config, service_info: KartonServiceInfo
-    ) -> SupportsServiceOperations: ...
+    ) -> KartonBackendProtocol: ...
 
 
 class KartonBase(abc.ABC, ConfigMixin, LoggingMixin):
@@ -205,7 +205,7 @@ class KartonBase(abc.ABC, ConfigMixin, LoggingMixin):
     #: Karton service version
     version: Optional[str] = None
     #: Karton service type (internal)
-    backend: SupportsServiceOperations
+    backend: KartonBackendProtocol
 
     _service_type = KartonServiceType.OTHER
     _backend_factory: KartonBackendFactory = staticmethod(get_backend)
@@ -214,7 +214,7 @@ class KartonBase(abc.ABC, ConfigMixin, LoggingMixin):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[SupportsServiceOperations] = None,
+        backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         # ConfigMixin handles setting proper self.identity
         ConfigMixin.__init__(self, config, identity)
@@ -259,7 +259,7 @@ class KartonServiceBase(KartonBase):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[SupportsServiceOperations] = None,
+        backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         super().__init__(
             config=config,

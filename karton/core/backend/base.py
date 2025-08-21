@@ -29,7 +29,7 @@ class KartonMetrics(enum.Enum):
     TASK_GARBAGE_COLLECTED = "karton.metrics.garbage-collected"
 
 
-class SupportsServiceOperations(Protocol):
+class KartonBackendProtocol(Protocol):
     """
     Interface for KartonBackend high-level methods used by producers and consumers
     """

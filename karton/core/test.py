@@ -6,10 +6,10 @@ import hashlib
 import logging
 import unittest
 from collections import defaultdict
-from typing import Any, BinaryIO, Dict, List, Optional, Union, cast
+from typing import IO, Any, Dict, Iterator, List, Optional, Union, cast
 from unittest import mock
 
-from .backend import KartonBackend, KartonMetrics
+from .backend import KartonBackend, KartonBackendProtocol, KartonBind, KartonMetrics
 from .config import Config
 from .resource import LocalResource, RemoteResource, ResourceBase
 from .task import Task, TaskState
@@ -21,11 +21,11 @@ log = logging.getLogger()
 
 
 class ConfigMock(Config):
-    def __init__(self):
+    def __init__(self) -> None:
         self._config = {"redis": {}, "s3": {}}
 
 
-class BackendMock:
+class BackendMock(KartonBackendProtocol):
     def __init__(self) -> None:
         self.produced_tasks: List[Task] = []
         # A custom S3 system mock
@@ -35,8 +35,8 @@ class BackendMock:
     def default_bucket_name(self) -> str:
         return "karton.test"
 
-    def register_task(self, task: Task, pipe=None) -> None:
-        log.debug("Registering a new task in Redis: %s", task.serialize())
+    def declare_task(self, task: Task) -> None:
+        log.debug("Declaring a new task in Redis: %s", task.serialize())
 
     def set_task_status(self, task: Task, status: TaskState, pipe=None) -> None:
         log.debug("Setting task %s status to %s", task.uid, status)
@@ -64,30 +64,52 @@ class BackendMock:
 
     def upload_object(
         self,
-        bucket: str,
-        object_uid: str,
-        content: Union[bytes, BinaryIO],
-        length: Optional[int] = None,
+        resource: LocalResource,
+        content: Union[bytes, IO[bytes]],
     ) -> None:
+        object_uid = resource.uid
+        bucket = resource.bucket or self.default_bucket_name
         log.debug("Uploading object %s to bucket %s", object_uid, bucket)
         if isinstance(content, bytes):
             self.buckets[bucket][object_uid] = content
         else:
             self.buckets[bucket][object_uid] = content.read()
 
-    def download_object(self, bucket: str, object_uid: str) -> bytes:
+    def download_object(self, resource: RemoteResource) -> bytes:
+        object_uid = resource.uid
+        bucket = resource.bucket or self.default_bucket_name
         log.debug("Downloading object %s from bucket %s", object_uid, bucket)
         return self.buckets[bucket][object_uid]
 
-    def upload_object_from_file(self, bucket: str, object_uid: str, path: str) -> None:
+    def upload_object_from_file(self, resource: LocalResource, path: str) -> None:
+        object_uid = resource.uid
+        bucket = resource.bucket or self.default_bucket_name
         log.debug("Uploading object %s from file from bucket %s", object_uid, bucket)
         with open(path, "rb") as f:
             self.buckets[bucket][object_uid] = f.read()
 
-    def download_object_to_file(self, bucket: str, object_uid: str, path: str) -> None:
+    def download_object_to_file(self, resource: RemoteResource, path: str) -> None:
+        object_uid = resource.uid
+        bucket = resource.bucket or self.default_bucket_name
         log.debug("Downloading object %s from bucket %s to file", object_uid, bucket)
         with open(path, "wb") as f:
             f.write(self.buckets[bucket][object_uid])
+
+    def register_bind(self, bind: KartonBind) -> None:
+        raise NotImplementedError()
+
+    def consume_routed_task(
+        self, identity: str, timeout: int = 5, _bind: Optional[KartonBind] = None
+    ) -> Optional[Task]:
+        raise NotImplementedError()
+
+    def consume_log(
+        self,
+        timeout: int = 5,
+        logger_filter: Optional[str] = None,
+        level: Optional[str] = None,
+    ) -> Iterator[Optional[Dict[str, Any]]]:
+        raise NotImplementedError()
 
 
 class KartonTestCase(unittest.TestCase):
@@ -239,7 +261,6 @@ class KartonTestCase(unittest.TestCase):
                 size=resource.size,
                 backend=backend,
                 sha256=resource.sha256,
-                _flags=resource._flags,
             )
 
         task.transform_payload_bags(local_resource_to_remote)

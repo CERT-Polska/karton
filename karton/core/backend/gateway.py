@@ -21,11 +21,11 @@ from karton.core.task import Task, TaskPriority, TaskState, root_uid_from_task_u
 from karton.core.utils import recursive_map
 
 from .base import (
+    KartonBackendProtocol,
     KartonBind,
     KartonMetrics,
     KartonServiceInfo,
     KartonServiceType,
-    SupportsServiceOperations,
 )
 
 
@@ -98,7 +98,7 @@ def deserialize_resources(
     return recursive_map(deserialize_resource, payload)
 
 
-class KartonGatewayBackend(SupportsServiceOperations):
+class KartonGatewayBackend(KartonBackendProtocol):
     def __init__(self, config: Config, service_info: KartonServiceInfo):
         self.config = config
         self.service_info = service_info

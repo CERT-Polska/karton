@@ -6,10 +6,10 @@ import tempfile
 import uuid
 import zipfile
 from io import BytesIO
-from typing import IO, TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Union, cast
+from typing import IO, TYPE_CHECKING, Any, Dict, Iterator, Optional, Union, cast
 
 if TYPE_CHECKING:
-    from .backend import SupportsServiceOperations
+    from .backend import KartonBackendProtocol
 
 
 class ResourceBase(object):
@@ -26,10 +26,7 @@ class ResourceBase(object):
     :param metadata: Resource metadata
     :param sha256: Resource sha256 hash
     :param _uid: Alternative S3 resource id
-    :param _flags: Resource flags
     """
-
-    DIRECTORY_FLAG = "Directory"
 
     def __init__(
         self,
@@ -42,7 +39,6 @@ class ResourceBase(object):
         fd: Optional[IO[bytes]] = None,
         _uid: Optional[str] = None,
         _size: Optional[int] = None,
-        _flags: Optional[List[str]] = None,
     ) -> None:
         self.name = name
         self.bucket = bucket
@@ -93,8 +89,6 @@ class ResourceBase(object):
         self._uid = _uid or str(uuid.uuid4())
         self._path = path
         self._size = _size
-        # Flags needed by 3.x.x Karton services
-        self._flags = _flags or []
 
     @property
     def uid(self) -> str:
@@ -145,7 +139,6 @@ class ResourceBase(object):
             "bucket": self.bucket,
             "size": self.size,
             "metadata": self.metadata,
-            "flags": self._flags,
             "sha256": self.sha256,
         }
 
@@ -161,7 +154,6 @@ class LocalResourceBase(ResourceBase):
         uid: Optional[str] = None,
         sha256: Optional[str] = None,
         fd: Optional[IO[bytes]] = None,
-        _flags: Optional[List[str]] = None,
         _close_fd: bool = False,
     ) -> None:
         if len(list(filter(None, [path, content, fd]))) != 1:
@@ -176,7 +168,6 @@ class LocalResourceBase(ResourceBase):
             sha256=sha256,
             fd=fd,
             _uid=uid,
-            _flags=_flags,
         )
         self.fd = fd
         self._close_fd = _close_fd
@@ -274,9 +265,6 @@ class LocalResourceBase(ResourceBase):
         # Ensure out_stream is not closed and seeked to the first byte
         assert not out_stream.closed
         out_stream.seek(0, os.SEEK_SET)
-        # Flag is required by Karton 3.x.x services to recognize that resource
-        # as DirectoryResource
-        flags = [ResourceBase.DIRECTORY_FLAG]
 
         if in_memory:
             return cls(
@@ -285,7 +273,6 @@ class LocalResourceBase(ResourceBase):
                 bucket=bucket,
                 metadata=metadata,
                 uid=uid,
-                _flags=flags,
             )
         else:
             return cls(
@@ -294,7 +281,6 @@ class LocalResourceBase(ResourceBase):
                 bucket=bucket,
                 metadata=metadata,
                 uid=uid,
-                _flags=flags,
                 _close_fd=True,
             )
 
@@ -323,11 +309,10 @@ class LocalResource(LocalResourceBase):
     :param uid: Alternative S3 resource id
     :param sha256: Resource sha256 hash
     :param fd: Seekable file descriptor
-    :param _flags: Resource flags
     :param _close_fd: Close file descriptor after upload (default: False)
     """
 
-    def _upload(self, backend: "SupportsServiceOperations") -> None:
+    def _upload(self, backend: "KartonBackendProtocol") -> None:
         """Internal function for uploading resources
 
         :param backend: KartonBackend to use while uploading the resource
@@ -353,7 +338,7 @@ class LocalResource(LocalResourceBase):
             # Upload file provided by path
             backend.upload_object_from_file(self, self._path)
 
-    def upload(self, backend: "SupportsServiceOperations") -> None:
+    def upload(self, backend: "KartonBackendProtocol") -> None:
         """Internal function for uploading resources
 
         :param backend: KartonBackend to use while uploading the resource
@@ -383,7 +368,6 @@ class RemoteResource(ResourceBase):
     :param size: Resource size
     :param backend: :py:meth:`KartonBackend` to bind to this resource
     :param sha256: Resource sha256 hash
-    :param _flags: Resource flags
     """
 
     def __init__(
@@ -393,9 +377,8 @@ class RemoteResource(ResourceBase):
         metadata: Optional[Dict[str, Any]] = None,
         uid: Optional[str] = None,
         size: Optional[int] = None,
-        backend: Optional["SupportsServiceOperations"] = None,
+        backend: Optional["KartonBackendProtocol"] = None,
         sha256: Optional[str] = None,
-        _flags: Optional[List[str]] = None,
         _download_url: Optional[str] = None,
     ) -> None:
         super(RemoteResource, self).__init__(
@@ -405,7 +388,6 @@ class RemoteResource(ResourceBase):
             sha256=sha256,
             _uid=uid,
             _size=size,
-            _flags=_flags,
         )
         self.backend = backend
         self._download_url = _download_url
@@ -428,7 +410,7 @@ class RemoteResource(ResourceBase):
     def from_dict(
         cls,
         dict: Dict[str, Any],
-        backend: Optional["SupportsServiceOperations"],
+        backend: Optional["KartonBackendProtocol"],
         download_url: Optional[str] = None,
     ) -> "RemoteResource":
         """
@@ -451,9 +433,8 @@ class RemoteResource(ResourceBase):
             metadata=metadata,
             bucket=dict["bucket"],
             uid=dict["uid"],
-            size=dict.get("size"),  # Backwards compatibility (2.x.x)
+            size=dict["size"],
             backend=backend,
-            _flags=dict.get("flags"),  # Backwards compatibility (3.x.x)
             _download_url=download_url,
         )
 

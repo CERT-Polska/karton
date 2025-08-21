@@ -23,10 +23,10 @@ from karton.core.task import Task, TaskPriority, TaskState
 from karton.core.utils import chunks, chunks_iter
 
 from .base import (
+    KartonBackendProtocol,
     KartonBind,
     KartonMetrics,
     KartonServiceInfo,
-    SupportsServiceOperations,
     make_redis_client_name,
     parse_redis_client_name,
 )
@@ -93,7 +93,6 @@ class KartonBackendBase:
         :return: List of queue names
         """
         return [
-            identity,  # Backwards compatibility (2.x.x)
             KartonBackend.get_queue_name(identity, TaskPriority.HIGH),
             KartonBackend.get_queue_name(identity, TaskPriority.NORMAL),
             KartonBackend.get_queue_name(identity, TaskPriority.LOW),
@@ -123,24 +122,12 @@ class KartonBackendBase:
     def unserialize_bind(identity: str, bind_data: str) -> KartonBind:
         """
         Deserialize KartonBind object for given identity.
-        Compatible with Karton 2.x.x and 3.x.x
 
         :param identity: Karton service identity
         :param bind_data: Serialized bind data
         :return: KartonBind object with bind definition
         """
         bind = json.loads(bind_data)
-        if isinstance(bind, list):
-            # Backwards compatibility (v2.x.x)
-            return KartonBind(
-                identity=identity,
-                info=None,
-                version="2.x.x",
-                persistent=not identity.endswith(".test"),
-                filters=bind,
-                service_version=None,
-                is_async=False,
-            )
         return KartonBind(
             identity=identity,
             info=bind["info"],
@@ -170,7 +157,7 @@ class KartonBackendBase:
         )
 
 
-class KartonBackend(KartonBackendBase, SupportsServiceOperations):
+class KartonBackend(KartonBackendBase, KartonBackendProtocol):
     def __init__(
         self,
         config: Config,

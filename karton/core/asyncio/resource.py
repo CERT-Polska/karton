@@ -4,7 +4,7 @@ import shutil
 import tempfile
 import zipfile
 from io import BytesIO
-from typing import IO, TYPE_CHECKING, Any, AsyncIterator, Dict, List, Optional, Union
+from typing import IO, TYPE_CHECKING, Any, AsyncIterator, Dict, Optional, Union
 
 from karton.core.resource import LocalResourceBase, ResourceBase
 
@@ -36,7 +36,6 @@ class LocalResource(LocalResourceBase):
     :param uid: Alternative S3 resource id
     :param sha256: Resource sha256 hash
     :param fd: Seekable file descriptor
-    :param _flags: Resource flags
     :param _close_fd: Close file descriptor after upload (default: False)
     """
 
@@ -50,7 +49,6 @@ class LocalResource(LocalResourceBase):
         uid: Optional[str] = None,
         sha256: Optional[str] = None,
         fd: Optional[IO[bytes]] = None,
-        _flags: Optional[List[str]] = None,
         _close_fd: bool = False,
     ) -> None:
         super().__init__(
@@ -62,7 +60,6 @@ class LocalResource(LocalResourceBase):
             uid=uid,
             sha256=sha256,
             fd=fd,
-            _flags=_flags,
             _close_fd=_close_fd,
         )
 
@@ -131,7 +128,6 @@ class RemoteResource(ResourceBase):
     :param size: Resource size
     :param backend: :py:meth:`KartonBackend` to bind to this resource
     :param sha256: Resource sha256 hash
-    :param _flags: Resource flags
     """
 
     def __init__(
@@ -143,7 +139,6 @@ class RemoteResource(ResourceBase):
         size: Optional[int] = None,
         backend: Optional["KartonAsyncBackend"] = None,
         sha256: Optional[str] = None,
-        _flags: Optional[List[str]] = None,
     ) -> None:
         super(RemoteResource, self).__init__(
             name,
@@ -152,7 +147,6 @@ class RemoteResource(ResourceBase):
             sha256=sha256,
             _uid=uid,
             _size=size,
-            _flags=_flags,
         )
         self.backend = backend
 
@@ -202,7 +196,6 @@ class RemoteResource(ResourceBase):
             uid=dict["uid"],
             size=dict.get("size"),  # Backwards compatibility (2.x.x)
             backend=backend,
-            _flags=dict.get("flags"),  # Backwards compatibility (3.x.x)
         )
 
     def unload(self) -> None:
