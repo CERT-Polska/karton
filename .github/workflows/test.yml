@@ -30,8 +30,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ammaraskar/sphinx-action@master
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
-          # Install karton package
-          pre-build-command: pip install .
-          docs-folder: "docs/"
+          python-version: "3.11"
+      - name: Install dependencies
+        working-directory: docs
+        run: pip install -r requirements.txt
+      - name: Build docs
+        working-directory: docs
+        run: make html
