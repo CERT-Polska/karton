@@ -5,6 +5,7 @@ import logging
 import time
 import urllib.parse
 import warnings
+import itertools
 from collections import defaultdict, namedtuple
 from typing import IO, Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
 
@@ -31,6 +32,7 @@ KARTON_LOG_CHANNEL = "karton.log"
 KARTON_BINDS_HSET = "karton.binds"
 KARTON_TASK_NAMESPACE = "karton.task"
 KARTON_OUTPUTS_NAMESPACE = "karton.outputs"
+KARTON_RESOURCE_REF_SET = 'karton.resource_ref'
 
 KartonBind = namedtuple(
     "KartonBind",
@@ -241,6 +243,12 @@ class KartonBackendBase:
 
 
 class KartonBackend(KartonBackendBase):
+
+    task_crashed_timeout: int = 3 * 24 * 3600  # 3 days
+    task_started_timeout: int = 24 * 3600 # 1 day
+    gc_interval: int = 3 * 60 # 3 minutes
+    task_dispatched_timeout: int  = 24 * 3600 # 1 day
+
     def __init__(
         self,
         config: Config,
@@ -283,6 +291,14 @@ class KartonBackend(KartonBackendBase):
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
         )
+
+        self.task_ttls = {
+            TaskState.CRASHED: self.config.getint("system", "task_crashed_timeout", self.task_crashed_timeout),
+            TaskState.STARTED: self.config.getint("system", "task_started_timeout", self.task_started_timeout),
+            TaskState.FINISHED: self.config.getint("system", "gc_interval", self.gc_interval),
+            TaskState.DECLARED: self.config.getint("system", "task_dispatched_timeout", self.task_dispatched_timeout)
+        }
+
 
     def iam_auth_s3(self, endpoint: str):
         boto_session = get_session()
@@ -631,6 +647,10 @@ class KartonBackend(KartonBackendBase):
             task_keys, chunk_size=chunk_size, parse_resources=parse_resources
         )
 
+    def set_expire_task(self, task: Task, pipe: Optional[Pipeline] = None) -> None:
+        p = pipe or self.redis
+        p.expire(f'{KARTON_TASK_NAMESPACE}:{task.uid}', self.task_ttls[task.status])
+
     def register_task(self, task: Task, pipe: Optional[Pipeline] = None) -> None:
         """
         Register or update task in Redis.
@@ -748,6 +768,8 @@ class KartonBackend(KartonBackendBase):
         :param task: Task object
         """
         self.redis.rpush(KARTON_TASKS_QUEUE, task.uid)
+        # producing unrouted tasks means we can remove expiration on the key. It will be set back later on
+        self.redis.persist(f'{KARTON_TASK_NAMESPACE}:{task.uid}')
 
     def produce_routed_task(
         self, identity: str, task: Task, pipe: Optional[Pipeline] = None
@@ -1112,6 +1134,55 @@ class KartonBackend(KartonBackendBase):
             else:
                 raise e
         return False
+
+    def check_object_exists(self, bucket: str, uid: str) -> bool:
+        try:
+            self.s3.head_object(Bucket=bucket, Key=uid)
+            return True
+        except self.s3.exceptions.ClientError as err:
+            if err.response['Error']['Code'] == '404':
+                return False
+            raise err
+
+    def increment_object_ref(self, uid: str, pipe: Optional[Pipeline] = None, val: int | float = 1.0) -> None:
+        (pipe or self.redis).zincrby(KARTON_RESOURCE_REF_SET, float(val), uid)
+
+    def increment_objects_ref(self, uids: Iterable[str], pipe: Optional[Pipeline] = None, val: int | float = 1.0) -> None:
+        p = pipe or self.make_pipeline()
+        for uid in uids:
+            self.increment_object_ref(uid, p, val)
+        if not pipe:
+            p.execute()
+    def decrement_object_ref(self, uid: str, pipe: Optional[Pipeline] = None, val: int | float = 1.0) -> None:
+        (pipe or self.redis).zincrby(KARTON_RESOURCE_REF_SET, -float(val), uid)
+
+    def decrement_objects_ref(self, uids: Iterable[str], pipe: Optional[Pipeline] = None, val: int | float = 1.0) -> None:
+        p = pipe or self.make_pipeline()
+        for uid in uids:
+            self.decrement_object_ref(uid, p, val)
+        if not pipe:
+            p.execute()
+
+
+    def get_unused_objects(self, pipe=None, chunk_size: int = 1000) -> Iterator[str]:
+        off = 0
+        p = pipe or self.redis
+        while r := p.zrange(KARTON_RESOURCE_REF_SET, 0, 0, byscore=True, offset=off, num=chunk_size):
+            yield from iter(r)
+            off += chunk_size
+
+    def remove_unused_objects(self, bucket: str, batched_size: int = 1000, chunk_size: int = 1000, pipe: Optional[Pipeline] = None) -> None:
+        p = pipe or self.make_pipeline(transaction=True)
+        # (mak) I have some doubts here about race condition and blocking
+        # remove_objects can be very long and block transaction, but removing later
+        # might clash with other task uploading resource that was just removed and there is a possible race
+        # resulting with removal of just uploaded resource
+        for objs in itertools.batched(self.get_unused_objects(p, chunk_size), batched_size):
+            self.remove_objects(bucket, objs)
+            p.zrem(KARTON_RESOURCE_REF_SET, *objs)
+
+        if not pipe:
+            p.execute()
 
     def log_identity_output(
         self, identity: str, headers: Dict[str, Any], task_tracking_ttl: int
