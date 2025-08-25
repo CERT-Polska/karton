@@ -47,6 +47,8 @@ Common Karton configuration fields are listed below:
  [redis]        username          Redis server AUTH username (default: None)
  [redis]        password          Redis server AUTH password (default: None)
  [redis]        socket_timeout    Socket timeout for Redis operations in seconds (default: 30, use 0 to turn off if timeout doesn't work properly)
+ [redis]        ssl               Use TLS for Redis connection
+ [redis]        url               Redis server url (allows to pass custom arbitrary options)
  [karton]       identity          Karton service identity override (overrides the name provided in class / constructor arguments)
  [karton]       persistent        Karton service queue persistency override
  [karton]       debug             Karton debug mode for service development
