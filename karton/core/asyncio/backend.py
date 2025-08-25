@@ -12,7 +12,7 @@ from redis.asyncio.client import Pipeline
 from redis.exceptions import AuthenticationError
 
 from karton.core import Config, Task
-from karton.core.asyncio.resource import RemoteResource
+from karton.core.asyncio.resource import LocalResource, RemoteResource
 from karton.core.backend import (
     KARTON_BINDS_HSET,
     KARTON_TASK_NAMESPACE,
@@ -22,6 +22,7 @@ from karton.core.backend import (
     KartonMetrics,
     KartonServiceInfo,
 )
+from karton.core.resource import LocalResource as SyncLocalResource
 from karton.core.task import TaskState
 
 logger = logging.getLogger(__name__)
@@ -167,6 +168,25 @@ class KartonAsyncBackend(KartonBackendBase):
         :return: RemoteResource object
         """
         return RemoteResource.from_dict(resource_spec, backend=self)
+
+    async def declare_task(self, task: Task) -> None:
+        """
+        Declares a new task to send it to the queue.
+
+        :param task: Task to declare
+        """
+        # Ensure all local resources have good buckets
+        for resource in task.iterate_resources():
+            if isinstance(resource, LocalResource) and not resource.bucket:
+                resource.bucket = self.default_bucket_name
+            if isinstance(resource, SyncLocalResource):
+                raise RuntimeError(
+                    "Synchronous resources are not supported. "
+                    "Use karton.core.asyncio.resource module instead."
+                )
+
+        # Register new task
+        await self.register_task(task)
 
     async def register_task(self, task: Task, pipe: Optional[Pipeline] = None) -> None:
         """
