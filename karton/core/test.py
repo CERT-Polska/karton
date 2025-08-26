@@ -22,7 +22,8 @@ log = logging.getLogger()
 
 class ConfigMock(Config):
     def __init__(self):
-        self._config = {"redis": {}, "s3": {}}
+        self._file_config = {}
+        self._dict_config = {"redis": {}, "s3": {}}
 
 
 class BackendMock:
