@@ -80,23 +80,32 @@ class Producer(KartonBase):
         task.last_update = time.time()
         task.headers.update({"origin": self.identity})
 
+        self._handle_resources(task)
+        # Register new task
+        self.backend.register_task(task)
+        # Add task to karton.tasks
+        self.backend.produce_unrouted_task(task)
+        self.backend.increment_metrics(KartonMetrics.TASK_PRODUCED, self.identity)
+        return True
+
+    def _handle_resources(self, task: Task) -> None:
         # Ensure all local resources have good buckets
         for resource in task.iterate_resources():
             if isinstance(resource, LocalResource) and not resource.bucket:
                 resource.bucket = self.backend.default_bucket_name
-
-        # Register new task
-        self.backend.register_task(task)
 
         # Upload local resources
         for resource in task.iterate_resources():
             if isinstance(resource, LocalResource):
                 resource.upload(self.backend)
 
-        # Add task to karton.tasks
-        self.backend.produce_unrouted_task(task)
-        self.backend.increment_metrics(KartonMetrics.TASK_PRODUCED, self.identity)
-        return True
+class RCProducer(Producer):
+    def _handle_resources(self, task: Task) -> None:
+        # Ensure we increase ref before we upload so we avoid a race condition on already existing objects
+        # we need to do that on all resources so we won't lose ones we got from parent task
+        self.backend.increment_objects_ref((r.uid for r in task.iterate_resources()))
+        super()._handle_resources(task)
+
 
 
 class Consumer(KartonServiceBase):
@@ -220,6 +229,9 @@ class Consumer(KartonServiceBase):
                 task_state = TaskState.CRASHED
                 task.error = exception_str
 
+            self._finalize_task(task, task_state)
+
+    def _finalize_task(self, task: Task, task_state: TaskState) -> None:
             self.backend.set_task_status(task, task_state)
             self.current_task = None
 
@@ -370,6 +382,18 @@ class Consumer(KartonServiceBase):
                 if task:
                     self.internal_process(task)
 
+class RCConsumer(Consumer):
+    def _finalize_task(self, task: Task, task_state: TaskState) -> None:
+        with self.backend.make_pipeline(transaction=True) as p:
+            # only check finished to safely remove unneeded resources
+            # if task crashed we need to keep them so we can restart task
+            if task_state == TaskState.FINISHED:
+                # we can now free our objects
+                self.backend.decrement_objects_ref(self.current_task.iterate_resources(), pipe=p)
+            self.backend.set_task_status(self.current_task, task_state, pipe=p)
+            self.backend.set_expire_task(self.current_task, pipe=p)
+            p.execute()
+        self.current_task = None
 
 class LogConsumer(KartonServiceBase):
     """
@@ -442,6 +466,47 @@ class Karton(Consumer, Producer):
     This glues together Consumer and Producer - which is the most common use case
     """
 
+    def __init__(
+        self,
+        config: Optional[Config] = None,
+        identity: Optional[str] = None,
+        backend: Optional[KartonBackend] = None,
+    ) -> None:
+        super().__init__(config=config, identity=identity, backend=backend)
+
+        if self.config.getboolean("signaling", "status", fallback=False):
+            self.log.info("Using status signaling")
+            self.add_pre_hook(self._send_signaling_status_task_begin, "task_begin")
+            self.add_post_hook(self._send_signaling_status_task_end, "task_end")
+
+    def _send_signaling_status_task_begin(self, task: Task) -> None:
+        """Send a begin status signaling task.
+
+        :meta private:
+        """
+        self._send_signaling_status_task("task_begin")
+
+    def _send_signaling_status_task_end(
+        self, task: Task, ex: Optional[BaseException]
+    ) -> None:
+        """Send a begin status signaling task.
+
+        :meta private:
+        """
+        self._send_signaling_status_task("task_end")
+
+    def _send_signaling_status_task(self, status: str) -> None:
+        """Send a status signaling task.
+
+        :param status: Status task identifier.
+
+        :meta private:
+        """
+        task = Task({"type": "karton.signaling.status", "status": status})
+        self.send_task(task)
+
+
+class RCKarton(RCConsumer, RCProducer):
     def __init__(
         self,
         config: Optional[Config] = None,

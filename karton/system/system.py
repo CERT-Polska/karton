@@ -1,6 +1,7 @@
 import argparse
 import json
 import time
+import itertools
 from typing import List, Optional
 
 from karton.core import query
@@ -430,3 +431,84 @@ class SystemService(KartonServiceBase):
             return
 
         service.loop()
+
+# This is just demo of usage,
+# probably should be incorporated into main class if we decide to go with this
+class RefCountSystemService(SystemService):
+
+    def gc_collect_resources(self) -> None:
+        # Collects and remove unreferenced resources left in object storage
+        karton_bucket = self.backend.default_bucket_name
+        self.backend.remove_unused_objects(karton_bucket)
+
+    def gc_collect_tasks(self) -> None:
+        # Collects tasks related to the non-persistent services no more online and remove them
+        online_consumers = self.backend.get_online_consumers()
+        for bind in self.backend.get_binds():
+            identity = bind.identity
+            if identity not in online_consumers and not bind.persistent:
+                self.log.info("Non-persistent: removing bind %s", identity)
+                while data := self.backend.consume_queues_batch(self.backend.get_queue_names(identity), timeout=1,
+                                                                max_count=100):
+                    tasks = self.backend.get_tasks(data[1])
+                    for task in tasks:
+                        for res in task.iterate_resources():
+                            self.backend.decrement_object_ref(res.uid)
+                    self.backend.delete_tasks(tasks)
+                self.backend.unregister_bind(identity)
+                self.backend.delete_consumer_queues(identity)
+
+    def route_task(self, task: Task, binds: List[KartonBind]) -> None:
+        # Performs routing of task
+        self.log.info("[%s] Processing task %s", task.root_uid, task.task_uid)
+        # store the producer-task relationship in redis for task tracking
+        self.backend.log_identity_output(
+            task.headers.get("origin", "unknown"), task.headers
+        )
+
+        # XXX: shouldn't this be per task?
+        pipe = self.backend.make_pipeline()
+        for bind in binds:
+            identity = bind.identity
+            try:
+                is_match = task.matches_filters(bind.filters)
+            except query.QueryError:
+                self.log.error("Task matching failed - invalid filters?")
+                continue
+            if is_match:
+                routed_task = task.fork_task()
+                routed_task.status = TaskState.SPAWNED
+                routed_task.last_update = time.time()
+                routed_task.headers.update({"receiver": identity})
+                self.backend.register_task(routed_task, pipe=pipe)
+                # adding an unrouted task doesn't add objects to set
+                # so until this moment objects cant be removed 
+                self.backend.increment_objects_ref(routed_task.iterate_resources(), pipe=pipe)
+                self.backend.produce_routed_task(identity, routed_task, pipe=pipe)
+                self.backend.set_expire_task(routed_task, pipe=pipe)
+                self.backend.increment_metrics(
+                    KartonMetrics.TASK_ASSIGNED, identity, pipe=pipe
+                )
+        pipe.execute()
+
+    def handle_tasks(self, task_uids: List[str]) -> None:
+        tasks = self.backend.get_tasks(task_uids)
+        binds = self.backend.get_binds()
+        for task in tasks:
+            if task is None:
+                raise RuntimeError(
+                    "Task disappeared while popping, this should never happen"
+                )
+
+            self.route_task(task, binds)
+            task.last_update = time.time()
+            task.status = TaskState.FINISHED
+            # Directly update the unrouted task status to be finished
+        self.backend.register_tasks(tasks)
+
+        with self.backend.make_pipeline() as p:
+            self.backend.register_tasks(tasks, pipe=p)
+            self.backend.decrement_objects_ref(itertools.chain(t.iterate_resources() for t in tasks))
+            for t in tasks:
+                self.backend.set_expire_task(t, p)
+            p.execute()
