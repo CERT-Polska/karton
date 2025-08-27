@@ -35,8 +35,12 @@ class BackendMock:
     def default_bucket_name(self) -> str:
         return "karton.test"
 
-    def register_task(self, task: Task, pipe=None) -> None:
-        log.debug("Registering a new task in Redis: %s", task.serialize())
+    def declare_task(self, task: Task) -> None:
+        # Ensure all local resources have good buckets
+        for resource in task.iterate_resources():
+            if isinstance(resource, LocalResource) and not resource.bucket:
+                resource.bucket = self.default_bucket_name
+        log.debug("Declaring a new task in Redis: %s", task.serialize())
 
     def set_task_status(self, task: Task, status: TaskState, pipe=None) -> None:
         log.debug("Setting task %s status to %s", task.uid, status)

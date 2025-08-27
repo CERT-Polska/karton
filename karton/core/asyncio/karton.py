@@ -12,7 +12,6 @@ from karton.core.__version__ import __version__
 from karton.core.backend import KartonBind, KartonMetrics
 from karton.core.config import Config
 from karton.core.exceptions import TaskTimeoutError
-from karton.core.resource import LocalResource as SyncLocalResource
 from karton.core.task import Task, TaskState
 
 from .backend import KartonAsyncBackend
@@ -81,18 +80,8 @@ class Producer(KartonAsyncBase):
         task.last_update = time.time()
         task.headers.update({"origin": self.identity})
 
-        # Ensure all local resources have good buckets
-        for resource in task.iterate_resources():
-            if isinstance(resource, LocalResource) and not resource.bucket:
-                resource.bucket = self.backend.default_bucket_name
-            if isinstance(resource, SyncLocalResource):
-                raise RuntimeError(
-                    "Synchronous resources are not supported. "
-                    "Use karton.core.asyncio.resource module instead."
-                )
-
         # Register new task
-        await self.backend.register_task(task)
+        await self.backend.declare_task(task)
 
         # Upload local resources
         for resource in task.iterate_resources():

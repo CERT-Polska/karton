@@ -22,7 +22,7 @@ from urllib3.response import HTTPResponse
 
 from .config import Config
 from .exceptions import InvalidIdentityError
-from .resource import RemoteResource
+from .resource import LocalResource, RemoteResource
 from .task import Task, TaskPriority, TaskState
 from .utils import chunks, chunks_iter
 
@@ -656,9 +656,28 @@ class KartonBackend(KartonBackendBase):
             task_keys, chunk_size=chunk_size, parse_resources=parse_resources
         )
 
+    def declare_task(self, task: Task) -> None:
+        """
+        Declares a new task to send it to the queue.
+
+        Task producers should use this method for new tasks.
+
+        :param task: Task to declare
+        """
+        # Ensure all local resources have good buckets
+        for resource in task.iterate_resources():
+            if isinstance(resource, LocalResource) and not resource.bucket:
+                resource.bucket = self.default_bucket_name
+
+        # Register new task
+        self.register_task(task)
+
     def register_task(self, task: Task, pipe: Optional[Pipeline] = None) -> None:
         """
         Register or update task in Redis.
+
+        This method is used internally to alter task data. If you want to declare new
+        task in Redis, use declare_task.
 
         :param task: Task object
         :param pipe: Optional pipeline object if operation is a part of pipeline
