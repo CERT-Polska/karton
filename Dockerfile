@@ -5,6 +5,6 @@ COPY ./requirements.txt ./requirements.txt
 RUN pip install -r requirements.txt
 COPY ./karton ./karton
 COPY ./README.md ./README.md
-COPY ./setup.py ./setup.py
+COPY ./pyproject.toml ./pyproject.toml
 RUN pip install .
 ENTRYPOINT ["karton-system"]
