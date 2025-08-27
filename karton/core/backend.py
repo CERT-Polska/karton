@@ -172,12 +172,8 @@ class KartonBackendBase:
         # Don't set if set to 0
         if socket_timeout := config.get("redis", "socket_timeout", 30):
             redis_conf["socket_timeout"] = socket_timeout
-        redis_conf.update(
-            {
-                "client_name": client_name,
-                "decode_responses": True,
-            }
-        )
+        redis_conf["client_name"] = client_name
+        redis_conf["decode_responses"] = True
         return redis_conf
 
     @staticmethod
