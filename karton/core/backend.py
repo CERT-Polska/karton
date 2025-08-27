@@ -17,6 +17,7 @@ from botocore.credentials import (
 from botocore.session import get_session
 from redis import AuthenticationError, StrictRedis
 from redis.client import Pipeline
+from redis.connection import parse_url as parse_redis_url
 from urllib3.response import HTTPResponse
 
 from .config import Config
@@ -141,6 +142,41 @@ class KartonBackendBase:
         if not bucket_name:
             raise RuntimeError("S3 default bucket is not defined in configuration")
         return bucket_name
+
+    @staticmethod
+    def get_redis_configuration(
+        config: Config,
+        identity: Optional[str] = None,
+        service_info: Optional[KartonServiceInfo] = None,
+    ) -> Dict[str, Any]:
+        if service_info is not None:
+            client_name: Optional[str] = service_info.make_client_name()
+        else:
+            client_name = identity
+
+        redis_url = config.get("redis", "url")
+        if redis_url is not None:
+            redis_conf = parse_redis_url(redis_url)
+        else:
+            redis_conf = {
+                "host": config["redis"]["host"],
+                "port": config.getint("redis", "port", 6379),
+                "db": config.getint("redis", "db", 0),
+                "ssl": config.getboolean("redis", "ssl", False),
+            }
+
+        if username := config.get("redis", "username"):
+            redis_conf["username"] = username
+            password = config.get("redis", "password")
+            if password is None:
+                raise RuntimeError("You must set both username and password, or none")
+            redis_conf["password"] = password
+        # Don't set if set to 0
+        if socket_timeout := config.get("redis", "socket_timeout", 30):
+            redis_conf["socket_timeout"] = socket_timeout
+        redis_conf["client_name"] = client_name
+        redis_conf["decode_responses"] = True
+        return redis_conf
 
     @staticmethod
     def get_queue_name(identity: str, priority: TaskPriority) -> str:
@@ -302,8 +338,9 @@ class KartonBackend(KartonBackendBase):
                     endpoint_url=endpoint,
                 )
 
-    @staticmethod
+    @classmethod
     def make_redis(
+        cls,
         config,
         identity: Optional[str] = None,
         service_info: Optional[KartonServiceInfo] = None,
@@ -316,22 +353,9 @@ class KartonBackend(KartonBackendBase):
         :param service_info: Additional service identity metadata
         :return: Redis connection
         """
-        if service_info is not None:
-            client_name: Optional[str] = service_info.make_client_name()
-        else:
-            client_name = identity
-
-        redis_args = {
-            "host": config["redis"]["host"],
-            "port": config.getint("redis", "port", 6379),
-            "db": config.getint("redis", "db", 0),
-            "username": config.get("redis", "username"),
-            "password": config.get("redis", "password"),
-            "client_name": client_name,
-            # set socket_timeout to None if set to 0
-            "socket_timeout": config.getint("redis", "socket_timeout", 30) or None,
-            "decode_responses": True,
-        }
+        redis_args = cls.get_redis_configuration(
+            config, identity=identity, service_info=service_info
+        )
         try:
             redis = StrictRedis(**redis_args)
             redis.ping()
@@ -339,6 +363,7 @@ class KartonBackend(KartonBackendBase):
             # Maybe we've sent a wrong password.
             # Or maybe the server is not (yet) password protected
             # To make smooth transition possible, try to login insecurely
+            del redis_args["username"]
             del redis_args["password"]
             redis = StrictRedis(**redis_args)
             redis.ping()

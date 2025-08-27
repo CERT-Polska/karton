@@ -118,8 +118,9 @@ class KartonAsyncBackend(KartonBackendBase):
                 boto_session._credentials = creds  # type: ignore
                 return aioboto3.Session(botocore_session=boto_session)
 
-    @staticmethod
+    @classmethod
     async def make_redis(
+        cls,
         config,
         identity: Optional[str] = None,
         service_info: Optional[KartonServiceInfo] = None,
@@ -132,22 +133,9 @@ class KartonAsyncBackend(KartonBackendBase):
         :param service_info: Additional service identity metadata
         :return: Redis connection
         """
-        if service_info is not None:
-            client_name: Optional[str] = service_info.make_client_name()
-        else:
-            client_name = identity
-
-        redis_args = {
-            "host": config["redis"]["host"],
-            "port": config.getint("redis", "port", 6379),
-            "db": config.getint("redis", "db", 0),
-            "username": config.get("redis", "username"),
-            "password": config.get("redis", "password"),
-            "client_name": client_name,
-            # set socket_timeout to None if set to 0
-            "socket_timeout": config.getint("redis", "socket_timeout", 30) or None,
-            "decode_responses": True,
-        }
+        redis_args = cls.get_redis_configuration(
+            config, identity=identity, service_info=service_info
+        )
         try:
             rs = Redis(**redis_args)
             await rs.ping()
@@ -155,6 +143,7 @@ class KartonAsyncBackend(KartonBackendBase):
             # Maybe we've sent a wrong password.
             # Or maybe the server is not (yet) password protected
             # To make smooth transition possible, try to login insecurely
+            del redis_args["username"]
             del redis_args["password"]
             rs = Redis(**redis_args)
             await rs.ping()
