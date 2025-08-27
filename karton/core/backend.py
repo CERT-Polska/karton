@@ -635,6 +635,8 @@ class KartonBackend(KartonBackendBase):
         """
         Declares a new task to send it to the queue.
 
+        Task producers should use this method for new tasks.
+
         :param task: Task to declare
         """
         # Ensure all local resources have good buckets
@@ -648,6 +650,9 @@ class KartonBackend(KartonBackendBase):
     def register_task(self, task: Task, pipe: Optional[Pipeline] = None) -> None:
         """
         Register or update task in Redis.
+
+        This method is used internally to alter task data. If you want to declare new
+        task in Redis, use declare_task.
 
         :param task: Task object
         :param pipe: Optional pipeline object if operation is a part of pipeline
