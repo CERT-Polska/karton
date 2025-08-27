@@ -167,7 +167,9 @@ class KartonBackendBase:
 
         if username := config.get("redis", "username"):
             redis_conf["username"] = username
-        if password := config.get("redis", "password"):
+            password = config.get("redis", "password")
+            if password is None:
+                raise RuntimeError("You must set both username and password, or none")
             redis_conf["password"] = password
         # Don't set if set to 0
         if socket_timeout := config.get("redis", "socket_timeout", 30):
