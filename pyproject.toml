@@ -46,3 +46,28 @@ lint-version = "2"
 source = "karton/"
 # Temporary workaround for Union[Awaitable[T]], T] mess in Redis typing
 extra-requirements = "redis<5.0.0 botocore-stubs"
+
+[tool.mypy]
+explicit_package_bases = true
+namespace_packages = true
+python_version = "3.8"
+
+[[tool.mypy.overrides]]
+module = "urllib3.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "redis.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "boto3.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "aioboto3.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "aiobotocore.*"
+ignore_missing_imports = true
