@@ -3,9 +3,11 @@ on:
   push:
     branches:
       - master
+      - develop-v6
   pull_request:
     branches:
       - master
+      - develop-v6
 jobs:
   lint:
     runs-on: ubuntu-latest
