@@ -1,9 +1,6 @@
-import dataclasses
-import enum
 import json
 import logging
 import time
-import urllib.parse
 import warnings
 from collections import defaultdict, namedtuple
 from typing import IO, Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
@@ -20,11 +17,20 @@ from redis.client import Pipeline
 from redis.connection import parse_url as parse_redis_url
 from urllib3.response import HTTPResponse
 
-from .config import Config
-from .exceptions import InvalidIdentityError
-from .resource import LocalResource, RemoteResource
-from .task import Task, TaskPriority, TaskState
-from .utils import chunks, chunks_iter
+from karton.core.config import Config
+from karton.core.exceptions import InvalidIdentityError
+from karton.core.resource import LocalResource, RemoteResource
+from karton.core.task import Task, TaskPriority, TaskState
+from karton.core.utils import chunks, chunks_iter
+
+from .base import (
+    KartonBackendProtocol,
+    KartonBind,
+    KartonMetrics,
+    KartonServiceInfo,
+    make_redis_client_name,
+    parse_redis_client_name,
+)
 
 KARTON_TASKS_QUEUE = "karton.tasks"
 KARTON_OPERATIONS_QUEUE = "karton.operations"
@@ -33,84 +39,8 @@ KARTON_BINDS_HSET = "karton.binds"
 KARTON_TASK_NAMESPACE = "karton.task"
 KARTON_OUTPUTS_NAMESPACE = "karton.outputs"
 
-KartonBind = namedtuple(
-    "KartonBind",
-    [
-        "identity",
-        "info",
-        "version",
-        "persistent",
-        "filters",
-        "service_version",
-        "is_async",
-    ],
-)
-
-
 KartonOutputs = namedtuple("KartonOutputs", ["identity", "outputs"])
 logger = logging.getLogger(__name__)
-
-
-class KartonMetrics(enum.Enum):
-    TASK_PRODUCED = "karton.metrics.produced"
-    TASK_CONSUMED = "karton.metrics.consumed"
-    TASK_CRASHED = "karton.metrics.crashed"
-    TASK_ASSIGNED = "karton.metrics.assigned"
-    TASK_GARBAGE_COLLECTED = "karton.metrics.garbage-collected"
-
-
-@dataclasses.dataclass(frozen=True, order=True)
-class KartonServiceInfo:
-    """
-    Extended Karton service information.
-
-    Instances of this dataclass are meant to be aggregated to count service replicas
-    in Karton Dashboard. They're considered equal if identity and versions strings
-    are the same.
-    """
-
-    identity: str = dataclasses.field(metadata={"serializable": False})
-    karton_version: str
-    service_version: Optional[str] = None
-    # Extra information about Redis client
-    redis_client_info: Optional[Dict[str, str]] = dataclasses.field(
-        default=None, hash=False, compare=False, metadata={"serializable": False}
-    )
-
-    def make_client_name(self) -> str:
-        included_keys = [
-            field.name
-            for field in dataclasses.fields(self)
-            if field.metadata.get("serializable", True)
-        ]
-        params = {
-            k: v
-            for k, v in dataclasses.asdict(self).items()
-            if k in included_keys and v is not None
-        }
-        return f"{self.identity}?{urllib.parse.urlencode(params)}"
-
-    @classmethod
-    def parse_client_name(
-        cls, client_name: str, redis_client_info: Optional[Dict[str, str]] = None
-    ) -> "KartonServiceInfo":
-        included_keys = [
-            field.name
-            for field in dataclasses.fields(cls)
-            if field.metadata.get("serializable", True)
-        ]
-        identity, params_string = client_name.split("?", 1)
-        # Filter out unknown params to not get crashed by future extensions
-        params = dict(
-            [
-                (key, value)
-                for key, value in urllib.parse.parse_qsl(params_string)
-                if key in included_keys
-            ]
-        )
-        return KartonServiceInfo(
-            identity, redis_client_info=redis_client_info, **params
-        )
 
 
 class KartonBackendBase:
@@ -150,7 +80,7 @@ class KartonBackendBase:
         service_info: Optional[KartonServiceInfo] = None,
     ) -> Dict[str, Any]:
         if service_info is not None:
-            client_name: Optional[str] = service_info.make_client_name()
+            client_name: Optional[str] = make_redis_client_name(service_info)
         else:
             client_name = identity
 
@@ -276,7 +206,7 @@ class KartonBackendBase:
         )
 
 
-class KartonBackend(KartonBackendBase):
+class KartonBackend(KartonBackendBase, KartonBackendProtocol):
     def __init__(
         self,
         config: Config,
@@ -469,9 +399,7 @@ class KartonBackend(KartonBackendBase):
             name = client["name"]
             if "?" in name:
                 try:
-                    service_info = KartonServiceInfo.parse_client_name(
-                        name, redis_client_info=client
-                    )
+                    service_info = parse_redis_client_name(name)
                     bound_services.append(service_info)
                 except Exception:
                     logger.exception("Fatal error while parsing client name: %s", name)
