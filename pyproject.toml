@@ -14,7 +14,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent"
 ]
-dynamic = ["version", "dependencies"]
+dynamic = ["version", "dependencies", "optional-dependencies"]
 requires-python = ">=3.8"
 
 [project.urls]
@@ -27,11 +27,12 @@ karton-system = "karton.system:SystemService.main"
 karton = "karton.core.main:main"
 
 [tool.setuptools]
-packages = ["karton.core", "karton.core.asyncio", "karton.system"]
+packages = ["karton.core", "karton.core.asyncio", "karton.gateway", "karton.system"]
 
 [tool.setuptools.dynamic]
 version = {attr = "karton.core.__version__.__version__"}
 dependencies = { file = ["requirements.txt"] }
+optional-dependencies.gateway = { file = ["requirements.gateway.txt"] }
 
 [tool.isort]
 multi_line_output = 3
@@ -50,7 +51,7 @@ extra-requirements = "redis<5.0.0 botocore-stubs"
 [tool.mypy]
 explicit_package_bases = true
 namespace_packages = true
-python_version = "3.8"
+python_version = "3.11"
 
 [[tool.mypy.overrides]]
 module = "urllib3.*"
