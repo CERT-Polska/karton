@@ -83,7 +83,6 @@ class KartonBackendProtocol(Protocol):
 def make_redis_client_name(service_info: KartonServiceInfo) -> str:
     params = {
         "karton_version": service_info.karton_version,
-        "service_type": service_info.service_type.value,
     }
     if service_info.service_version is not None:
         params.update({"service_version": service_info.service_version})
