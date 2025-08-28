@@ -9,7 +9,7 @@ from typing import IO, TYPE_CHECKING, Any, AsyncIterator, Dict, List, Optional, 
 from karton.core.resource import LocalResourceBase, ResourceBase
 
 if TYPE_CHECKING:
-    from .backend import KartonAsyncBackend
+    from .backend import KartonAsyncBackendProtocol
 
 
 class LocalResource(LocalResourceBase):
@@ -66,7 +66,7 @@ class LocalResource(LocalResourceBase):
             _close_fd=_close_fd,
         )
 
-    async def _upload(self, backend: "KartonAsyncBackend") -> None:
+    async def _upload(self, backend: "KartonAsyncBackendProtocol") -> None:
         """Internal function for uploading resources
 
         :param backend: KartonBackend to use while uploading the resource
@@ -101,7 +101,7 @@ class LocalResource(LocalResourceBase):
             # Upload file provided by path
             await backend.upload_object_from_file(self.bucket, self.uid, self._path)
 
-    async def upload(self, backend: "KartonAsyncBackend") -> None:
+    async def upload(self, backend: "KartonAsyncBackendProtocol") -> None:
         """Internal function for uploading resources
 
         :param backend: KartonBackend to use while uploading the resource
@@ -141,7 +141,7 @@ class RemoteResource(ResourceBase):
         metadata: Optional[Dict[str, Any]] = None,
         uid: Optional[str] = None,
         size: Optional[int] = None,
-        backend: Optional["KartonAsyncBackend"] = None,
+        backend: Optional["KartonAsyncBackendProtocol"] = None,
         sha256: Optional[str] = None,
         _flags: Optional[List[str]] = None,
     ) -> None:
@@ -179,7 +179,7 @@ class RemoteResource(ResourceBase):
 
     @classmethod
     def from_dict(
-        cls, dict: Dict[str, Any], backend: Optional["KartonAsyncBackend"]
+        cls, dict: Dict[str, Any], backend: Optional["KartonAsyncBackendProtocol"]
     ) -> "RemoteResource":
         """
         Internal deserialization method for remote resources

@@ -21,7 +21,7 @@ from .resource import RemoteResource, ResourceBase
 from .utils import recursive_iter, recursive_iter_with_keys, recursive_map
 
 if TYPE_CHECKING:
-    from .backend import KartonBackend  # noqa
+    from .backend import KartonBackendProtocol  # noqa
 
 import orjson
 
@@ -384,7 +384,7 @@ class Task(object):
     @staticmethod
     def unserialize(
         data: Union[str, bytes],
-        backend: Optional["KartonBackend"] = None,
+        backend: Optional["KartonBackendProtocol"] = None,
         parse_resources: bool = True,
         resource_unserializer: Optional[Callable[[Dict], Any]] = None,
     ) -> "Task":

@@ -9,7 +9,7 @@ from io import BytesIO
 from typing import IO, TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Union, cast
 
 if TYPE_CHECKING:
-    from .backend import KartonBackend
+    from .backend import KartonBackendProtocol
 
 
 class ResourceBase(object):
@@ -307,7 +307,7 @@ class LocalResource(LocalResourceBase):
     :param _close_fd: Close file descriptor after upload (default: False)
     """
 
-    def _upload(self, backend: "KartonBackend") -> None:
+    def _upload(self, backend: "KartonBackendProtocol") -> None:
         """Internal function for uploading resources
 
         :param backend: KartonBackend to use while uploading the resource
@@ -342,7 +342,7 @@ class LocalResource(LocalResourceBase):
             # Upload file provided by path
             backend.upload_object_from_file(self.bucket, self.uid, self._path)
 
-    def upload(self, backend: "KartonBackend") -> None:
+    def upload(self, backend: "KartonBackendProtocol") -> None:
         """Internal function for uploading resources
 
         :param backend: KartonBackend to use while uploading the resource
@@ -382,7 +382,7 @@ class RemoteResource(ResourceBase):
         metadata: Optional[Dict[str, Any]] = None,
         uid: Optional[str] = None,
         size: Optional[int] = None,
-        backend: Optional["KartonBackend"] = None,
+        backend: Optional["KartonBackendProtocol"] = None,
         sha256: Optional[str] = None,
         _flags: Optional[List[str]] = None,
     ) -> None:
@@ -407,7 +407,7 @@ class RemoteResource(ResourceBase):
 
     @classmethod
     def from_dict(
-        cls, dict: Dict[str, Any], backend: Optional["KartonBackend"]
+        cls, dict: Dict[str, Any], backend: Optional["KartonBackendProtocol"]
     ) -> "RemoteResource":
         """
         Internal deserialization method for remote resources
