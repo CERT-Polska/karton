@@ -71,8 +71,10 @@ class KartonAsyncBackend(KartonBackendBase):
             # Already connected
             return
         self._redis = await self.make_redis(
-            self.config, identity=self.identity, service_info=self.service_info,
-            single_connection_client=single_connection_client
+            self.config,
+            identity=self.identity,
+            service_info=self.service_info,
+            single_connection_client=single_connection_client,
         )
 
         endpoint = self.config.get("s3", "address")
@@ -388,3 +390,29 @@ class KartonAsyncBackend(KartonBackendBase):
             )
             > 0
         )
+
+    async def get_presigned_object_download_url(
+        self, bucket: str, object_uid: str, expires_in: int = 3600
+    ) -> str:
+        async with self.s3 as client:
+            return await client.generate_presigned_url(
+                "get_object",
+                Params={
+                    "Bucket": bucket,
+                    "Key": object_uid,
+                },
+                ExpiresIn=expires_in,
+            )
+
+    async def get_presigned_object_upload_url(
+        self, bucket: str, object_uid: str, expires_in: int = 3600
+    ) -> str:
+        async with self.s3 as client:
+            return await client.generate_presigned_url(
+                "put_object",
+                Params={
+                    "Bucket": bucket,
+                    "Key": object_uid,
+                },
+                ExpiresIn=expires_in,
+            )

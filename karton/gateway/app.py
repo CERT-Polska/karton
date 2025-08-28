@@ -3,13 +3,33 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from pydantic import ValidationError
 from websockets import ConnectionClosed
 
-from .errors import KartonGatewayError, InternalError
-from .operations import gateway_backend, send_error
+from karton.core.backend import KartonServiceInfo
 
+from .auth import authorize_user, get_anonymous_user
+from .config import gateway_config
+from .errors import (
+    BadCredentialsError,
+    BadRequestError,
+    InternalError,
+    KartonGatewayError,
+    OperationTimeoutError,
+)
+from .logger import set_connection_id, setup_logger
+from .models import HelloRequest, Request
+from .operations import (
+    UserSession,
+    call_request_handler,
+    gateway_backend,
+    send_error,
+    send_hello,
+    send_success,
+)
+
+setup_logger()
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 
 @asynccontextmanager
@@ -20,21 +40,81 @@ async def lifespan(app: FastAPI):
     finally:
         await gateway_backend.close()
 
+
 app = FastAPI(lifespan=lifespan)
+
+
+async def initiate_session(websocket: WebSocket) -> UserSession:
+    await send_hello(websocket)
+    try:
+        async with asyncio.timeout(gateway_config.auth_timeout):
+            request_json = await websocket.receive_json()
+            hello_request = HelloRequest.model_validate(request_json)
+    except TimeoutError:
+        raise OperationTimeoutError("Client has not replied in required time")
+    except ValidationError as exc:
+        raise BadRequestError("Invalid request", validation_error=exc) from exc
+
+    if gateway_config.auth_required:
+        credentials = hello_request.message.credentials
+        if not credentials:
+            raise BadRequestError("Missing credentials")
+        user = await authorize_user(
+            gateway_backend.redis, credentials.username, credentials.password
+        )
+        if user is None:
+            raise BadCredentialsError("Wrong username or password")
+    else:
+        user = get_anonymous_user()
+
+    service_info = KartonServiceInfo(
+        identity=hello_request.message.identity,
+        karton_version=hello_request.message.library_version,
+        service_version=hello_request.message.service_version,
+    )
+    user_session = UserSession(
+        user=user,
+        service_info=service_info,
+        secondary_connection=hello_request.message.secondary_connection,
+    )
+    await send_success(websocket)
+    return user_session
+
+
+async def message_loop(websocket: WebSocket, user_session: UserSession) -> None:
+    try:
+        while True:
+            try:
+                request_json = await websocket.receive_json()
+                try:
+                    request = Request.model_validate(request_json)
+                except ValidationError as exc:
+                    raise BadRequestError(
+                        "Invalid request", validation_error=exc
+                    ) from exc
+                await call_request_handler(websocket, request, user_session)
+            except KartonGatewayError as error:
+                await send_error(websocket, error)
+    finally:
+        await user_session.close()
+
 
 @app.websocket("/gateway")
 async def gateway_endpoint(websocket: WebSocket):
+    set_connection_id()
     await websocket.accept()
-
     try:
-        ...
+        user_session = await initiate_session(websocket)
+        await message_loop(websocket, user_session)
     except KartonGatewayError as error:
+        logger.error(f"Client was disconnected with error: {error}")
         await send_error(websocket, error)
         await websocket.close()
     except (WebSocketDisconnect, ConnectionClosed):
-        logger.info("Client disconnected")
-    except Exception as e:
-        logger.exception(e)
+        # Client disconnected gracefully
+        logger.info("Client disconnected gracefully")
+    except Exception:
+        logger.exception("Internal server error")
         internal_error = InternalError("Internal server error")
         await send_error(websocket, internal_error)
         await websocket.close()

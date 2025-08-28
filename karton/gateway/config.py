@@ -1,3 +1,5 @@
+import os
+
 from pydantic import BaseModel
 
 from karton.core.config import Config
@@ -20,5 +22,6 @@ def get_gateway_config(config: Config) -> GatewayServerConfig:
     )
 
 
-karton_config = Config()
+config_file = os.getenv("KARTON_CONFIG_FILE")
+karton_config = Config(config_file)
 gateway_config = get_gateway_config(karton_config)

@@ -88,6 +88,8 @@ class Task(object):
         "payload",
         "payload_persistent",
         "_headers_persistent_keys",
+        "_token",
+        "_parent_token",
     )
 
     def __init__(
@@ -104,6 +106,7 @@ class Task(object):
         error: Optional[List[str]] = None,
         _status: Optional[TaskState] = None,
         _last_update: Optional[float] = None,
+        _token: Optional[str] = None,
     ) -> None:
         payload = payload or {}
         payload_persistent = payload_persistent or {}
@@ -144,10 +147,21 @@ class Task(object):
 
         self.payload = dict(payload)
         self.payload_persistent = dict(payload_persistent)
+        # Bound tokens for KartonGatewayBackend
+        self._token: Optional[str] = _token
+        self._parent_token: Optional[str] = None
 
     @property
     def headers_persistent(self) -> Dict[str, Any]:
         return {k: v for k, v in self.headers.items() if self.is_header_persistent(k)}
+
+    @property
+    def token(self) -> Optional[str]:
+        return self._token
+
+    @property
+    def parent_token(self) -> Optional[str]:
+        return self._parent_token
 
     @property
     def receiver(self) -> Optional[str]:
@@ -167,6 +181,13 @@ class Task(object):
         if ":" not in fquid:
             return fquid
         return fquid.split(":")[-1]
+
+    def bind_token(self, token: str) -> None:
+        """
+        Binds task with gateway token. Used internally.
+        :meta private:
+        """
+        self._token = token
 
     def fork_task(self) -> "Task":
         """
@@ -247,6 +268,7 @@ class Task(object):
         """
         self.parent_uid = parent.uid
         self.root_uid = parent.root_uid
+        self._parent_token = parent._token
 
     def merge_persistent_payload(self, other_task: "Task") -> None:
         """
@@ -387,6 +409,7 @@ class Task(object):
         backend: Optional["KartonBackend"] = None,
         parse_resources: bool = True,
         resource_unserializer: Optional[Callable[[Dict], Any]] = None,
+        task_token: Optional[str] = None,
     ) -> "Task":
         """
         Unserialize Task instance from JSON string
@@ -405,6 +428,8 @@ class Task(object):
         :param resource_unserializer: |
             Resource factory used for deserialization of __karton_resource__
             dictionary values.
+        :param task_token: |
+            Task token used by KartonGatewayBackend
         :return: Unserialized Task object
 
         :meta private:
@@ -465,6 +490,7 @@ class Task(object):
             ),
             _status=TaskState(task_data["status"]),
             _last_update=task_data.get("last_update", None),
+            _token=task_token,
         )
         return task
 

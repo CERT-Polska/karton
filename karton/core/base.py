@@ -4,10 +4,14 @@ import logging
 import os
 import textwrap
 from contextlib import contextmanager
-from typing import Optional, Union, cast
+from typing import Optional, Union, cast, Protocol
 
 from .__version__ import __version__
-from .backend import KartonBackend, KartonServiceInfo
+from .backend import (
+    KartonBackendProtocol,
+    KartonServiceInfo,
+    get_backend,
+)
 from .config import Config
 from .logger import KartonLogHandler, TaskContextFilter
 from .task import Task, get_current_task, set_current_task
@@ -180,6 +184,10 @@ class LoggingMixin:
         """
         return logging.getLogger(self.identity)
 
+class KartonBackendFactory(Protocol):
+    def __call__(
+        self, config: Config, identity: Optional[str], service_info: Optional[KartonServiceInfo]
+    ) -> KartonBackendProtocol: ...
 
 class KartonBase(abc.ABC, ConfigMixin, LoggingMixin):
     """
@@ -195,12 +203,15 @@ class KartonBase(abc.ABC, ConfigMixin, LoggingMixin):
     version: Optional[str] = None
     #: Include extended service information for non-consumer services
     with_service_info: bool = False
+    #: Karton service type
+    backend: KartonBackendProtocol
+    _backend_factory: KartonBackendFactory = staticmethod(get_backend)
 
     def __init__(
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         ConfigMixin.__init__(self, config, identity)
 
@@ -212,7 +223,7 @@ class KartonBase(abc.ABC, ConfigMixin, LoggingMixin):
                 service_version=self.version,
             )
 
-        self.backend = backend or KartonBackend(
+        self.backend = backend or self._backend_factory(
             self.config, identity=self.identity, service_info=self.service_info
         )
 
@@ -246,7 +257,7 @@ class KartonServiceBase(KartonBase):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         super().__init__(
             config=config,

@@ -11,10 +11,10 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from . import query
 from .__version__ import __version__
-from .backend import KartonBackend, KartonBind, KartonMetrics
+from .backend import KartonBackendProtocol, KartonBind, KartonMetrics
 from .base import KartonBase, KartonServiceBase
 from .config import Config
-from .exceptions import TaskTimeoutError
+from .exceptions import TaskTimeoutError, BindExpiredError
 from .resource import LocalResource
 from .task import Task, TaskState
 from .utils import timeout
@@ -56,7 +56,7 @@ class Producer(KartonBase):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -116,7 +116,7 @@ class Consumer(KartonServiceBase):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -332,36 +332,19 @@ class Consumer(KartonServiceBase):
         if self.task_timeout:
             self.log.info(f"Task timeout is set to {self.task_timeout} seconds")
 
-        # Get the old binds and set the new ones atomically
-        old_bind = self.backend.register_bind(self._bind)
-
-        if not old_bind:
-            self.log.info("Service binds created.")
-        elif old_bind != self._bind:
-            self.log.info(
-                "Binds changed, old service instances should exit soon. "
-                "Old binds: %s "
-                "New binds: %s",
-                old_bind,
-                self._bind,
-            )
+        self.backend.register_bind(self._bind)
+        self.log.info("Service binds created.")
 
         for task_filter in self.filters:
             self.log.info("Binding on: %s", task_filter)
 
         with self.graceful_killer():
             while not self.shutdown:
-                current_bind = self.backend.get_bind(self.identity)
-                if current_bind != self._bind:
-                    self.log.info(
-                        "Binds changed, shutting down. "
-                        "Old binds: %s "
-                        "New binds: %s",
-                        self._bind,
-                        current_bind,
-                    )
+                try:
+                    task = self.backend.consume_routed_task(self.identity, _bind=self._bind)
+                except BindExpiredError as exc:
+                    self.log.info(str(exc))
                     break
-                task = self.backend.consume_routed_task(self.identity)
                 if task:
                     self.internal_process(task)
 
@@ -389,7 +372,7 @@ class LogConsumer(KartonServiceBase):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -441,7 +424,7 @@ class Karton(Consumer, Producer):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 

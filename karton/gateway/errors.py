@@ -1,16 +1,20 @@
+from pydantic import ValidationError
+
+
 class KartonGatewayError(Exception):
     code: str = "gateway_error"
 
 
-class KartonGatewayTaskError(KartonGatewayError):
-    """
-    Karton task errors don't disconnect the client in message loop and client
-    should handle them without exiting.
-    """
-
-
 class BadRequestError(KartonGatewayError):
     code: str = "bad_request"
+
+    def __init__(
+        self, message: str, validation_error: ValidationError | None = None
+    ) -> None:
+        if validation_error is None:
+            super().__init__(message)
+        else:
+            super().__init__(f"{message} ({str(validation_error)})")
 
 
 class BadCredentialsError(KartonGatewayError):
@@ -33,15 +37,15 @@ class AlreadyBoundError(KartonGatewayError):
     code: str = "already_bound"
 
 
-class InvalidTaskTokenError(KartonGatewayTaskError):
+class InvalidTaskTokenError(KartonGatewayError):
     code: str = "invalid_task_token"
 
 
-class InvalidTaskStatusError(KartonGatewayTaskError):
+class InvalidTaskStatusError(KartonGatewayError):
     code: str = "invalid_task_status"
 
 
-class InvalidTaskError(KartonGatewayTaskError):
+class InvalidTaskError(KartonGatewayError):
     code: str = "invalid_task"
 
 

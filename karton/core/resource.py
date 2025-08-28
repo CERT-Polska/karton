@@ -1,4 +1,5 @@
 import contextlib
+import dataclasses
 import hashlib
 import os
 import shutil
@@ -9,7 +10,42 @@ from io import BytesIO
 from typing import IO, TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Union, cast
 
 if TYPE_CHECKING:
-    from .backend import KartonBackend
+    from .backend import KartonBackendProtocol
+
+
+@dataclasses.dataclass
+class ResourceGatewayInfo:
+    """
+    Schema for resource exchanged via Karton Gateway
+    """
+
+    uid: str
+    name: str
+    size: int
+    metadata: Dict[str, Any]
+    sha256: str
+    to_upload: bool = False
+
+    @classmethod
+    def from_dict(cls, obj: Dict[str, Any]) -> "ResourceGatewayInfo":
+        return cls(
+            uid=obj["uid"],
+            name=obj["name"],
+            size=obj["size"],
+            metadata=obj["metadata"],
+            sha256=obj["sha256"],
+            to_upload=obj["to_upload"],
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "uid": self.uid,
+            "name": self.name,
+            "size": self.size,
+            "metadata": self.metadata,
+            "sha256": self.sha256,
+            "to_upload": self.to_upload,
+        }
 
 
 class ResourceBase(object):
@@ -149,6 +185,15 @@ class ResourceBase(object):
             "sha256": self.sha256,
         }
 
+    def to_gateway_info(self):
+        return ResourceGatewayInfo(
+            uid=self.uid,
+            name=self.name,
+            size=self.size,
+            metadata=self.metadata,
+            sha256=self.sha256,
+        )
+
 
 class LocalResourceBase(ResourceBase):
     def __init__(
@@ -278,6 +323,16 @@ class LocalResourceBase(ResourceBase):
                 _close_fd=True,
             )
 
+    def to_gateway_info(self):
+        return ResourceGatewayInfo(
+            uid=self.uid,
+            name=self.name,
+            size=self.size,
+            metadata=self.metadata,
+            sha256=self.sha256,
+            to_upload=True,
+        )
+
 
 class LocalResource(LocalResourceBase):
     """
@@ -307,7 +362,7 @@ class LocalResource(LocalResourceBase):
     :param _close_fd: Close file descriptor after upload (default: False)
     """
 
-    def _upload(self, backend: "KartonBackend") -> None:
+    def _upload(self, backend: "KartonBackendProtocol") -> None:
         """Internal function for uploading resources
 
         :param backend: KartonBackend to use while uploading the resource
@@ -325,7 +380,7 @@ class LocalResource(LocalResourceBase):
 
         if self._content:
             # Upload contents
-            backend.upload_object(self.bucket, self.uid, self._content)
+            backend.upload_object(self, self._content)
         elif self.fd:
             if self.fd.tell() != 0:
                 raise RuntimeError(
@@ -334,15 +389,15 @@ class LocalResource(LocalResourceBase):
                     f"(fd.tell = {self.fd.tell()})"
                 )
             # Upload contents from fd
-            backend.upload_object(self.bucket, self.uid, self.fd)
+            backend.upload_object(self, self.fd)
             # If file descriptor is managed by Resource, close it after upload
             if self._close_fd:
                 self.fd.close()
         elif self._path:
             # Upload file provided by path
-            backend.upload_object_from_file(self.bucket, self.uid, self._path)
+            backend.upload_object_from_file(self, self._path)
 
-    def upload(self, backend: "KartonBackend") -> None:
+    def upload(self, backend: "KartonBackendProtocol") -> None:
         """Internal function for uploading resources
 
         :param backend: KartonBackend to use while uploading the resource
@@ -382,7 +437,7 @@ class RemoteResource(ResourceBase):
         metadata: Optional[Dict[str, Any]] = None,
         uid: Optional[str] = None,
         size: Optional[int] = None,
-        backend: Optional["KartonBackend"] = None,
+        backend: Optional["KartonBackendProtocol"] = None,
         sha256: Optional[str] = None,
         _flags: Optional[List[str]] = None,
     ) -> None:
@@ -407,7 +462,7 @@ class RemoteResource(ResourceBase):
 
     @classmethod
     def from_dict(
-        cls, dict: Dict[str, Any], backend: Optional["KartonBackend"]
+        cls, dict: Dict[str, Any], backend: Optional["KartonBackendProtocol"]
     ) -> "RemoteResource":
         """
         Internal deserialization method for remote resources
@@ -495,7 +550,7 @@ class RemoteResource(ResourceBase):
                 "Resource object can't be downloaded because its bucket is not set"
             )
 
-        self._content = self.backend.download_object(self.bucket, self.uid)
+        self._content = self.backend.download_object(self)
         return self._content
 
     def download_to_file(self, path: str) -> None:
@@ -525,7 +580,7 @@ class RemoteResource(ResourceBase):
                 "Resource object can't be downloaded because its bucket is not set"
             )
 
-        self.backend.download_object_to_file(self.bucket, self.uid, path)
+        self.backend.download_object_to_file(self, path)
 
     @contextlib.contextmanager
     def download_temporary_file(self, suffix=None) -> Iterator[IO[bytes]]:

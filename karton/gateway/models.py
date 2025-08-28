@@ -71,6 +71,20 @@ class NewTaskParameters(BaseModel):
     priority: TaskPriority
 
 
+class DeclaredResourceSpec(BaseModel):
+    """
+    Gateway-specific resource schema for __karton_resource__ keys passed via
+    NewTaskParameters.payload and NewTaskParameters.payload_persistent
+    """
+
+    uid: str
+    name: str
+    size: int
+    metadata: dict[str, Any]
+    sha256: str
+    to_upload: bool = False
+
+
 class DeclareTaskRequestMessage(BaseModel):
     task: NewTaskParameters
     parent_token: str | None = None
@@ -182,13 +196,16 @@ class LogResponse(BaseModel):
     message: LogResponseMessage
 
 
+RequestType = (
+    BindRequest
+    | DeclareTaskRequest
+    | SendTaskRequest
+    | SetTaskStatusRequest
+    | GetTaskRequest
+    | SendLogRequest
+    | SubscribeLogsRequest
+)
+
+
 class Request(RootModel):
-    root: (
-        BindRequest
-        | DeclareTaskRequest
-        | SendTaskRequest
-        | SetTaskStatusRequest
-        | GetTaskRequest
-        | SendLogRequest
-        | SubscribeLogsRequest
-    ) = Field(discriminator="request")
+    root: RequestType = Field(discriminator="request")
