@@ -2,9 +2,8 @@ from typing import IO, Any
 
 from typing_extensions import Protocol
 
-from karton.core import Task
 from karton.core.backend import KartonBind, KartonMetrics
-from karton.core.task import TaskState
+from karton.core.task import Task, TaskState
 
 
 class KartonAsyncBackendProtocol(Protocol):

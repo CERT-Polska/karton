@@ -11,7 +11,6 @@ from redis.asyncio import Redis
 from redis.asyncio.client import Pipeline
 from redis.exceptions import AuthenticationError
 
-from karton.core import Config, Task
 from karton.core.asyncio.backend.base import KartonAsyncBackendProtocol
 from karton.core.asyncio.resource import LocalResource, RemoteResource
 from karton.core.backend import KartonBind, KartonMetrics, KartonServiceInfo
@@ -21,8 +20,9 @@ from karton.core.backend.direct import (
     KARTON_TASKS_QUEUE,
     KartonBackendBase,
 )
+from karton.core.config import Config
 from karton.core.resource import LocalResource as SyncLocalResource
-from karton.core.task import TaskState
+from karton.core.task import Task, TaskState
 
 logger = logging.getLogger(__name__)
 

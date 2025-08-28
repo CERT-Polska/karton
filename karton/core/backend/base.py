@@ -3,8 +3,7 @@ import enum
 from collections import namedtuple
 from typing import IO, Any, Iterator, Protocol
 
-from karton.core import Task
-from karton.core.task import TaskState
+from karton.core.task import Task, TaskState
 
 KartonBind = namedtuple(
     "KartonBind",
