@@ -1,6 +1,5 @@
 import dataclasses
 import enum
-import urllib.parse
 from collections import namedtuple
 from typing import IO, Any, Iterator, Protocol
 
@@ -92,25 +91,3 @@ class KartonBackendProtocol(Protocol):
         logger_filter: str | None = None,
         level: str | None = None,
     ) -> Iterator[dict[str, Any] | None]: ...
-
-
-def make_redis_client_name(service_info: KartonServiceInfo) -> str:
-    params = {
-        "karton_version": service_info.karton_version,
-    }
-    if service_info.service_version is not None:
-        params.update({"service_version": service_info.service_version})
-    return f"{service_info.identity}?{urllib.parse.urlencode(params)}"
-
-
-def parse_redis_client_name(client_name: str) -> KartonServiceInfo:
-    identity, params_string = client_name.split("?", 1)
-    # Filter out unknown params to not get crashed by future extensions
-    params = dict(urllib.parse.parse_qsl(params_string))
-    karton_version = params.get("karton_version", "")
-    service_version = params.get("service_version")
-    return KartonServiceInfo(
-        identity=identity,
-        karton_version=karton_version,
-        service_version=service_version,
-    )
