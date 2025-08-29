@@ -128,7 +128,7 @@ For some concrete examples, consider these filters:
             "type": "sample",
             "version": {"$gt": 3},
         },
-        {  # checks if `tags` header contain both "emotet" and "dimp"
+        {  # checks if `tags` header contain both "emotet" and "dump"
             "type": "sample",
             "tags": {"$all": ["emotet", "dump"]},
         },
@@ -160,8 +160,8 @@ For some concrete examples, consider these filters:
         filters = [{
             "version": {
                 "$or": [
-                    {"$regex": "win*"},
-                    {"$regex": "linux*"},
+                    {"$regex": "win.*"},
+                    {"$regex": "linux.*"},
                 ],
             }
         ]
@@ -171,7 +171,7 @@ For some concrete examples, consider these filters:
     .. code-block:: python
 
         filters = [
-            { "version": {"$regex": "win*|linux*"} },
+            { "version": {"$regex": "win.*|linux.*"} },
         ]
 
 

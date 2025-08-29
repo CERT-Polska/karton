@@ -290,7 +290,7 @@ Using regular ("new style") patterns, the matching will proceed as follows:
 - Check against the second filter: :code:`foo` matches, and the platform - :code:`linux` - is not equal to to :code:`windows`, so the task is accepted.
 
 Whoops! This is probably not what the programmer intended. In comparison, "old style" filters will always reject a task if it matches at least one negated filter.
-This sounds nice, but as every special case may cause unpleasant surprised. This is especially true when combining "old style" and "new style" patterns.
+This sounds nice, but as every special case it may cause unpleasant surprises. This is especially true when combining "old style" and "new style" patterns.
 That's why it's currently recommended to only use "new style" filters - they do everything "old style" filters can, and much more.
 
 In this case, the proper way to get the desired behavior with "new-style" filters is:
