@@ -1,7 +1,7 @@
 import json
 import logging
 import time
-from typing import IO, Any, Dict, List, Optional, Tuple, Union
+from typing import IO, Any, AsyncIterator, Dict, List, Optional, Tuple, Union
 
 import aioboto3
 from aiobotocore.credentials import ContainerProvider, InstanceMetadataProvider
@@ -69,11 +69,15 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
                 aws_secret_access_key=secret_key,
             )
 
-    async def connect(self) -> None:
+    async def connect(self, single_connection_client: bool = False) -> None:
         if self._redis is not None or self._s3_session is not None:
             # Already connected
             return
-        self._redis = await self.make_redis(self.config, service_info=self.service_info)
+        self._redis = await self.make_redis(
+            self.config,
+            service_info=self.service_info,
+            single_connection_client=single_connection_client,
+        )
 
         endpoint = self.config.get("s3", "address")
         access_key = self.config.get("s3", "access_key")
@@ -104,6 +108,13 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         session = aioboto3.Session()
         self._s3_session = session
 
+    async def close(self):
+        if self._redis is not None:
+            await self._redis.close()
+            self._redis = None
+        if self._s3_session is not None:
+            self._s3_session = None
+
     async def iam_auth_s3(self):
         boto_session = get_session()
         iam_providers = [
@@ -124,6 +135,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         cls,
         config,
         service_info: KartonServiceInfo,
+        single_connection_client: bool = False,
     ) -> Redis:
         """
         Create and test a Redis connection.
@@ -133,6 +145,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         :return: Redis connection
         """
         redis_args = cls.get_redis_configuration(config, service_info=service_info)
+        redis_args["single_connection_client"] = single_connection_client
         try:
             rs = Redis(**redis_args)
             await rs.ping()
@@ -398,3 +411,60 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             )
             > 0
         )
+
+    async def consume_log(
+        self,
+        timeout: int = 5,
+        logger_filter: Optional[str] = None,
+        level: Optional[str] = None,
+    ) -> AsyncIterator[Optional[Dict[str, Any]]]:
+        """
+        Subscribe to logs channel and yield subsequent log records
+        or None if timeout has been reached.
+
+        If you want to subscribe only to a specific logger name
+        and/or log level, pass them via logger_filter and level arguments.
+
+        :param timeout: Waiting for log record timeout (default: 5)
+        :param logger_filter: Filter for name of consumed logger
+        :param level: Log level
+        :return: Dict with log record
+        """
+        async with self.redis.pubsub() as pubsub:
+            await pubsub.psubscribe(self._log_channel(logger_filter, level))
+            while pubsub.subscribed:
+                item = await pubsub.get_message(
+                    ignore_subscribe_messages=True, timeout=timeout
+                )
+                if item and item["type"] == "pmessage":
+                    body = json.loads(item["data"])
+                    if "task" in body and isinstance(body["task"], str):
+                        body["task"] = json.loads(body["task"])
+                    yield body
+                yield None
+
+    async def get_presigned_object_download_url(
+        self, bucket: str, object_uid: str, expires_in: int = 3600
+    ) -> str:
+        async with self.s3 as client:
+            return await client.generate_presigned_url(
+                "get_object",
+                Params={
+                    "Bucket": bucket,
+                    "Key": object_uid,
+                },
+                ExpiresIn=expires_in,
+            )
+
+    async def get_presigned_object_upload_url(
+        self, bucket: str, object_uid: str, expires_in: int = 3600
+    ) -> str:
+        async with self.s3 as client:
+            return await client.generate_presigned_url(
+                "put_object",
+                Params={
+                    "Bucket": bucket,
+                    "Key": object_uid,
+                },
+                ExpiresIn=expires_in,
+            )
