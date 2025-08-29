@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from karton.core.__version__ import __version__
 from karton.core.asyncio.backend import KartonAsyncBackend
-from karton.core.backend import KartonBind, KartonServiceInfo
+from karton.core.backend import KartonBind, KartonMetrics, KartonServiceInfo
 from karton.core.resource import ResourceBase
 from karton.core.task import Task, TaskState
 
@@ -295,6 +295,9 @@ async def handle_send_task_request(
         raise InvalidTaskError("Task no longer exists")
 
     await service_backend.produce_unrouted_task(task)
+    await service_backend.increment_metrics(
+        KartonMetrics.TASK_PRODUCED, session.identity
+    )
     await send_success(websocket)
 
 
@@ -337,8 +340,14 @@ async def handle_set_task_status_request(
 
     if new_task_status is TaskState.CRASHED:
         task.error = request.message.error
+        await service_backend.increment_metrics(
+            KartonMetrics.TASK_CRASHED, session.identity
+        )
 
     await service_backend.set_task_status(task, new_task_status)
+    await service_backend.increment_metrics(
+        KartonMetrics.TASK_CONSUMED, session.identity
+    )
     await send_success(websocket)
 
 
@@ -416,6 +425,12 @@ async def handle_get_task_request(
         exc_info = sys.exc_info()
         task.error = traceback.format_exception(*exc_info)
         await service_backend.set_task_status(task, TaskState.CRASHED)
+        await service_backend.increment_metrics(
+            KartonMetrics.TASK_CRASHED, session.identity
+        )
+        await service_backend.increment_metrics(
+            KartonMetrics.TASK_CONSUMED, session.identity
+        )
         raise
 
 
