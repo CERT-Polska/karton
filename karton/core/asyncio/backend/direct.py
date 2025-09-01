@@ -70,6 +70,14 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             )
 
     async def connect(self, single_connection_client: bool = False) -> None:
+        """
+        Connects to the backend
+
+        :param single_connection_client: |
+            Uses single connection in Redis connection pool.
+            Parallel operations using this backend will be serialized
+            if this option is set to True.
+        """
         if self._redis is not None or self._s3_session is not None:
             # Already connected
             return
@@ -142,6 +150,10 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
 
         :param config: The karton configuration
         :param service_info: Additional service identity metadata
+        :param single_connection_client: |
+            Uses single connection in Redis connection pool.
+            Parallel operations using this backend will be serialized
+            if this option is set to True.
         :return: Redis connection
         """
         redis_args = cls.get_redis_configuration(config, service_info=service_info)
@@ -428,7 +440,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         :param timeout: Waiting for log record timeout (default: 5)
         :param logger_filter: Filter for name of consumed logger
         :param level: Log level
-        :return: Dict with log record
+        :return: Dict with log record or None if timeout has been reached
         """
         async with self.redis.pubsub() as pubsub:
             await pubsub.psubscribe(self._log_channel(logger_filter, level))
@@ -446,6 +458,14 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
     async def get_presigned_object_download_url(
         self, bucket: str, object_uid: str, expires_in: int = 3600
     ) -> str:
+        """
+        Creates presigned url for downloading resource (GET) from S3 bucket.
+
+        :param bucket: Bucket name
+        :param object_uid: Resource object identifier
+        :param expires_in: URL expiration time in seconds
+        :return: Presigned download URL
+        """
         async with self.s3 as client:
             return await client.generate_presigned_url(
                 "get_object",
@@ -459,6 +479,14 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
     async def get_presigned_object_upload_url(
         self, bucket: str, object_uid: str, expires_in: int = 3600
     ) -> str:
+        """
+        Creates presigned url for uploading resource (PUT) into S3 bucket.
+
+        :param bucket: Bucket name
+        :param object_uid: Resource object identifier
+        :param expires_in: URL expiration time in seconds
+        :return: Presigned upload URL
+        """
         async with self.s3 as client:
             return await client.generate_presigned_url(
                 "put_object",

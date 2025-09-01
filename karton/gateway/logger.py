@@ -2,15 +2,15 @@ import contextvars
 import logging
 import secrets
 
-connection_id: contextvars.ContextVar[str] = contextvars.ContextVar("connection_id")
+__connection_id: contextvars.ContextVar[str] = contextvars.ContextVar("connection_id")
 
 
 def set_connection_id():
-    connection_id.set(secrets.token_hex(8))
+    __connection_id.set(secrets.token_hex(16))
 
 
 def get_connection_id() -> str | None:
-    return connection_id.get()
+    return __connection_id.get()
 
 
 class ConnectionLoggingFilter(logging.Filter):
