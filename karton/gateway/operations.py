@@ -80,6 +80,12 @@ class UserSession:
         return self.karton_bind is not None
 
     async def get_service_backend(self) -> KartonAsyncBackend:
+        """
+        Returns a connected backend instance and establishes connection
+        if session has not yet connected. Each websocket connection has
+        at most one Redis connection, parallel blocking operations are
+        not supported.
+        """
         if self.backend:
             return self.backend
         if self.secondary_connection:
@@ -152,6 +158,14 @@ async def call_request_handler(
 async def handle_bind_request(
     websocket: WebSocket, request: BindRequest, session: UserSession
 ) -> None:
+    """
+    Handler for 'bind' request which implements register_bind operation
+    in the backend. Creates a new consumer queue or connects to existing one.
+
+    :param websocket: WebSocket that received the request
+    :param request: Parsed request object
+    :param session: User session that initiated the request
+    """
     if session.is_bound:
         raise AlreadyBoundError("Client is already bound")
 
@@ -176,6 +190,17 @@ PayloadBags = tuple[dict[str, Any], dict[str, Any]]
 def process_declared_task_resources(
     payload_bags: PayloadBags, allowed_parent_resources: list[str], target_bucket: str
 ) -> tuple[PayloadBags, list[DeclaredResourceSpec]]:
+    """
+    Performs a lookup for resources referenced in payload bags, validates them
+    and maps them to ResourceBase objects for Task.serialize
+
+    :param payload_bags: Payload bags to process
+    :param allowed_parent_resources: Allowed remote resources referenced in parent token
+    :param target_bucket: Target bucket to use for resource upload
+    :return: |
+        Tuple with two elements: payload bags with mapped resources to ResourceBase and
+        list of DeclaredResourceSpec objects with validated resource specification.
+    """
     resources: dict[str, DeclaredResourceSpec] = {}
 
     def process_resource(resource_data: dict[str, Any]) -> Any:
@@ -198,6 +223,7 @@ def process_declared_task_resources(
             name=resource_spec.name,
             metadata=resource_spec.metadata,
             sha256=resource_spec.sha256,
+            bucket=target_bucket,
         )
 
     transformed_payload_bags = map_resources(payload_bags, process_resource)
@@ -209,6 +235,14 @@ async def generate_resource_upload_urls(
     service_backend: KartonAsyncBackend,
     target_bucket: str,
 ) -> list[ResourceUrl]:
+    """
+    Generates a list of presigned upload URLs for resources marked as "to_upload"
+
+    :param resources: List of resource specifications
+    :param service_backend: Karton service backend
+    :param target_bucket: Target bucket to use for resource upload
+    :return: List of ResourceUrl objects with presigned upload URLs
+    """
     upload_urls: list[ResourceUrl] = []
     for resource in resources:
         if resource.to_upload:
@@ -228,6 +262,15 @@ async def generate_resource_upload_urls(
 async def handle_declare_task_request(
     websocket: WebSocket, request: DeclareTaskRequest, session: UserSession
 ) -> None:
+    """
+    Handler for 'declare_task' request which implements declare_task operation
+    in the backend. Validates the task declaration and declares a new task in Karton
+    to lock the resources before they're uploaded.
+
+    :param websocket: WebSocket that received the request
+    :param request: Parsed request object
+    :param session: User session that initiated the request
+    """
     parent_token = request.message.parent_token
     task_params = request.message.task
 
@@ -285,6 +328,15 @@ async def handle_declare_task_request(
 async def handle_send_task_request(
     websocket: WebSocket, request: SendTaskRequest, session: UserSession
 ) -> None:
+    """
+    Handler for 'send_task' request which implements send_task operation
+    in the backend. Accepts a task token returned by former response for
+    declare_task request.
+
+    :param websocket: WebSocket that received the request
+    :param request: Parsed request object
+    :param session: User session that initiated the request
+    """
     task_token = request.message.token
     task_info = parse_task_token(
         task_token, gateway_config.secret_key, session.user.username
@@ -293,6 +345,11 @@ async def handle_send_task_request(
     task = await service_backend.get_task(task_info.task_uid)
     if task is None:
         raise InvalidTaskError("Task no longer exists")
+    if task.status is not TaskState.DECLARED:
+        raise InvalidTaskError(
+            f"Task status is '{task.status.value}' while only "
+            f"'declared' tasks can be sent"
+        )
 
     await service_backend.produce_unrouted_task(task)
     await service_backend.increment_metrics(
@@ -320,6 +377,18 @@ def is_valid_task_status_transition(old_status: TaskState, new_status: TaskState
 async def handle_set_task_status_request(
     websocket: WebSocket, request: SetTaskStatusRequest, session: UserSession
 ) -> None:
+    """
+    Handler for 'set_task_status' request which implements set_task_status operation
+    in the backend. Used for marking task as:
+
+    - STARTED when consumer starts to execute the task
+    - FINISHED when consumer finishes executing the task
+    - CRASHED when task execution resulted in an error
+
+    :param websocket: WebSocket that received the request
+    :param request: Parsed request object
+    :param session: User session that initiated the request
+    """
     task_token = request.message.token
     task_info = parse_task_token(
         task_token, gateway_config.secret_key, session.user.username
@@ -354,6 +423,13 @@ async def handle_set_task_status_request(
 async def generate_resource_download_urls(
     task: Task, service_backend: KartonAsyncBackend
 ) -> list[ResourceUrl]:
+    """
+    Generates a list of presigned download URLs for an incoming task
+
+    :param task: Task containing resources
+    :param service_backend: Karton service backend
+    :return: List of ResourceUrl objects with presigned download URLs
+    """
     resources = {}
 
     for resource in task.iterate_resources():
@@ -375,6 +451,22 @@ async def generate_resource_download_urls(
 async def handle_get_task_request(
     websocket: WebSocket, request: GetTaskRequest, session: UserSession
 ) -> None:
+    """
+    Handler for 'get_task' request which implements consume_routed_task operation
+    in the backend.
+
+    If there is a task in the queue: returns it along with resource
+    download URLs. If there is no task and operation reaches timeout (5 seconds),
+    returns 'timeout' error. In that case, client should retry the request and continue
+    operation, unless requested by user to shut down.
+
+    Before consuming a task, checks whether binds have not been replaced by a newer
+    version of a consumer. In that case, returns 'expired_bind' error.
+
+    :param websocket: WebSocket that received the request
+    :param request: Parsed request object
+    :param session: User session that initiated the request
+    """
     if not session.is_bound:
         raise InvalidBindError("Service has not declared consumer bind")
 
@@ -438,6 +530,16 @@ async def handle_get_task_request(
 async def handle_send_log_request(
     websocket: WebSocket, request: SendLogRequest, session: UserSession
 ) -> None:
+    """
+    Handler for 'send_log' request which implements produce_log operation
+    in the backend. Publishes a log record to be consumed by currently
+    connected log consumers. Returns a bool response indicating whether
+    the log was successfully received by at least one log consumer.
+
+    :param websocket: WebSocket that received the request
+    :param request: Parsed request object
+    :param session: User session that initiated the request
+    """
     service_backend = await session.get_service_backend()
     was_received = await service_backend.produce_log(
         request.message.log_record,
@@ -453,6 +555,17 @@ async def handle_send_log_request(
 async def handle_subscribe_logs_request(
     websocket: WebSocket, request: SubscribeLogsRequest, session: UserSession
 ) -> None:
+    """
+    Handler for 'subscibe_log' request which implements consume_log operation
+    in the backend. Returns a stream of log records matching the provided filter.
+    If there is no log for 5 seconds, returns 'timeout' error. In that case,
+    client should retry the request and continue operation  unless requested by user
+    to shut down.
+
+    :param websocket: WebSocket that received the request
+    :param request: Parsed request object
+    :param session: User session that initiated the request
+    """
     service_backend = await session.get_service_backend()
     async for log_record in service_backend.consume_log(
         logger_filter=request.message.logger_filter, level=request.message.level
