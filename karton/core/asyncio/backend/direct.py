@@ -108,7 +108,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         session = aioboto3.Session()
         self._s3_session = session
 
-    async def close(self):
+    async def close(self) -> None:
         if self._redis is not None:
             await self._redis.close()
             self._redis = None
