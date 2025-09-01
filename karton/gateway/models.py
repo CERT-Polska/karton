@@ -179,7 +179,7 @@ class LogSentResponse(BaseModel):
 
 class SubscribeLogsRequestMessage(BaseModel):
     logger_filter: str | None
-    level: str
+    level: str | None
 
 
 class SubscribeLogsRequest(BaseModel):
