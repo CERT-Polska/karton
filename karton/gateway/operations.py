@@ -182,7 +182,7 @@ def process_declared_task_resources(
         try:
             resource_spec = DeclaredResourceSpec.model_validate(resource_data)
         except ValidationError as e:
-            raise InvalidTaskError(f"Invalid resource specification {str(e)}")
+            raise InvalidTaskError(f"Invalid resource specification {e}")
         if (
             not resource_spec.to_upload
             and resource_spec.uid not in allowed_parent_resources
@@ -385,8 +385,8 @@ async def handle_get_task_request(
     if current_bind != session.karton_bind:
         raise ExpiredBindError(
             f"Consumer bind expired. "
-            f"Old binds: {str(session.karton_bind)}. "
-            f"New binds: {str(current_bind)}."
+            f"Old binds: {session.karton_bind}. "
+            f"New binds: {current_bind}."
         )
 
     task = await service_backend.consume_routed_task(identity)
