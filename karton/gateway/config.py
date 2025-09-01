@@ -1,13 +1,13 @@
 import os
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from karton.core.config import Config
 
 
 class GatewayServerConfig(BaseModel):
-    secret_key: str
+    secret_key: str = Field(..., min_length=8)
     auth_timeout: Optional[int]
     auth_required: bool
 

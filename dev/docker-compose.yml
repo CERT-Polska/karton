@@ -31,6 +31,7 @@ services:
       dockerfile: dev/gateway.Dockerfile
     env_file:
       - karton-vars.env
+      - gateway-secret.env
     depends_on:
       - minio
       - redis
