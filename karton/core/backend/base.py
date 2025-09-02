@@ -3,6 +3,8 @@ import enum
 from collections import namedtuple
 from typing import IO, Any, Iterator, Protocol
 
+from karton.core.__version__ import __version__
+from karton.core.exceptions import InvalidIdentityError
 from karton.core.resource import LocalResource, RemoteResource
 from karton.core.task import Task, TaskState
 
@@ -41,6 +43,35 @@ class KartonServiceInfo:
     identity: str
     karton_version: str
     service_version: str | None = None
+
+
+def resolve_service_info(
+    identity: str | None, service_info: KartonServiceInfo | None
+) -> KartonServiceInfo:
+    """
+    Makes KartonServiceInfo object from backend parameters that identify the service.
+
+    If only identity is provided: KartonServiceInfo containing only an identity and
+    karton_version information is created.
+
+    This function also validates if identity is correct and doesn't contain disallowed
+    characters.
+    """
+    if service_info is None:
+        if identity is None:
+            raise InvalidIdentityError("Identity cannot be None")
+        service_info = KartonServiceInfo(
+            identity=identity,
+            karton_version=__version__,
+        )
+    disallowed_chars = [" ", "?"]
+    if any(
+        disallowed_char in service_info.identity for disallowed_char in disallowed_chars
+    ):
+        raise InvalidIdentityError(
+            f"Karton identity should not contain {disallowed_chars}"
+        )
+    return service_info
 
 
 class KartonBackendProtocol(Protocol):

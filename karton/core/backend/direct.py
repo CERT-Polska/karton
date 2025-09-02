@@ -19,12 +19,18 @@ from redis.connection import parse_url as parse_redis_url
 from urllib3.response import HTTPResponse
 
 from karton.core.config import Config
-from karton.core.exceptions import BindExpiredError, InvalidIdentityError
+from karton.core.exceptions import BindExpiredError
 from karton.core.resource import LocalResource, RemoteResource
 from karton.core.task import Task, TaskPriority, TaskState
 from karton.core.utils import chunks, chunks_iter
 
-from .base import KartonBackendProtocol, KartonBind, KartonMetrics, KartonServiceInfo
+from .base import (
+    KartonBackendProtocol,
+    KartonBind,
+    KartonMetrics,
+    KartonServiceInfo,
+    resolve_service_info,
+)
 
 KARTON_TASKS_QUEUE = "karton.tasks"
 KARTON_OPERATIONS_QUEUE = "karton.operations"
@@ -66,20 +72,7 @@ class KartonBackendBase:
         service_info: Optional[KartonServiceInfo] = None,
     ):
         self.config = config
-
-        if identity is not None:
-            self._validate_identity(identity)
-        self.identity = identity
-
-        self.service_info = service_info
-
-    @staticmethod
-    def _validate_identity(identity: str):
-        disallowed_chars = [" ", "?"]
-        if any(disallowed_char in identity for disallowed_char in disallowed_chars):
-            raise InvalidIdentityError(
-                f"Karton identity should not contain {disallowed_chars}"
-            )
+        self.service_info = resolve_service_info(identity, service_info)
 
     @property
     def default_bucket_name(self) -> str:
@@ -91,13 +84,9 @@ class KartonBackendBase:
     @staticmethod
     def get_redis_configuration(
         config: Config,
-        identity: Optional[str] = None,
-        service_info: Optional[KartonServiceInfo] = None,
+        service_info: KartonServiceInfo,
     ) -> Dict[str, Any]:
-        if service_info is not None:
-            client_name: Optional[str] = make_redis_client_name(service_info)
-        else:
-            client_name = identity
+        client_name = make_redis_client_name(service_info)
 
         redis_url = config.get("redis", "url")
         if redis_url is not None:
@@ -229,9 +218,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         service_info: Optional[KartonServiceInfo] = None,
     ) -> None:
         super().__init__(config, identity, service_info)
-        self.redis = self.make_redis(
-            config, identity=identity, service_info=service_info
-        )
+        self.redis = self.make_redis(config, service_info=self.service_info)
 
         endpoint = config.get("s3", "address")
         access_key = config.get("s3", "access_key")
@@ -290,20 +277,16 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
     def make_redis(
         cls,
         config,
-        identity: Optional[str] = None,
-        service_info: Optional[KartonServiceInfo] = None,
+        service_info: KartonServiceInfo,
     ) -> StrictRedis:
         """
         Create and test a Redis connection.
 
         :param config: The karton configuration
-        :param identity: Karton service identity
         :param service_info: Additional service identity metadata
         :return: Redis connection
         """
-        redis_args = cls.get_redis_configuration(
-            config, identity=identity, service_info=service_info
-        )
+        redis_args = cls.get_redis_configuration(config, service_info=service_info)
         try:
             redis = StrictRedis(**redis_args)
             redis.ping()
@@ -404,10 +387,6 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
     def get_online_services(self) -> List[KartonServiceInfo]:
         """
         Gets all online services providing extended service information.
-
-        Consumers by default don't provide that information and it's included in binds
-        instead. If you want to get information about all services, use
-        :py:meth:`KartonBackend.get_online_consumers`.
 
         .. versionadded:: 5.1.0
 

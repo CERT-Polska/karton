@@ -7,7 +7,9 @@ from .direct import KartonBackend
 
 
 def get_backend(
-    config: Config, identity: Optional[str], service_info: Optional[KartonServiceInfo]
+    config: Config,
+    identity: Optional[str] = None,
+    service_info: Optional[KartonServiceInfo] = None,
 ) -> KartonBackendProtocol:
     return KartonBackend(config, identity=identity, service_info=service_info)
 
