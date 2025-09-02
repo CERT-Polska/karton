@@ -36,6 +36,15 @@ def set_current_task(task: Optional["Task"]):
     current_task.set(task)
 
 
+def root_uid_from_task_uid(uid: str) -> str:
+    """
+    Extracts the root uid from a task uid e.g.
+    for {12345678-1234-1234-1234-12345678abcd}:abcdef89-1234-1234-1234-12345678abcd
+    returns 12345678-1234-1234-1234-12345678abcd. Works only for 5.4.0+ UIDs
+    """
+    return uid.split("}:")[0][1:]
+
+
 class TaskState(enum.Enum):
     DECLARED = "Declared"  # Task declared in TASKS_QUEUE
     SPAWNED = "Spawned"  # Task spawned into subsystem queue
@@ -88,6 +97,8 @@ class Task(object):
         "payload",
         "payload_persistent",
         "_headers_persistent_keys",
+        "_token",
+        "_parent_token",
     )
 
     def __init__(
@@ -104,6 +115,7 @@ class Task(object):
         error: Optional[List[str]] = None,
         _status: Optional[TaskState] = None,
         _last_update: Optional[float] = None,
+        _token: Optional[str] = None,
     ) -> None:
         payload = payload or {}
         payload_persistent = payload_persistent or {}
@@ -144,6 +156,9 @@ class Task(object):
 
         self.payload = dict(payload)
         self.payload_persistent = dict(payload_persistent)
+        # Bound tokens for KartonGatewayBackend
+        self._token: Optional[str] = _token
+        self._parent_token: Optional[str] = None
 
     @property
     def headers_persistent(self) -> Dict[str, Any]:
@@ -157,6 +172,14 @@ class Task(object):
     def task_uid(self) -> str:
         return self.fquid_to_uid(self.uid)
 
+    @property
+    def token(self) -> Optional[str]:
+        return self._token
+
+    @property
+    def parent_token(self) -> Optional[str]:
+        return self._parent_token
+
     @staticmethod
     def fquid_to_uid(fquid: str) -> str:
         """
@@ -167,6 +190,14 @@ class Task(object):
         if ":" not in fquid:
             return fquid
         return fquid.split(":")[-1]
+
+    def bind_token(self, token: str) -> None:
+        """
+        Binds task with gateway token. Used internally.
+
+        :meta private:
+        """
+        self._token = token
 
     def fork_task(self) -> "Task":
         """
@@ -247,6 +278,7 @@ class Task(object):
         """
         self.parent_uid = parent.uid
         self.root_uid = parent.root_uid
+        self._parent_token = parent._token
 
     def merge_persistent_payload(self, other_task: "Task") -> None:
         """
@@ -387,6 +419,7 @@ class Task(object):
         backend: Optional["KartonBackendProtocol"] = None,
         parse_resources: bool = True,
         resource_unserializer: Optional[Callable[[Dict], Any]] = None,
+        task_token: Optional[str] = None,
     ) -> "Task":
         """
         Unserialize Task instance from JSON string
@@ -405,6 +438,8 @@ class Task(object):
         :param resource_unserializer: |
             Resource factory used for deserialization of __karton_resource__
             dictionary values.
+        :param task_token: |
+            Task token got from KartonGatewayBackend
         :return: Unserialized Task object
 
         :meta private:
@@ -465,6 +500,7 @@ class Task(object):
             ),
             _status=TaskState(task_data["status"]),
             _last_update=task_data.get("last_update", None),
+            _token=task_token,
         )
         return task
 
