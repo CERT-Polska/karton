@@ -287,7 +287,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         """
         Create and test a Redis connection.
 
-        :param config: The karton configuration
+        :param config: The Karton configuration
         :param service_info: Additional service identity metadata
         :return: Redis connection
         """
