@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from . import query
 from .__version__ import __version__
-from .backend import KartonBackend, KartonBind, KartonMetrics
+from .backend import KartonBackendProtocol, KartonBind, KartonMetrics
 from .base import KartonBase, KartonServiceBase
 from .config import Config
 from .exceptions import TaskTimeoutError
@@ -56,7 +56,7 @@ class Producer(KartonBase):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -110,13 +110,13 @@ class Consumer(KartonServiceBase):
     filters: List[Dict[str, Any]] = []
     persistent: bool = True
     version: Optional[str] = None
-    task_timeout = None
+    task_timeout: Optional[int] = None
 
     def __init__(
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -389,7 +389,7 @@ class LogConsumer(KartonServiceBase):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -441,7 +441,7 @@ class Karton(Consumer, Producer):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
