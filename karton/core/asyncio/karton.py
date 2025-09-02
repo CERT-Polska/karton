@@ -14,7 +14,7 @@ from karton.core.config import Config
 from karton.core.exceptions import TaskTimeoutError
 from karton.core.task import Task, TaskState
 
-from .backend import KartonAsyncBackend
+from .backend import KartonAsyncBackendProtocol
 from .base import KartonAsyncBase, KartonAsyncServiceBase
 from .resource import LocalResource
 
@@ -56,7 +56,7 @@ class Producer(KartonAsyncBase):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonAsyncBackend] = None,
+        backend: Optional[KartonAsyncBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -119,7 +119,7 @@ class Consumer(KartonAsyncServiceBase):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonAsyncBackend] = None,
+        backend: Optional[KartonAsyncBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -359,6 +359,6 @@ class Karton(Consumer, Producer):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonAsyncBackend] = None,
+        backend: Optional[KartonAsyncBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
