@@ -8,7 +8,9 @@ from karton.core.task import Task, TaskState
 
 class KartonAsyncBackendProtocol(Protocol):
     """
-    Interface for KartonAsyncBackend high-level methods used by producers and consumers
+    Protocol that defines methods that KartonAsyncBackend must implement.
+
+    Used by producers and consumers to avoid depending on a concrete implementation.
     """
 
     async def connect(self) -> None: ...

@@ -48,7 +48,6 @@ def make_redis_client_name(service_info: KartonServiceInfo) -> str:
 
 def parse_redis_client_name(client_name: str) -> KartonServiceInfo:
     identity, params_string = client_name.split("?", 1)
-    # Filter out unknown params to not get crashed by future extensions
     params = dict(urllib.parse.parse_qsl(params_string))
     karton_version = params.get("karton_version", "")
     service_version = params.get("service_version")

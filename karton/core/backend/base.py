@@ -44,7 +44,9 @@ class KartonServiceInfo:
 
 class KartonBackendProtocol(Protocol):
     """
-    Interface for KartonBackend high-level methods used by producers and consumers
+    Protocol that defines methods that KartonBackend must implement.
+
+    Used by producers and consumers to avoid depending on a concrete implementation.
     """
 
     def declare_task(self, task: Task) -> None: ...
