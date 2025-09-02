@@ -73,18 +73,9 @@ class LocalResource(LocalResourceBase):
 
         :meta private:
         """
-
-        # Note: never transform resource into Remote
-        # Multiple task dispatching with same local, in that case resource
-        # can be deleted between tasks.
-        if self.bucket is None:
-            raise RuntimeError(
-                "Resource object can't be uploaded because its bucket is not set"
-            )
-
         if self._content:
             # Upload contents
-            await backend.upload_object(self.bucket, self.uid, self._content)
+            await backend.upload_object(self, self._content)
         elif self.fd:
             if self.fd.tell() != 0:
                 raise RuntimeError(
@@ -93,13 +84,13 @@ class LocalResource(LocalResourceBase):
                     f"(fd.tell = {self.fd.tell()})"
                 )
             # Upload contents from fd
-            await backend.upload_object(self.bucket, self.uid, self.fd)
+            await backend.upload_object(self, self.fd)
             # If file descriptor is managed by Resource, close it after upload
             if self._close_fd:
                 self.fd.close()
         elif self._path:
             # Upload file provided by path
-            await backend.upload_object_from_file(self.bucket, self.uid, self._path)
+            await backend.upload_object_from_file(self, self._path)
 
     async def upload(self, backend: "KartonAsyncBackendProtocol") -> None:
         """Internal function for uploading resources
@@ -234,12 +225,8 @@ class RemoteResource(ResourceBase):
                     "the backend"
                 )
             )
-        if self.bucket is None:
-            raise RuntimeError(
-                "Resource object can't be downloaded because its bucket is not set"
-            )
 
-        self._content = await self.backend.download_object(self.bucket, self.uid)
+        self._content = await self.backend.download_object(self)
         return self._content
 
     async def download_to_file(self, path: str) -> None:
@@ -264,12 +251,8 @@ class RemoteResource(ResourceBase):
                     "the backend"
                 )
             )
-        if self.bucket is None:
-            raise RuntimeError(
-                "Resource object can't be downloaded because its bucket is not set"
-            )
 
-        await self.backend.download_object_to_file(self.bucket, self.uid, path)
+        await self.backend.download_object_to_file(self, path)
 
     @contextlib.asynccontextmanager
     async def download_temporary_file(self, suffix=None) -> AsyncIterator[IO[bytes]]:
