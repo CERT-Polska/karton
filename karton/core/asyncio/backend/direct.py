@@ -21,6 +21,7 @@ from karton.core.backend.direct import (
     KartonBackendBase,
 )
 from karton.core.config import Config
+from karton.core.exceptions import BindExpiredError
 from karton.core.resource import LocalResource as SyncLocalResource
 from karton.core.task import Task, TaskState
 
@@ -38,6 +39,9 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         self._redis: Optional[Redis] = None
         self._s3_session: Optional[aioboto3.Session] = None
         self._s3_iam_auth = False
+        # Bind is stored for expiration check done by consume_routed_task
+        # Explicit expiration check is not required when using Karton Gateway
+        self._current_bind: Optional[KartonBind] = None
 
     @property
     def redis(self) -> Redis:
@@ -202,22 +206,16 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         task.last_update = time.time()
         await self.register_task(task, pipe=pipe)
 
-    async def register_bind(self, bind: KartonBind) -> Optional[KartonBind]:
+    async def register_bind(self, bind: KartonBind) -> None:
         """
-        Register bind for Karton service and return the old one
+        Register bind for Karton service
 
         :param bind: KartonBind object with bind definition
-        :return: Old KartonBind that was registered under this identity
         """
-        async with self.redis.pipeline(transaction=True) as pipe:
-            await pipe.hget(KARTON_BINDS_HSET, bind.identity)
-            await pipe.hset(KARTON_BINDS_HSET, bind.identity, self.serialize_bind(bind))
-            old_serialized_bind, _ = await pipe.execute()
-
-        if old_serialized_bind:
-            return self.unserialize_bind(bind.identity, old_serialized_bind)
-        else:
-            return None
+        await self.redis.hset(
+            KARTON_BINDS_HSET, bind.identity, self.serialize_bind(bind)
+        )
+        self._current_bind = bind
 
     async def get_bind(self, identity: str) -> KartonBind:
         """
@@ -279,6 +277,14 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         :param timeout: Waiting for task timeout (default: 5)
         :return: Task object
         """
+        if self._current_bind is not None:
+            current_bind = self.get_bind(identity)
+            if current_bind != self._current_bind:
+                raise BindExpiredError(
+                    "Binds changed, shutting down. "
+                    f"Old binds: {self._current_bind} "
+                    f"New binds: {current_bind}"
+                )
         item = await self.consume_queues(
             self.get_queue_names(identity),
             timeout=timeout,

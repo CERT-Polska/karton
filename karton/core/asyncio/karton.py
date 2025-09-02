@@ -11,7 +11,7 @@ from karton.core import query
 from karton.core.__version__ import __version__
 from karton.core.backend import KartonBind, KartonMetrics
 from karton.core.config import Config
-from karton.core.exceptions import TaskTimeoutError
+from karton.core.exceptions import BindExpiredError, TaskTimeoutError
 from karton.core.task import Task, TaskState
 
 from .backend import KartonAsyncBackendProtocol
@@ -289,18 +289,8 @@ class Consumer(KartonAsyncServiceBase):
             self.log.info(f"Concurrency limit is set to {self.concurrency_limit}")
 
         # Get the old binds and set the new ones atomically
-        old_bind = await self.backend.register_bind(self._bind)
-
-        if not old_bind:
-            self.log.info("Service binds created.")
-        elif old_bind != self._bind:
-            self.log.info(
-                "Binds changed, old service instances should exit soon. "
-                "Old binds: %s "
-                "New binds: %s",
-                old_bind,
-                self._bind,
-            )
+        await self.backend.register_bind(self._bind)
+        self.log.info("Service binds created.")
 
         for task_filter in self.filters:
             self.log.info("Binding on: %s", task_filter)
@@ -309,19 +299,15 @@ class Consumer(KartonAsyncServiceBase):
 
         try:
             while True:
-                current_bind = await self.backend.get_bind(self.identity)
-                if current_bind != self._bind:
-                    self.log.info(
-                        "Binds changed, shutting down. "
-                        "Old binds: %s "
-                        "New binds: %s",
-                        self._bind,
-                        current_bind,
-                    )
-                    break
                 if self.concurrency_semaphore is not None:
                     await self.concurrency_semaphore.acquire()
-                task = await self.backend.consume_routed_task(self.identity)
+                try:
+                    task = await self.backend.consume_routed_task(self.identity)
+                except BindExpiredError as e:
+                    self.log.info("%s", e)
+                    if self.concurrency_semaphore is not None:
+                        self.concurrency_semaphore.release()
+                    break
                 if task:
                     coro_task = asyncio.create_task(self.internal_process(task))
                     concurrent_tasks.append(coro_task)
