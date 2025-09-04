@@ -59,7 +59,9 @@ def resolve_service_info(
     """
     if service_info is None:
         if identity is None:
-            raise InvalidIdentityError("Identity cannot be None")
+            raise InvalidIdentityError(
+                "Either identity or service_info must be provided"
+            )
         service_info = KartonServiceInfo(
             identity=identity,
             karton_version=__version__,
@@ -69,7 +71,7 @@ def resolve_service_info(
         disallowed_char in service_info.identity for disallowed_char in disallowed_chars
     ):
         raise InvalidIdentityError(
-            f"Karton identity should not contain {disallowed_chars}"
+            f"Karton identity must not contain {disallowed_chars}"
         )
     return service_info
 
