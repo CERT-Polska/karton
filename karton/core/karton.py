@@ -377,7 +377,6 @@ class LogConsumer(KartonServiceBase):
 
     logger_filter: Optional[str] = None
     level: Optional[str] = None
-    with_service_info = True
 
     def __init__(
         self,
