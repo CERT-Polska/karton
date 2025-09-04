@@ -333,8 +333,18 @@ class Consumer(KartonServiceBase):
             self.log.info(f"Task timeout is set to {self.task_timeout} seconds")
 
         # Get the old binds and set the new ones atomically
-        self.backend.register_bind(self._bind)
-        self.log.info("Service binds created.")
+        old_bind = self.backend.register_bind(self._bind)
+
+        if not old_bind:
+            self.log.info("Service binds created.")
+        elif old_bind != self._bind:
+            self.log.info(
+                "Binds changed, old service instances should exit soon. "
+                "Old binds: %s "
+                "New binds: %s",
+                old_bind,
+                self._bind,
+            )
 
         for task_filter in self.filters:
             self.log.info("Binding on: %s", task_filter)

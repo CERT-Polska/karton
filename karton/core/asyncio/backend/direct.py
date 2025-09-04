@@ -206,16 +206,23 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         task.last_update = time.time()
         await self.register_task(task, pipe=pipe)
 
-    async def register_bind(self, bind: KartonBind) -> None:
+    async def register_bind(self, bind: KartonBind) -> Optional[KartonBind]:
         """
-        Register bind for Karton service
+        Register bind for Karton service and return the old one
 
         :param bind: KartonBind object with bind definition
+        :return: Old KartonBind that was registered under this identity
         """
-        await self.redis.hset(
-            KARTON_BINDS_HSET, bind.identity, self.serialize_bind(bind)
-        )
+        async with self.redis.pipeline(transaction=True) as pipe:
+            await pipe.hget(KARTON_BINDS_HSET, bind.identity)
+            await pipe.hset(KARTON_BINDS_HSET, bind.identity, self.serialize_bind(bind))
+            old_serialized_bind, _ = await pipe.execute()
+
         self._current_bind = bind
+        if old_serialized_bind:
+            return self.unserialize_bind(bind.identity, old_serialized_bind)
+        else:
+            return None
 
     async def get_bind(self, identity: str) -> KartonBind:
         """

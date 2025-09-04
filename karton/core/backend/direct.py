@@ -348,14 +348,23 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             for identity, raw_bind in self.redis.hgetall(KARTON_BINDS_HSET).items()
         ]
 
-    def register_bind(self, bind: KartonBind) -> None:
+    def register_bind(self, bind: KartonBind) -> KartonBind | None:
         """
-        Register bind for Karton service
+        Register bind for Karton service and return the old one
 
         :param bind: KartonBind object with bind definition
+        :return: Old KartonBind that was registered under this identity
         """
-        self.redis.hset(KARTON_BINDS_HSET, bind.identity, self.serialize_bind(bind))
+        with self.redis.pipeline(transaction=True) as pipe:
+            pipe.hget(KARTON_BINDS_HSET, bind.identity)
+            pipe.hset(KARTON_BINDS_HSET, bind.identity, self.serialize_bind(bind))
+            old_serialized_bind, _ = pipe.execute()
+
         self._current_bind = bind
+        if old_serialized_bind:
+            return self.unserialize_bind(bind.identity, old_serialized_bind)
+        else:
+            return None
 
     def unregister_bind(self, identity: str) -> None:
         """
