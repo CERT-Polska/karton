@@ -19,7 +19,7 @@ from redis.connection import parse_url as parse_redis_url
 from urllib3.response import HTTPResponse
 
 from karton.core.config import Config
-from karton.core.exceptions import InvalidIdentityError
+from karton.core.exceptions import BindExpiredError, InvalidIdentityError
 from karton.core.resource import LocalResource, RemoteResource
 from karton.core.task import Task, TaskPriority, TaskState
 from karton.core.utils import chunks, chunks_iter
@@ -264,6 +264,9 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
         )
+        # Bind is stored for expiration check done by consume_routed_task
+        # Explicit expiration check is not required when using Karton Gateway
+        self._current_bind: Optional[KartonBind] = None
 
     def iam_auth_s3(self, endpoint: str):
         boto_session = get_session()
@@ -345,7 +348,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             for identity, raw_bind in self.redis.hgetall(KARTON_BINDS_HSET).items()
         ]
 
-    def register_bind(self, bind: KartonBind) -> Optional[KartonBind]:
+    def register_bind(self, bind: KartonBind) -> KartonBind | None:
         """
         Register bind for Karton service and return the old one
 
@@ -357,6 +360,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             pipe.hset(KARTON_BINDS_HSET, bind.identity, self.serialize_bind(bind))
             old_serialized_bind, _ = pipe.execute()
 
+        self._current_bind = bind
         if old_serialized_bind:
             return self.unserialize_bind(bind.identity, old_serialized_bind)
         else:
@@ -800,6 +804,14 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         :param timeout: Waiting for task timeout (default: 5)
         :return: Task object
         """
+        if self._current_bind is not None:
+            current_bind = self.get_bind(identity)
+            if current_bind != self._current_bind:
+                raise BindExpiredError(
+                    "Binds changed, shutting down. "
+                    f"Old binds: {self._current_bind} "
+                    f"New binds: {current_bind}"
+                )
         item = self.consume_queues(
             self.get_queue_names(identity),
             timeout=timeout,

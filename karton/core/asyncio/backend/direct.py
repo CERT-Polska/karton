@@ -21,6 +21,7 @@ from karton.core.backend.direct import (
     KartonBackendBase,
 )
 from karton.core.config import Config
+from karton.core.exceptions import BindExpiredError
 from karton.core.resource import LocalResource as SyncLocalResource
 from karton.core.task import Task, TaskState
 
@@ -38,6 +39,9 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         self._redis: Optional[Redis] = None
         self._s3_session: Optional[aioboto3.Session] = None
         self._s3_iam_auth = False
+        # Bind is stored for expiration check done by consume_routed_task
+        # Explicit expiration check is not required when using Karton Gateway
+        self._current_bind: Optional[KartonBind] = None
 
     @property
     def redis(self) -> Redis:
@@ -214,6 +218,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             await pipe.hset(KARTON_BINDS_HSET, bind.identity, self.serialize_bind(bind))
             old_serialized_bind, _ = await pipe.execute()
 
+        self._current_bind = bind
         if old_serialized_bind:
             return self.unserialize_bind(bind.identity, old_serialized_bind)
         else:
@@ -279,6 +284,14 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         :param timeout: Waiting for task timeout (default: 5)
         :return: Task object
         """
+        if self._current_bind is not None:
+            current_bind = self.get_bind(identity)
+            if current_bind != self._current_bind:
+                raise BindExpiredError(
+                    "Binds changed, shutting down. "
+                    f"Old binds: {self._current_bind} "
+                    f"New binds: {current_bind}"
+                )
         item = await self.consume_queues(
             self.get_queue_names(identity),
             timeout=timeout,

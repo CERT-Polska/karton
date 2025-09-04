@@ -13,6 +13,9 @@ This version is compatible with Karton services no older than 5.0.0. If you have
 
 * ``RemoteResource.remove()`` method has been removed.
 
+* `KartonBackend.consume_routed_task` checks if bind has expired and throws BindExpiredError if it happens. `get_bind` should no
+  longer be used in Karton services.
+
 * Karton requires Python 3.10
 
 What is changed in Karton 5.0.0
