@@ -20,7 +20,6 @@ class SystemService(KartonServiceBase):
 
     identity = "karton.system"
     version = __version__
-    with_service_info = True
     backend: KartonBackend
     _backend_factory = KartonBackend
 

@@ -20,8 +20,8 @@ class KartonAsyncBackendFactory(Protocol):
     def __call__(
         self,
         config: Config,
-        identity: Optional[str],
-        service_info: Optional[KartonServiceInfo],
+        identity: Optional[str] = None,
+        service_info: Optional[KartonServiceInfo] = None,
     ) -> KartonAsyncBackendProtocol: ...
 
 
@@ -37,8 +37,6 @@ class KartonAsyncBase(abc.ABC, ConfigMixin, LoggingMixin):
     identity: str = ""
     #: Karton service version
     version: Optional[str] = None
-    #: Include extended service information for non-consumer services
-    with_service_info: bool = False
     backend: KartonAsyncBackendProtocol
     _backend_factory: KartonAsyncBackendFactory = staticmethod(get_backend)
 
@@ -50,16 +48,14 @@ class KartonAsyncBase(abc.ABC, ConfigMixin, LoggingMixin):
     ) -> None:
         ConfigMixin.__init__(self, config, identity)
 
-        self.service_info = None
-        if self.identity is not None and self.with_service_info:
-            self.service_info = KartonServiceInfo(
-                identity=self.identity,
-                karton_version=__version__,
-                service_version=self.version,
-            )
+        self.service_info = KartonServiceInfo(
+            identity=self.identity,
+            karton_version=__version__,
+            service_version=self.version,
+        )
 
         self.backend = backend or self._backend_factory(
-            self.config, identity=self.identity, service_info=self.service_info
+            self.config, service_info=self.service_info
         )
 
         log_handler = KartonAsyncLogHandler(backend=self.backend, channel=self.identity)
