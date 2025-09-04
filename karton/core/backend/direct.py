@@ -940,31 +940,36 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
 
     def upload_object(
         self,
-        bucket: str,
-        object_uid: str,
+        resource: LocalResource,
         content: Union[bytes, IO[bytes]],
     ) -> None:
         """
         Upload resource object to underlying object storage (S3)
 
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
+        :param resource: Resource to upload
         :param content: Object content as bytes or file-like stream
         """
-        self.s3.put_object(Bucket=bucket, Key=object_uid, Body=content)
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be uploaded because its bucket is not set"
+            )
+        self.s3.put_object(Bucket=resource.bucket, Key=resource.uid, Body=content)
 
-    def upload_object_from_file(self, bucket: str, object_uid: str, path: str) -> None:
+    def upload_object_from_file(self, resource: LocalResource, path: str) -> None:
         """
         Upload resource object file to underlying object storage
 
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
+        :param resource: Resource to upload
         :param path: Path to the object content
         """
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be uploaded because its bucket is not set"
+            )
         with open(path, "rb") as f:
-            self.s3.put_object(Bucket=bucket, Key=object_uid, Body=f)
+            self.s3.put_object(Bucket=resource.bucket, Key=resource.uid, Body=f)
 
-    def get_object(self, bucket: str, object_uid: str) -> HTTPResponse:
+    def get_object(self, resource: RemoteResource) -> HTTPResponse:
         """
         Get resource object stream with the content.
 
@@ -972,33 +977,42 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         To reuse the connection, it's required to call `response.release_conn()`
         explicitly.
 
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
+        :param resource: Resource to download
         :return: Response object with content
         """
-        return self.s3.get_object(Bucket=bucket, Key=object_uid)["Body"]
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be downloaded because its bucket is not set"
+            )
+        return self.s3.get_object(Bucket=resource.bucket, Key=resource.uid)["Body"]
 
-    def download_object(self, bucket: str, object_uid: str) -> bytes:
+    def download_object(self, resource: RemoteResource) -> bytes:
         """
         Download resource object from object storage.
 
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
+        :param resource: Resource to download
         :return: Content bytes
         """
-        with self.s3.get_object(Bucket=bucket, Key=object_uid)["Body"] as f:
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be downloaded because its bucket is not set"
+            )
+        with self.s3.get_object(Bucket=resource.bucket, Key=resource.uid)["Body"] as f:
             ret = f.read()
         return ret
 
-    def download_object_to_file(self, bucket: str, object_uid: str, path: str) -> None:
+    def download_object_to_file(self, resource: RemoteResource, path: str) -> None:
         """
         Download resource object from object storage to file
 
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
+        :param resource: Resource to download
         :param path: Target file path
         """
-        self.s3.download_file(Bucket=bucket, Key=object_uid, Filename=path)
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be downloaded because its bucket is not set"
+            )
+        self.s3.download_file(Bucket=resource.bucket, Key=resource.uid, Filename=path)
 
     def list_objects(self, bucket: str) -> List[str]:
         """

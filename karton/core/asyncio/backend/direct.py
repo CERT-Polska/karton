@@ -303,58 +303,73 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
 
     async def upload_object(
         self,
-        bucket: str,
-        object_uid: str,
-        content: Union[bytes, IO[bytes]],
+        resource: LocalResource,
+        content: bytes | IO[bytes],
     ) -> None:
         """
         Upload resource object to underlying object storage (S3)
 
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
+        :param resource: Resource to upload
         :param content: Object content as bytes or file-like stream
         """
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be uploaded because its bucket is not set"
+            )
         async with self.s3 as client:
-            await client.put_object(Bucket=bucket, Key=object_uid, Body=content)
+            await client.put_object(
+                Bucket=resource.bucket, Key=resource.uid, Body=content
+            )
 
-    async def upload_object_from_file(
-        self, bucket: str, object_uid: str, path: str
-    ) -> None:
+    async def upload_object_from_file(self, resource: LocalResource, path: str) -> None:
         """
         Upload resource object file to underlying object storage
 
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
+        :param resource: Resource to upload
         :param path: Path to the object content
         """
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be uploaded because its bucket is not set"
+            )
         async with self.s3 as client:
             with open(path, "rb") as f:
-                await client.put_object(Bucket=bucket, Key=object_uid, Body=f)
+                await client.put_object(
+                    Bucket=resource.bucket, Key=resource.uid, Body=f
+                )
 
-    async def download_object(self, bucket: str, object_uid: str) -> bytes:
+    async def download_object(self, resource: RemoteResource) -> bytes:
         """
         Download resource object from object storage.
 
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
+        :param resource: Resource to download
         :return: Content bytes
         """
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be downloaded because its bucket is not set"
+            )
         async with self.s3 as client:
-            obj = await client.get_object(Bucket=bucket, Key=object_uid)
+            obj = await client.get_object(Bucket=resource.bucket, Key=resource.uid)
             return await obj["Body"].read()
 
     async def download_object_to_file(
-        self, bucket: str, object_uid: str, path: str
+        self, resource: RemoteResource, path: str
     ) -> None:
         """
         Download resource object from object storage to file
 
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
+        :param resource: Resource to download
         :param path: Target file path
         """
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be downloaded because its bucket is not set"
+            )
         async with self.s3 as client:
-            await client.download_file(Bucket=bucket, Key=object_uid, Filename=path)
+            await client.download_file(
+                Bucket=resource.bucket, Key=resource.uid, Filename=path
+            )
 
     async def produce_log(
         self,

@@ -2,6 +2,7 @@ from typing import IO, Any
 
 from typing_extensions import Protocol
 
+from karton.core.asyncio.resource import LocalResource, RemoteResource
 from karton.core.backend import KartonBind, KartonMetrics
 from karton.core.task import Task, TaskState
 
@@ -33,19 +34,18 @@ class KartonAsyncBackendProtocol(Protocol):
 
     async def upload_object(
         self,
-        bucket: str,
-        object_uid: str,
+        resource: LocalResource,
         content: bytes | IO[bytes],
     ) -> None: ...
 
     async def upload_object_from_file(
-        self, bucket: str, object_uid: str, path: str
+        self, resource: LocalResource, path: str
     ) -> None: ...
 
-    async def download_object(self, bucket: str, object_uid: str) -> bytes: ...
+    async def download_object(self, resource: RemoteResource) -> bytes: ...
 
     async def download_object_to_file(
-        self, bucket: str, object_uid: str, path: str
+        self, resource: RemoteResource, path: str
     ) -> None: ...
 
     async def produce_log(

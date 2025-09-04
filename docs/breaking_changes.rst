@@ -3,6 +3,18 @@ Breaking changes
 
 This chapter will describe significant changes introduced in major version releases of Karton. Versions before 4.0.0 were not officially released, so they have value only for internal purposes. Don't worry about it if you are a new user.
 
+What is changed in Karton 6.0.0
+-------------------------------
+
+This version is compatible with Karton services no older than 5.0.0. If you have 4.x services, you need to upgrade them before migration.
+
+* KartonBackend resource methods: ``upload_object``, ``upload_object_from_file``, ``download_object`` and ``download_object_to_file``
+  gets Resource object as an argument instead of bucket/uid pair.
+
+* ``RemoteResource.remove()`` method has been removed.
+
+* Karton requires Python 3.10
+
 What is changed in Karton 5.0.0
 -------------------------------
 
