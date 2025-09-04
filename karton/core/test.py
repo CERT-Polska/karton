@@ -5,11 +5,10 @@ Test stubs for karton subsystem unit tests
 import hashlib
 import logging
 import unittest
-from collections import defaultdict
-from typing import Any, BinaryIO, Dict, List, Optional, Union, cast
+from typing import IO, Any, Dict, Iterator, List, Union, cast
 from unittest import mock
 
-from .backend import KartonBackend, KartonMetrics
+from .backend import KartonBackend, KartonBackendProtocol, KartonBind, KartonMetrics
 from .config import Config
 from .resource import LocalResource, RemoteResource, ResourceBase
 from .task import Task, TaskState
@@ -25,21 +24,13 @@ class ConfigMock(Config):
         self._config = {"redis": {}, "s3": {}}
 
 
-class BackendMock:
+class BackendMock(KartonBackendProtocol):
     def __init__(self) -> None:
         self.produced_tasks: List[Task] = []
         # A custom S3 system mock
-        self.buckets: Dict[str, Dict[str, bytes]] = defaultdict(dict)
-
-    @property
-    def default_bucket_name(self) -> str:
-        return "karton.test"
+        self.objects: Dict[str, bytes] = {}
 
     def declare_task(self, task: Task) -> None:
-        # Ensure all local resources have good buckets
-        for resource in task.iterate_resources():
-            if isinstance(resource, LocalResource) and not resource.bucket:
-                resource.bucket = self.default_bucket_name
         log.debug("Declaring a new task in Redis: %s", task.serialize())
 
     def set_task_status(self, task: Task, status: TaskState, pipe=None) -> None:
@@ -62,36 +53,45 @@ class BackendMock:
     def increment_metrics(self, metric: KartonMetrics, identity: str) -> None:
         log.debug("Incrementing metric %s for identity %s", metric, identity)
 
-    def remove_object(self, bucket: str, object_uid: str) -> None:
-        log.debug("Deleting object %s from bucket %s", object_uid, bucket)
-        del self.buckets[bucket][object_uid]
-
     def upload_object(
-        self,
-        bucket: str,
-        object_uid: str,
-        content: Union[bytes, BinaryIO],
-        length: Optional[int] = None,
+        self, resource: LocalResource, content: Union[bytes, IO[bytes]]
     ) -> None:
-        log.debug("Uploading object %s to bucket %s", object_uid, bucket)
+        log.debug("Uploading object %s", resource.uid)
         if isinstance(content, bytes):
-            self.buckets[bucket][object_uid] = content
+            self.objects[resource.uid] = content
         else:
-            self.buckets[bucket][object_uid] = content.read()
+            self.objects[resource.uid] = content.read()
 
-    def download_object(self, bucket: str, object_uid: str) -> bytes:
-        log.debug("Downloading object %s from bucket %s", object_uid, bucket)
-        return self.buckets[bucket][object_uid]
+    def download_object(self, resource: RemoteResource) -> bytes:
+        log.debug("Downloading object %s", resource)
+        return self.objects[resource.uid]
 
-    def upload_object_from_file(self, bucket: str, object_uid: str, path: str) -> None:
-        log.debug("Uploading object %s from file from bucket %s", object_uid, bucket)
+    def upload_object_from_file(self, resource: LocalResource, path: str) -> None:
+        log.debug("Uploading object %s from file %s", resource.uid, path)
         with open(path, "rb") as f:
-            self.buckets[bucket][object_uid] = f.read()
+            self.objects[resource.uid] = f.read()
 
-    def download_object_to_file(self, bucket: str, object_uid: str, path: str) -> None:
-        log.debug("Downloading object %s from bucket %s to file", object_uid, bucket)
+    def download_object_to_file(self, resource: RemoteResource, path: str) -> None:
+        log.debug("Downloading object %s to file %s", resource.uid, path)
         with open(path, "wb") as f:
-            f.write(self.buckets[bucket][object_uid])
+            f.write(self.objects[resource.uid])
+
+    def consume_log(
+        self,
+        timeout: int = 5,
+        logger_filter: str | None = None,
+        level: str | None = None,
+    ) -> Iterator[dict[str, Any] | None]:
+        raise NotImplementedError
+
+    def consume_routed_task(self, identity: str, timeout: int = 5) -> Task | None:
+        raise NotImplementedError
+
+    def get_bind(self, identity: str) -> KartonBind:
+        raise NotImplementedError
+
+    def register_bind(self, bind: KartonBind) -> KartonBind | None:
+        raise NotImplementedError
 
 
 class KartonTestCase(unittest.TestCase):
@@ -233,7 +233,6 @@ class KartonTestCase(unittest.TestCase):
                 raise ValueError("Test task must contain only LocalResource objects")
             backend = cast(KartonBackend, self.backend)
             resource = cast(LocalResource, obj)
-            resource.bucket = backend.default_bucket_name
             resource.upload(backend)
             return RemoteResource(
                 name=resource.name,

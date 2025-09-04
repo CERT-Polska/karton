@@ -314,18 +314,9 @@ class LocalResource(LocalResourceBase):
 
         :meta private:
         """
-
-        # Note: never transform resource into Remote
-        # Multiple task dispatching with same local, in that case resource
-        # can be deleted between tasks.
-        if self.bucket is None:
-            raise RuntimeError(
-                "Resource object can't be uploaded because its bucket is not set"
-            )
-
         if self._content:
             # Upload contents
-            backend.upload_object(self.bucket, self.uid, self._content)
+            backend.upload_object(self, self._content)
         elif self.fd:
             if self.fd.tell() != 0:
                 raise RuntimeError(
@@ -334,13 +325,13 @@ class LocalResource(LocalResourceBase):
                     f"(fd.tell = {self.fd.tell()})"
                 )
             # Upload contents from fd
-            backend.upload_object(self.bucket, self.uid, self.fd)
+            backend.upload_object(self, self.fd)
             # If file descriptor is managed by Resource, close it after upload
             if self._close_fd:
                 self.fd.close()
         elif self._path:
             # Upload file provided by path
-            backend.upload_object_from_file(self.bucket, self.uid, self._path)
+            backend.upload_object_from_file(self, self._path)
 
     def upload(self, backend: "KartonBackendProtocol") -> None:
         """Internal function for uploading resources
@@ -450,23 +441,6 @@ class RemoteResource(ResourceBase):
         """
         self._content = None
 
-    def remove(self) -> None:
-        """
-        Internal remote resource remove method
-
-        :meta private:
-        """
-        if self.backend is None:
-            raise RuntimeError(
-                "Resource object can't be removed because it's not bound to the backend"
-            )
-        if self.bucket is None:
-            raise RuntimeError(
-                "Resource object can't be removed because its bucket is not set"
-            )
-
-        self.backend.remove_object(self.bucket, self.uid)
-
     def download(self) -> bytes:
         """
         Downloads remote resource content from object hub into memory.
@@ -490,12 +464,8 @@ class RemoteResource(ResourceBase):
                     "the backend"
                 )
             )
-        if self.bucket is None:
-            raise RuntimeError(
-                "Resource object can't be downloaded because its bucket is not set"
-            )
 
-        self._content = self.backend.download_object(self.bucket, self.uid)
+        self._content = self.backend.download_object(self)
         return self._content
 
     def download_to_file(self, path: str) -> None:
@@ -520,12 +490,8 @@ class RemoteResource(ResourceBase):
                     "the backend"
                 )
             )
-        if self.bucket is None:
-            raise RuntimeError(
-                "Resource object can't be downloaded because its bucket is not set"
-            )
 
-        self.backend.download_object_to_file(self.bucket, self.uid, path)
+        self.backend.download_object_to_file(self, path)
 
     @contextlib.contextmanager
     def download_temporary_file(self, suffix=None) -> Iterator[IO[bytes]]:

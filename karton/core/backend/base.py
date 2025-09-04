@@ -3,6 +3,7 @@ import enum
 from collections import namedtuple
 from typing import IO, Any, Iterator, Protocol
 
+from karton.core.resource import LocalResource, RemoteResource
 from karton.core.task import Task, TaskState
 
 KartonBind = namedtuple(
@@ -65,26 +66,19 @@ class KartonBackendProtocol(Protocol):
 
     def upload_object(
         self,
-        bucket: str,
-        object_uid: str,
+        resource: LocalResource,
         content: bytes | IO[bytes],
     ) -> None: ...
 
-    def upload_object_from_file(
-        self, bucket: str, object_uid: str, path: str
-    ) -> None: ...
+    def upload_object_from_file(self, resource: LocalResource, path: str) -> None: ...
 
-    def download_object(self, bucket: str, object_uid: str) -> bytes: ...
+    def download_object(self, resource: RemoteResource) -> bytes: ...
 
-    def download_object_to_file(
-        self, bucket: str, object_uid: str, path: str
-    ) -> None: ...
+    def download_object_to_file(self, resource: RemoteResource, path: str) -> None: ...
 
     def produce_log(
         self, log_record: dict[str, Any], logger_name: str, level: str
     ) -> bool: ...
-
-    def remove_object(self, bucket: str, object_uid: str) -> None: ...
 
     def consume_log(
         self,
