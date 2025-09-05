@@ -24,6 +24,8 @@ from .errors import (
 )
 from .models import (
     BindRequest,
+    BindResponse,
+    BindResponseMessage,
     DeclaredResourceSpec,
     DeclareTaskRequest,
     ErrorResponse,
@@ -58,12 +60,9 @@ gateway_backend = KartonAsyncBackend(karton_config, service_info=gateway_service
 
 
 class UserSession:
-    def __init__(
-        self, user: User, service_info: KartonServiceInfo, secondary_connection: bool
-    ):
+    def __init__(self, user: User, service_info: KartonServiceInfo):
         self.user = user
         self.service_info = service_info
-        self.secondary_connection = secondary_connection
         self.karton_bind: KartonBind | None = None
         self.backend: KartonAsyncBackend | None = None
 
@@ -88,12 +87,7 @@ class UserSession:
         """
         if self.backend:
             return self.backend
-        if self.secondary_connection:
-            backend = KartonAsyncBackend(
-                karton_config, identity=self.service_info.identity
-            )
-        else:
-            backend = KartonAsyncBackend(karton_config, service_info=self.service_info)
+        backend = KartonAsyncBackend(karton_config, service_info=self.service_info)
         await backend.connect(single_connection_client=True)
         self.backend = backend
         return self.backend
@@ -179,9 +173,13 @@ async def handle_bind_request(
         is_async=request.message.is_async,
     )
     service_backend = await session.get_service_backend()
-    await service_backend.register_bind(bind)
+    old_bind = await service_backend.register_bind(bind)
     session.set_karton_bind(bind)
-    await send_success(websocket)
+    bind_response_message = BindResponseMessage(
+        old_bind=old_bind,
+    )
+    bind_response = BindResponse(message=bind_response_message)
+    await websocket.send_json(bind_response.model_dump(mode="json"))
 
 
 PayloadBags = tuple[dict[str, Any], dict[str, Any]]

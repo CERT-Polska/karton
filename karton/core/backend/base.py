@@ -43,6 +43,7 @@ class KartonServiceInfo:
     identity: str
     karton_version: str
     service_version: str | None = None
+    secondary: bool = False
 
 
 def resolve_service_info(
