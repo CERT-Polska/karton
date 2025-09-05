@@ -2,6 +2,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, RootModel
 
+from karton.core.backend import KartonBind
 from karton.core.task import TaskPriority, TaskState
 
 # Dict[Never, Never] would be better but is not supported by Pydantic
@@ -61,6 +62,15 @@ class BindRequestMessage(BaseModel):
 class BindRequest(BaseModel):
     request: Literal["bind"] = "bind"
     message: BindRequestMessage
+
+
+class BindResponseMessage(BaseModel):
+    old_bind: KartonBind | None
+
+
+class BindResponse(BaseModel):
+    response: Literal["bind"] = "bind"
+    message: BindResponseMessage
 
 
 class NewTaskParameters(BaseModel):

@@ -75,11 +75,11 @@ async def initiate_session(websocket: WebSocket) -> UserSession:
         identity=hello_request.message.identity,
         karton_version=hello_request.message.library_version,
         service_version=hello_request.message.service_version,
+        secondary=hello_request.message.secondary_connection,
     )
     user_session = UserSession(
         user=user,
         service_info=service_info,
-        secondary_connection=hello_request.message.secondary_connection,
     )
     await send_success(websocket)
     return user_session
