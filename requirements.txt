@@ -3,3 +3,4 @@ orjson
 # See also https://github.com/CERT-Polska/karton/pull/270
 boto3<=1.35.81
 aioboto3==13.3.0
+typing-extensions

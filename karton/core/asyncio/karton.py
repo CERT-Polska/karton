@@ -5,7 +5,7 @@ import sys
 import time
 import traceback
 from asyncio import CancelledError
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from karton.core import query
 from karton.core.__version__ import __version__
@@ -14,6 +14,7 @@ from karton.core.config import Config
 from karton.core.exceptions import BindExpiredError, TaskTimeoutError
 from karton.core.task import Task, TaskState
 
+from . import RemoteResource
 from .backend import KartonAsyncBackendProtocol
 from .base import KartonAsyncBase, KartonAsyncServiceBase
 from .resource import LocalResource
@@ -147,7 +148,7 @@ class Consumer(KartonAsyncServiceBase):
             )
 
     @abc.abstractmethod
-    async def process(self, task: Task) -> None:
+    async def process(self, task: Task[RemoteResource]) -> None:
         """
         Task processing method.
 
@@ -159,7 +160,7 @@ class Consumer(KartonAsyncServiceBase):
         """
         raise NotImplementedError()
 
-    async def _internal_process(self, task: Task) -> None:
+    async def _internal_process(self, task: Task[RemoteResource]) -> None:
         exception_str = None
         try:
             self.log.info("Received new task - %s", task.uid)
@@ -198,7 +199,7 @@ class Consumer(KartonAsyncServiceBase):
 
             await self.backend.set_task_status(task, task_state)
 
-    async def internal_process(self, task: Task) -> None:
+    async def internal_process(self, task: Task[RemoteResource]) -> None:
         """
         The internal side of :py:meth:`Consumer.process` function, takes care of
         synchronizing the task state, handling errors and running task hooks.
@@ -319,7 +320,9 @@ class Consumer(KartonAsyncServiceBase):
                         self.concurrency_semaphore.release()
                     break
                 if task:
-                    coro_task = asyncio.create_task(self.internal_process(task))
+                    coro_task = asyncio.create_task(
+                        self.internal_process(cast(Task[RemoteResource], task))
+                    )
                     concurrent_tasks.append(coro_task)
                 else:
                     if self.concurrency_semaphore is not None:

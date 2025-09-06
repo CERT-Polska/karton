@@ -9,12 +9,15 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Generic,
     Iterator,
     List,
     Optional,
     Tuple,
     Union,
 )
+
+from typing_extensions import TypeIs, TypeVar
 
 from . import query
 from .resource import RemoteResource, ResourceBase
@@ -50,7 +53,12 @@ class TaskPriority(enum.Enum):
     LOW = "low"
 
 
-class Task(object):
+ResourceT = TypeVar(
+    "ResourceT", bound=ResourceBase, default=ResourceBase, covariant=True
+)
+
+
+class Task(Generic[ResourceT]):
     """
     Task representation with headers and resources.
 
@@ -524,7 +532,13 @@ class Task(object):
             return self.payload_persistent[name]
         return self.payload.get(name, default)
 
-    def get_resource(self, name: str) -> ResourceBase:
+    def _is_resource(self, obj: Any) -> TypeIs[ResourceT]:
+        # This is not an exact type-guard (ResourceT can be specialized),
+        # but we don't have easy way in Python to check what is current
+        # Generic type specialization.
+        return isinstance(obj, ResourceBase)
+
+    def get_resource(self, name: str) -> ResourceT:
         """
         Get resource from task.
 
@@ -535,7 +549,7 @@ class Task(object):
         :return: :py:class:`karton.ResourceBase` - resource with given name
         """
         resource = self.get_payload(name)
-        if not isinstance(resource, ResourceBase):
+        if not self._is_resource(resource):
             raise TypeError("Resource was expected but not found")
         return resource
 
