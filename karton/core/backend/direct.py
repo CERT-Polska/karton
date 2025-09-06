@@ -30,6 +30,7 @@ from .base import (
     KartonMetrics,
     KartonServiceInfo,
     resolve_service_info,
+    unserialize_bind,
 )
 
 KARTON_TASKS_QUEUE = "karton.tasks"
@@ -49,6 +50,8 @@ def make_redis_client_name(service_info: KartonServiceInfo) -> str:
     }
     if service_info.service_version is not None:
         params.update({"service_version": service_info.service_version})
+    if service_info.secondary:
+        params.update({"secondary": "1"})
     return f"{service_info.identity}?{urllib.parse.urlencode(params)}"
 
 
@@ -57,10 +60,12 @@ def parse_redis_client_name(client_name: str) -> KartonServiceInfo:
     params = dict(urllib.parse.parse_qsl(params_string))
     karton_version = params.get("karton_version", "")
     service_version = params.get("service_version")
+    secondary = params.get("secondary", False) == "1"
     return KartonServiceInfo(
         identity=identity,
         karton_version=karton_version,
         service_version=service_version,
+        secondary=secondary,
     )
 
 
@@ -170,26 +175,7 @@ class KartonBackendBase:
         :return: KartonBind object with bind definition
         """
         bind = json.loads(bind_data)
-        if isinstance(bind, list):
-            # Backwards compatibility (v2.x.x)
-            return KartonBind(
-                identity=identity,
-                info=None,
-                version="2.x.x",
-                persistent=not identity.endswith(".test"),
-                filters=bind,
-                service_version=None,
-                is_async=False,
-            )
-        return KartonBind(
-            identity=identity,
-            info=bind["info"],
-            version=bind["version"],
-            persistent=bind["persistent"],
-            filters=bind["filters"],
-            service_version=bind.get("service_version"),
-            is_async=bind.get("is_async", False),
-        )
+        return unserialize_bind(identity, bind)
 
     @staticmethod
     def unserialize_output(identity: str, output_data: Set[str]) -> KartonOutputs:
@@ -282,7 +268,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         """
         Create and test a Redis connection.
 
-        :param config: The karton configuration
+        :param config: The Karton configuration
         :param service_info: Additional service identity metadata
         :return: Redis connection
         """
