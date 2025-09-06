@@ -1,3 +1,4 @@
+import warnings
 from typing import Optional
 
 from karton.core.config import Config
@@ -17,6 +18,11 @@ def get_backend(
             config, identity=identity, service_info=service_info
         )
     else:
+        warnings.warn(
+            "Direct connection to Redis is deprecated from v6.0.0. "
+            "Use Karton Gateway connection instead.",
+            DeprecationWarning,
+        )
         return KartonBackend(config, identity=identity, service_info=service_info)
 
 

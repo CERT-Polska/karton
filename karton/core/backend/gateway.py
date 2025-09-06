@@ -26,6 +26,7 @@ from .base import (
     KartonMetrics,
     KartonServiceInfo,
     resolve_service_info,
+    unserialize_bind,
 )
 
 
@@ -226,7 +227,7 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
             if self._connection is not None and self._connection.state is CLOSED:
                 self._connection = None
 
-    def register_bind(self, bind: KartonBind) -> None:
+    def register_bind(self, bind: KartonBind) -> KartonBind | None:
         with self._get_connection() as connection:
             self._send(
                 connection,
@@ -238,7 +239,11 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
                     "is_async": bind.is_async,
                 },
             )
-            self._recv(connection)
+            response = self._recv(connection, expected_response="bind")
+            if response["old_bind"] is None:
+                return None
+            old_bind = response["old_bind"]
+            return unserialize_bind(old_bind["identity"], old_bind)
 
     def declare_task(self, task: Task) -> None:
         # Serialize resources
@@ -407,7 +412,22 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
         logger_filter: str | None = None,
         level: str | None = None,
     ) -> Iterator[dict[str, Any] | None]:
-        raise NotImplementedError
+        with self._get_connection() as connection:
+            self._send(
+                connection,
+                request="subscribe_logs",
+                message={
+                    "logger_filter": logger_filter,
+                    "level": level,
+                },
+            )
+            while True:
+                try:
+                    log = self._recv(connection, expected_response="log")
+                    yield log["log_record"]
+                except OperationTimeoutError:
+                    yield None
+                    return
 
     def increment_metrics(self, metric: KartonMetrics, identity: str) -> None:
         # This is no-op, Karton gateway manages all metrics

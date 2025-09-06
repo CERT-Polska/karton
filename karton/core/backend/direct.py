@@ -30,6 +30,7 @@ from .base import (
     KartonMetrics,
     KartonServiceInfo,
     resolve_service_info,
+    unserialize_bind,
 )
 
 KARTON_TASKS_QUEUE = "karton.tasks"
@@ -175,26 +176,7 @@ class KartonBackendBase:
         :return: KartonBind object with bind definition
         """
         bind = json.loads(bind_data)
-        if isinstance(bind, list):
-            # Backwards compatibility (v2.x.x)
-            return KartonBind(
-                identity=identity,
-                info=None,
-                version="2.x.x",
-                persistent=not identity.endswith(".test"),
-                filters=bind,
-                service_version=None,
-                is_async=False,
-            )
-        return KartonBind(
-            identity=identity,
-            info=bind["info"],
-            version=bind["version"],
-            persistent=bind["persistent"],
-            filters=bind["filters"],
-            service_version=bind.get("service_version"),
-            is_async=bind.get("is_async", False),
-        )
+        return unserialize_bind(identity, bind)
 
     @staticmethod
     def unserialize_output(identity: str, output_data: Set[str]) -> KartonOutputs:

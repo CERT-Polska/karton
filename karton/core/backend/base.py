@@ -74,6 +74,21 @@ def resolve_service_info(
     return service_info
 
 
+def unserialize_bind(identity: str, bind: dict[str, Any]) -> KartonBind:
+    """
+    Creates a KartonBind from identity and bind data
+    """
+    return KartonBind(
+        identity=identity,
+        info=bind["info"],
+        version=bind["version"],
+        persistent=bind["persistent"],
+        filters=bind["filters"],
+        service_version=bind.get("service_version"),
+        is_async=bind.get("is_async", False),
+    )
+
+
 class KartonBackendProtocol(Protocol):
     """
     Protocol that defines methods that KartonBackend must implement.
