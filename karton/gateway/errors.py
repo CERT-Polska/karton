@@ -29,7 +29,7 @@ class InvalidBindError(KartonGatewayError):
     code: str = "invalid_bind"
 
 
-class ExpiredBindError(KartonGatewayError):
+class GatewayBindExpiredError(KartonGatewayError):
     code: str = "expired_bind"
 
 

@@ -1,6 +1,5 @@
 import dataclasses
 import enum
-from collections import namedtuple
 from typing import IO, Any, Iterator, Protocol
 
 from karton.core.__version__ import __version__
@@ -8,18 +7,16 @@ from karton.core.exceptions import InvalidIdentityError
 from karton.core.resource import LocalResource, RemoteResource
 from karton.core.task import Task, TaskState
 
-KartonBind = namedtuple(
-    "KartonBind",
-    [
-        "identity",
-        "info",
-        "version",
-        "persistent",
-        "filters",
-        "service_version",
-        "is_async",
-    ],
-)
+
+@dataclasses.dataclass(frozen=True)
+class KartonBind:
+    identity: str
+    info: str | None
+    version: str
+    persistent: bool
+    filters: list[dict[str, Any]]
+    service_version: str | None
+    is_async: bool
 
 
 class KartonMetrics(enum.Enum):
@@ -30,7 +27,7 @@ class KartonMetrics(enum.Enum):
     TASK_GARBAGE_COLLECTED = "karton.metrics.garbage-collected"
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, order=True)
 class KartonServiceInfo:
     """
     Extended Karton service information.

@@ -304,7 +304,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         :return: Task object
         """
         if self._current_bind is not None:
-            current_bind = self.get_bind(identity)
+            current_bind = await self.get_bind(identity)
             if current_bind != self._current_bind:
                 raise BindExpiredError(
                     "Binds changed, shutting down. "

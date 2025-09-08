@@ -53,7 +53,7 @@ class HelloRequest(BaseModel):
 
 
 class BindRequestMessage(BaseModel):
-    info: str
+    info: str | None
     filters: list[dict[str, Any]]
     persistent: bool
     is_async: bool

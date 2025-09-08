@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from karton.core.__version__ import __version__
 from karton.core.asyncio.backend import KartonAsyncBackend
 from karton.core.backend import KartonBind, KartonMetrics, KartonServiceInfo
+from karton.core.exceptions import BindExpiredError as KartonBindExpiredError
 from karton.core.resource import ResourceBase
 from karton.core.task import Task, TaskState
 
@@ -15,7 +16,7 @@ from .auth import User
 from .config import gateway_config, karton_config
 from .errors import (
     AlreadyBoundError,
-    ExpiredBindError,
+    GatewayBindExpiredError,
     InvalidBindError,
     InvalidTaskError,
     InvalidTaskStatusError,
@@ -471,15 +472,11 @@ async def handle_get_task_request(
     identity = session.identity
     service_backend = await session.get_service_backend()
 
-    current_bind = service_backend.get_bind(identity)
-    if current_bind != session.karton_bind:
-        raise ExpiredBindError(
-            f"Consumer bind expired. "
-            f"Old binds: {session.karton_bind}. "
-            f"New binds: {current_bind}."
-        )
+    try:
+        task = await service_backend.consume_routed_task(identity)
+    except KartonBindExpiredError as e:
+        raise GatewayBindExpiredError(str(e)) from e
 
-    task = await service_backend.consume_routed_task(identity)
     if not task:
         raise OperationTimeoutError("No task found, try again")
 
@@ -569,7 +566,9 @@ async def handle_subscribe_logs_request(
         logger_filter=request.message.logger_filter, level=request.message.level
     ):
         if not log_record:
-            raise OperationTimeoutError("No log found, try again")
+            error = OperationTimeoutError("No log found, try again")
+            await send_error(websocket, error)
+            continue
         log_message = LogResponseMessage(log_record=log_record)
         log_response = LogResponse(message=log_message)
         await websocket.send_json(log_response.model_dump(mode="json"))
