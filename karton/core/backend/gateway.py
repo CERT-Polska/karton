@@ -137,7 +137,6 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
         timeout: int = 10,
     ) -> dict[str, Any]:
         data = connection.recv(timeout=timeout)
-        print("> ", data, flush=True)
         message = json.loads(data)
         if "response" not in message:
             raise RuntimeError("Incorrect gateway response, missing 'response' key")
@@ -162,7 +161,6 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
                 "message": message,
             }
         )
-        print("< ", data, flush=True)
         connection.send(data)
 
     def _init_connection(
@@ -188,6 +186,7 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
                 "credentials": credentials,
             },
         )
+        self._recv(connection)
 
     @contextlib.contextmanager
     def _get_connection(self) -> Iterator[ClientConnection]:
@@ -429,7 +428,6 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
                     yield log["log_record"]
                 except OperationTimeoutError:
                     yield None
-                    return
 
     def increment_metrics(self, metric: KartonMetrics, identity: str) -> None:
         # This is no-op, Karton gateway manages all metrics
