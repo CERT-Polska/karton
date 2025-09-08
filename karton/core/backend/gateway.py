@@ -137,6 +137,7 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
         timeout: int = 10,
     ) -> dict[str, Any]:
         data = connection.recv(timeout=timeout)
+        print("> ", data, flush=True)
         message = json.loads(data)
         if "response" not in message:
             raise RuntimeError("Incorrect gateway response, missing 'response' key")
@@ -161,6 +162,7 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
                 "message": message,
             }
         )
+        print("< ", data, flush=True)
         connection.send(data)
 
     def _init_connection(
@@ -173,7 +175,7 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
                 "password": self.gateway_password,
             }
         else:
-            credentials = {}
+            credentials = None
 
         self._send(
             connection,
