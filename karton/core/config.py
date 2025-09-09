@@ -14,6 +14,7 @@ class Config(object):
     - ``/etc/karton/karton.ini`` (global)
     - ``~/.config/karton/karton.ini`` (user local)
     - ``./karton.ini`` (subsystem local)
+    - path from ``KARTON_CONFIG_FILE`` environment variable
     - ``<path>`` optional, additional path provided in arguments
 
     It is also possible to pass configuration via environment variables.
@@ -37,6 +38,12 @@ class Config(object):
         self, path: Optional[str] = None, check_sections: Optional[bool] = True
     ) -> None:
         self._config: Dict[str, Dict[str, Any]] = {}
+
+        path_from_env = os.getenv("KARTON_CONFIG_FILE")
+        if path_from_env:
+            if not os.path.isfile(path_from_env):
+                raise IOError("Configuration file not found in " + path_from_env)
+            self.SEARCH_PATHS = self.SEARCH_PATHS + [path_from_env]
 
         if path is not None:
             if not os.path.isfile(path):
