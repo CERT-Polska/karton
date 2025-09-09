@@ -14,7 +14,7 @@ jobs:
         pip3 install setuptools wheel
         python3 setup.py bdist_wheel
     - name: Publish to PyPi
-      uses: pypa/gh-action-pypi-publish@v1.3.0
+      uses: pypa/gh-action-pypi-publish@v1.13.0
       with:
         user: __token__
         password: ${{ secrets.pypi_password }}
