@@ -25,6 +25,7 @@ Configuration values are read from various sources using the following precedenc
 - ``/etc/karton/karton.ini`` file (global)
 - ``~/.config/karton/karton.ini`` file (user local)
 - ``./karton.ini`` file (subsystem local)
+- path provided via ``KARTON_CONFIG_FILE`` environment variable
 - ``--config-path <path>`` optional, additional path provided in arguments
 - ``KARTON_SECTION_OPTION`` values from environment variables e.g. (``secret_key`` option in ``[s3]`` section can be overridden using ``KARTON_S3_SECRET_KEY`` variable)
 - Command-line arguments (if ``Karton.main()`` method is used as entrypoint)
