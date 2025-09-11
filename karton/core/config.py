@@ -42,7 +42,7 @@ class Config(object):
         path_from_env = os.getenv("KARTON_CONFIG_FILE")
         if path_from_env:
             if not os.path.isfile(path_from_env):
-                raise IOError("Configuration file not found in " + path_from_env)
+                raise IOError(f"Configuration file not found in {path_from_env}")
             self.SEARCH_PATHS = self.SEARCH_PATHS + [path_from_env]
 
         if path is not None:
