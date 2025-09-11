@@ -71,7 +71,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
 
     async def connect(self, single_connection_client: bool = False) -> None:
         """
-        Connects to the backend
+        Connect to the backend.
 
         :param single_connection_client: |
             Uses single connection in Redis connection pool.

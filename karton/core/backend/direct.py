@@ -59,7 +59,8 @@ def parse_redis_client_name(client_name: str) -> KartonServiceInfo:
     params = dict(urllib.parse.parse_qsl(params_string))
     karton_version = params.get("karton_version", "")
     service_version = params.get("service_version")
-    secondary = params.get("secondary", False) == "1"
+    assert params.get("secondary", "0") in ["0", "1"]
+    secondary = params.get("secondary", "0") == "1"
     return KartonServiceInfo(
         identity=identity,
         karton_version=karton_version,
