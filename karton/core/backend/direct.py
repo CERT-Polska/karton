@@ -49,6 +49,8 @@ def make_redis_client_name(service_info: KartonServiceInfo) -> str:
     }
     if service_info.service_version is not None:
         params.update({"service_version": service_info.service_version})
+    if service_info.secondary:
+        params.update({"secondary": "1"})
     return f"{service_info.identity}?{urllib.parse.urlencode(params)}"
 
 
@@ -57,10 +59,13 @@ def parse_redis_client_name(client_name: str) -> KartonServiceInfo:
     params = dict(urllib.parse.parse_qsl(params_string))
     karton_version = params.get("karton_version", "")
     service_version = params.get("service_version")
+    assert params.get("secondary", "0") in ["0", "1"]
+    secondary = params.get("secondary", "0") == "1"
     return KartonServiceInfo(
         identity=identity,
         karton_version=karton_version,
         service_version=service_version,
+        secondary=secondary,
     )
 
 

@@ -1,0 +1,574 @@
+import sys
+import traceback
+from typing import Any, Protocol, Type, TypeVar
+
+from fastapi import WebSocket
+from pydantic import ValidationError
+
+from karton.core.__version__ import __version__
+from karton.core.asyncio.backend import KartonAsyncBackend
+from karton.core.backend import KartonBind, KartonMetrics, KartonServiceInfo
+from karton.core.exceptions import BindExpiredError as KartonBindExpiredError
+from karton.core.resource import ResourceBase
+from karton.core.task import Task, TaskState
+
+from .auth import User
+from .config import gateway_config, karton_config
+from .errors import (
+    AlreadyBoundError,
+    GatewayBindExpiredError,
+    InvalidBindError,
+    InvalidTaskError,
+    InvalidTaskStatusError,
+    KartonGatewayError,
+    OperationTimeoutError,
+)
+from .models import (
+    BindRequest,
+    BindResponse,
+    BindResponseMessage,
+    DeclaredResourceSpec,
+    DeclareTaskRequest,
+    ErrorResponse,
+    ErrorResponseMessage,
+    GetTaskRequest,
+    HelloResponse,
+    HelloResponseMessage,
+    IncomingTask,
+    LogResponse,
+    LogResponseMessage,
+    LogSentResponse,
+    LogSentResponseMessage,
+    Request,
+    RequestType,
+    ResourceUrl,
+    SendLogRequest,
+    SendTaskRequest,
+    SetTaskStatusRequest,
+    SubscribeLogsRequest,
+    SuccessResponse,
+    TaskDeclaredResponse,
+    TaskDeclaredResponseMessage,
+    TaskResponse,
+    TaskResponseMessage,
+)
+from .task import TaskTokenInfo, make_task_token, map_resources, parse_task_token
+
+gateway_service_info = KartonServiceInfo(
+    identity="karton.gateway", karton_version=__version__, service_version=__version__
+)
+gateway_backend = KartonAsyncBackend(karton_config, service_info=gateway_service_info)
+
+
+class UserSession:
+    def __init__(self, user: User, service_info: KartonServiceInfo):
+        self.user = user
+        self.service_info = service_info
+        self.karton_bind: KartonBind | None = None
+        self.backend: KartonAsyncBackend | None = None
+
+    @property
+    def identity(self) -> str:
+        return self.service_info.identity
+
+    @property
+    def username(self) -> str:
+        return self.user.username
+
+    @property
+    def is_bound(self) -> bool:
+        return self.karton_bind is not None
+
+    async def get_service_backend(self) -> KartonAsyncBackend:
+        """
+        Returns a connected backend instance and establishes connection
+        if session has not yet connected. Each websocket connection has
+        at most one Redis connection, parallel blocking operations are
+        not supported.
+        """
+        if self.backend:
+            return self.backend
+        backend = KartonAsyncBackend(karton_config, service_info=self.service_info)
+        await backend.connect(single_connection_client=True)
+        self.backend = backend
+        return self.backend
+
+    async def close(self) -> None:
+        if self.backend is not None:
+            await self.backend.close()
+        self.backend = None
+
+    def set_karton_bind(self, karton_bind: KartonBind) -> None:
+        self.karton_bind = karton_bind
+
+
+async def send_hello(websocket: WebSocket) -> None:
+    hello_message = HelloResponseMessage(
+        server_version=__version__, auth_required=gateway_config.auth_required
+    )
+    hello_response = HelloResponse(message=hello_message)
+    await websocket.send_json(hello_response.model_dump(mode="json"))
+
+
+async def send_error(websocket: WebSocket, error: KartonGatewayError) -> None:
+    error_message = ErrorResponseMessage(code=error.code, error_message=str(error))
+    error_response = ErrorResponse(message=error_message)
+    await websocket.send_json(error_response.model_dump(mode="json"))
+
+
+async def send_success(websocket: WebSocket) -> None:
+    success_response = SuccessResponse()
+    await websocket.send_json(success_response.model_dump(mode="json"))
+
+
+T = TypeVar("T", bound=RequestType, contravariant=True)
+
+
+class RequestHandler(Protocol[T]):
+    async def __call__(
+        self, websocket: WebSocket, request: T, session: UserSession
+    ) -> None: ...
+
+
+REQUEST_HANDLERS: dict[Type[RequestType], RequestHandler] = {}
+
+
+def request_handler(
+    handler_fn: RequestHandler[T],
+) -> RequestHandler[T]:
+    request_type = handler_fn.__annotations__["request"]
+    if request_type in REQUEST_HANDLERS:
+        raise ValueError(f"Handler for request type {request_type} is already defined")
+    REQUEST_HANDLERS[request_type] = handler_fn
+    return handler_fn
+
+
+async def call_request_handler(
+    websocket: WebSocket, request: Request, session: UserSession
+) -> None:
+    await REQUEST_HANDLERS[type(request.root)](websocket, request.root, session)
+
+
+@request_handler
+async def handle_bind_request(
+    websocket: WebSocket, request: BindRequest, session: UserSession
+) -> None:
+    """
+    Handler for 'bind' request which implements register_bind operation
+    in the backend. Creates a new consumer queue or connects to existing one.
+
+    :param websocket: WebSocket that received the request
+    :param request: Parsed request object
+    :param session: User session that initiated the request
+    """
+    if session.is_bound:
+        raise AlreadyBoundError("Client is already bound")
+
+    bind = KartonBind(
+        identity=session.service_info.identity,
+        info=request.message.info,
+        version=session.service_info.karton_version,
+        persistent=request.message.persistent,
+        filters=request.message.filters,
+        service_version=session.service_info.service_version,
+        is_async=request.message.is_async,
+    )
+    service_backend = await session.get_service_backend()
+    old_bind = await service_backend.register_bind(bind)
+    session.set_karton_bind(bind)
+    bind_response_message = BindResponseMessage(
+        old_bind=old_bind,
+    )
+    bind_response = BindResponse(message=bind_response_message)
+    await websocket.send_json(bind_response.model_dump(mode="json"))
+
+
+PayloadBags = tuple[dict[str, Any], dict[str, Any]]
+
+
+def process_declared_task_resources(
+    payload_bags: PayloadBags, allowed_parent_resources: list[str], target_bucket: str
+) -> tuple[PayloadBags, list[DeclaredResourceSpec]]:
+    """
+    Performs a lookup for resources referenced in payload bags, validates them
+    and maps them to ResourceBase objects for Task.serialize
+
+    :param payload_bags: Payload bags to process
+    :param allowed_parent_resources: Allowed remote resources referenced in parent token
+    :param target_bucket: Target bucket to use for resource upload
+    :return: |
+        Tuple with two elements: payload bags with mapped resources to ResourceBase and
+        list of DeclaredResourceSpec objects with validated resource specification.
+    """
+    resources: dict[str, DeclaredResourceSpec] = {}
+
+    def process_resource(resource_data: dict[str, Any]) -> Any:
+        try:
+            resource_spec = DeclaredResourceSpec.model_validate(resource_data)
+        except ValidationError as e:
+            raise InvalidTaskError(f"Invalid resource specification {e}")
+        if (
+            not resource_spec.to_upload
+            and resource_spec.uid not in allowed_parent_resources
+        ):
+            raise InvalidTaskError(
+                f"Service is not allowed to reference resource '{resource_spec.uid}'"
+            )
+        if resource_spec.uid not in resources:
+            resources[resource_spec.uid] = resource_spec
+        return ResourceBase(
+            _uid=resource_spec.uid,
+            _size=resource_spec.size,
+            name=resource_spec.name,
+            metadata=resource_spec.metadata,
+            sha256=resource_spec.sha256,
+            bucket=target_bucket,
+        )
+
+    transformed_payload_bags = map_resources(payload_bags, process_resource)
+    return transformed_payload_bags, list(resources.values())
+
+
+async def generate_resource_upload_urls(
+    resources: list[DeclaredResourceSpec],
+    service_backend: KartonAsyncBackend,
+    target_bucket: str,
+) -> list[ResourceUrl]:
+    """
+    Generates a list of presigned upload URLs for resources marked as "to_upload"
+
+    :param resources: List of resource specifications
+    :param service_backend: Karton service backend
+    :param target_bucket: Target bucket to use for resource upload
+    :return: List of ResourceUrl objects with presigned upload URLs
+    """
+    upload_urls: list[ResourceUrl] = []
+    for resource in resources:
+        if resource.to_upload:
+            upload_url = await service_backend.get_presigned_object_upload_url(
+                bucket=target_bucket, object_uid=resource.uid
+            )
+            upload_urls.append(
+                ResourceUrl(
+                    uid=resource.uid,
+                    url=upload_url,
+                )
+            )
+    return upload_urls
+
+
+@request_handler
+async def handle_declare_task_request(
+    websocket: WebSocket, request: DeclareTaskRequest, session: UserSession
+) -> None:
+    """
+    Handler for 'declare_task' request which implements declare_task operation
+    in the backend. Validates the task declaration and declares a new task in Karton
+    to lock the resources before they're uploaded.
+
+    :param websocket: WebSocket that received the request
+    :param request: Parsed request object
+    :param session: User session that initiated the request
+    """
+    parent_token = request.message.parent_token
+    task_params = request.message.task
+
+    if parent_token is None:
+        parent_task_uid = None
+        allowed_parent_resources = []
+    else:
+        parent_task_info = parse_task_token(
+            parent_token, gateway_config.secret_key, session.username
+        )
+        parent_task_uid = parent_task_info.task_uid
+        allowed_parent_resources = parent_task_info.resources
+
+    service_backend = await session.get_service_backend()
+    target_bucket = service_backend.default_bucket_name
+    payload_bags = (task_params.payload, task_params.payload_persistent)
+    task_payload_bags, resources = process_declared_task_resources(
+        payload_bags, allowed_parent_resources, target_bucket
+    )
+    resource_urls = await generate_resource_upload_urls(
+        resources, service_backend, target_bucket
+    )
+    task_payload, task_payload_persistent = task_payload_bags
+
+    # Now, we need to translate DeclaredResourceSpec to RemoteResource
+    task = Task(
+        headers=task_params.headers,
+        headers_persistent=task_params.headers_persistent,
+        payload=task_payload,
+        payload_persistent=task_payload_persistent,
+        priority=task_params.priority,
+        parent_uid=parent_task_uid,
+    )
+    task_token_info = TaskTokenInfo(
+        task_uid=task.uid,
+        resources=[r.uid for r in resources],
+    )
+    task_token = make_task_token(
+        task_token_info=task_token_info,
+        secret_key=gateway_config.secret_key,
+        username=session.user.username,
+    )
+
+    await service_backend.register_task(task)
+    task_declared_message = TaskDeclaredResponseMessage(
+        uid=task.uid,
+        token=task_token,
+        upload_urls=resource_urls,
+    )
+    task_declared_request = TaskDeclaredResponse(message=task_declared_message)
+    await websocket.send_json(task_declared_request.model_dump(mode="json"))
+
+
+@request_handler
+async def handle_send_task_request(
+    websocket: WebSocket, request: SendTaskRequest, session: UserSession
+) -> None:
+    """
+    Handler for 'send_task' request which implements send_task operation
+    in the backend. Accepts a task token returned by former response for
+    declare_task request.
+
+    :param websocket: WebSocket that received the request
+    :param request: Parsed request object
+    :param session: User session that initiated the request
+    """
+    task_token = request.message.token
+    task_info = parse_task_token(
+        task_token, gateway_config.secret_key, session.user.username
+    )
+    service_backend = await session.get_service_backend()
+    task = await service_backend.get_task(task_info.task_uid)
+    if task is None:
+        raise InvalidTaskError("Task no longer exists")
+    if task.status is not TaskState.DECLARED:
+        raise InvalidTaskError(
+            f"Task status is '{task.status.value}' while only "
+            f"'declared' tasks can be sent"
+        )
+
+    await service_backend.produce_unrouted_task(task)
+    await service_backend.increment_metrics(
+        KartonMetrics.TASK_PRODUCED, session.identity
+    )
+    await send_success(websocket)
+
+
+def is_valid_task_status_transition(old_status: TaskState, new_status: TaskState):
+    if old_status is TaskState.SPAWNED and new_status in (
+        TaskState.STARTED,
+        TaskState.FINISHED,
+        TaskState.CRASHED,
+    ):
+        return True
+    if old_status is TaskState.STARTED and new_status in (
+        TaskState.FINISHED,
+        TaskState.CRASHED,
+    ):
+        return True
+    return False
+
+
+@request_handler
+async def handle_set_task_status_request(
+    websocket: WebSocket, request: SetTaskStatusRequest, session: UserSession
+) -> None:
+    """
+    Handler for 'set_task_status' request which implements set_task_status operation
+    in the backend. Used for marking task as:
+
+    - STARTED when consumer starts to execute the task
+    - FINISHED when consumer finishes executing the task
+    - CRASHED when task execution resulted in an error
+
+    :param websocket: WebSocket that received the request
+    :param request: Parsed request object
+    :param session: User session that initiated the request
+    """
+    task_token = request.message.token
+    task_info = parse_task_token(
+        task_token, gateway_config.secret_key, session.user.username
+    )
+    service_backend = await session.get_service_backend()
+    task = await service_backend.get_task(task_info.task_uid)
+    if task is None:
+        raise InvalidTaskError("Task no longer exists")
+
+    new_task_status = request.message.status
+    if not is_valid_task_status_transition(
+        old_status=task.status, new_status=new_task_status
+    ):
+        raise InvalidTaskStatusError(
+            f"Can't change task status from {task.status.value}"
+            f" to {new_task_status.value}"
+        )
+
+    if new_task_status is TaskState.CRASHED:
+        task.error = request.message.error
+        await service_backend.increment_metrics(
+            KartonMetrics.TASK_CRASHED, session.identity
+        )
+
+    await service_backend.set_task_status(task, new_task_status)
+    await service_backend.increment_metrics(
+        KartonMetrics.TASK_CONSUMED, session.identity
+    )
+    await send_success(websocket)
+
+
+async def generate_resource_download_urls(
+    task: Task, service_backend: KartonAsyncBackend
+) -> list[ResourceUrl]:
+    """
+    Generates a list of presigned download URLs for an incoming task
+
+    :param task: Task containing resources
+    :param service_backend: Karton service backend
+    :return: List of ResourceUrl objects with presigned download URLs
+    """
+    resources = {}
+
+    for resource in task.iterate_resources():
+        if resource.uid in resources:
+            continue
+        if resource.bucket != service_backend.default_bucket_name:
+            raise InvalidTaskError(
+                "Got task that references different bucket than the configured one "
+                "which is unsupported"
+            )
+        download_url = await service_backend.get_presigned_object_download_url(
+            bucket=service_backend.default_bucket_name, object_uid=resource.uid
+        )
+        resources[resource.uid] = ResourceUrl(uid=resource.uid, url=download_url)
+    return list(resources.values())
+
+
+@request_handler
+async def handle_get_task_request(
+    websocket: WebSocket, request: GetTaskRequest, session: UserSession
+) -> None:
+    """
+    Handler for 'get_task' request which implements consume_routed_task operation
+    in the backend.
+
+    If there is a task in the queue: returns it along with resource
+    download URLs. If there is no task and operation reaches timeout (5 seconds),
+    returns 'timeout' error. In that case, client should retry the request and continue
+    operation, unless requested by user to shut down.
+
+    Before consuming a task, checks whether binds have not been replaced by a newer
+    version of a consumer. In that case, returns 'expired_bind' error.
+
+    :param websocket: WebSocket that received the request
+    :param request: Parsed request object
+    :param session: User session that initiated the request
+    """
+    if not session.is_bound:
+        raise InvalidBindError("Service has not declared consumer bind")
+
+    identity = session.identity
+    service_backend = await session.get_service_backend()
+
+    try:
+        task = await service_backend.consume_routed_task(identity)
+    except KartonBindExpiredError as e:
+        raise GatewayBindExpiredError(str(e)) from e
+
+    if not task:
+        raise OperationTimeoutError("No task found, try again")
+
+    try:
+        download_urls = await generate_resource_download_urls(task, service_backend)
+        task_token_info = TaskTokenInfo(
+            task_uid=task.uid,
+            resources=[r.uid for r in download_urls],
+        )
+        task_token = make_task_token(
+            task_token_info, gateway_config.secret_key, session.user.username
+        )
+        task_data = task.to_dict()
+        incoming_task = IncomingTask(
+            uid=task_data["uid"],
+            parent_uid=task_data["parent_uid"],
+            orig_uid=task_data["orig_uid"],
+            headers=task_data["headers"],
+            payload=task_data["payload"],
+            headers_persistent=task_data["headers_persistent"],
+            payload_persistent=task_data["payload_persistent"],
+            priority=task_data["priority"],
+        )
+        task_response_message = TaskResponseMessage(
+            task=incoming_task,
+            token=task_token,
+            download_urls=download_urls,
+        )
+        task_response = TaskResponse(message=task_response_message)
+        await websocket.send_json(task_response.model_dump(mode="json"))
+    except Exception:
+        # We need to crash gathered task if something went wrong in the process
+        exc_info = sys.exc_info()
+        task.error = traceback.format_exception(*exc_info)
+        await service_backend.set_task_status(task, TaskState.CRASHED)
+        await service_backend.increment_metrics(
+            KartonMetrics.TASK_CRASHED, session.identity
+        )
+        await service_backend.increment_metrics(
+            KartonMetrics.TASK_CONSUMED, session.identity
+        )
+        raise
+
+
+@request_handler
+async def handle_send_log_request(
+    websocket: WebSocket, request: SendLogRequest, session: UserSession
+) -> None:
+    """
+    Handler for 'send_log' request which implements produce_log operation
+    in the backend. Publishes a log record to be consumed by currently
+    connected log consumers. Returns a bool response indicating whether
+    the log was successfully received by at least one log consumer.
+
+    :param websocket: WebSocket that received the request
+    :param request: Parsed request object
+    :param session: User session that initiated the request
+    """
+    service_backend = await session.get_service_backend()
+    was_received = await service_backend.produce_log(
+        request.message.log_record,
+        request.message.logger_name,
+        request.message.level,
+    )
+    log_sent_message = LogSentResponseMessage(was_received=was_received)
+    log_sent_response = LogSentResponse(message=log_sent_message)
+    await websocket.send_json(log_sent_response.model_dump(mode="json"))
+
+
+@request_handler
+async def handle_subscribe_logs_request(
+    websocket: WebSocket, request: SubscribeLogsRequest, session: UserSession
+) -> None:
+    """
+    Handler for 'subscibe_log' request which implements consume_log operation
+    in the backend. Returns a stream of log records matching the provided filter.
+    If there is no log for 5 seconds, returns 'timeout' error. In that case,
+    client should retry the request and continue operation  unless requested by user
+    to shut down.
+
+    :param websocket: WebSocket that received the request
+    :param request: Parsed request object
+    :param session: User session that initiated the request
+    """
+    service_backend = await session.get_service_backend()
+    async for log_record in service_backend.consume_log(
+        logger_filter=request.message.logger_filter, level=request.message.level
+    ):
+        if not log_record:
+            error = OperationTimeoutError("No log found, try again")
+            await send_error(websocket, error)
+            continue
+        log_message = LogResponseMessage(log_record=log_record)
+        log_response = LogResponse(message=log_message)
+        await websocket.send_json(log_response.model_dump(mode="json"))

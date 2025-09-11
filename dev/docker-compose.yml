@@ -25,6 +25,19 @@ services:
     depends_on:
       - minio
       - redis
+  gateway:
+    build:
+      context: ..
+      dockerfile: dev/gateway.Dockerfile
+    env_file:
+      - karton-vars.env
+      - gateway-secret.env
+    depends_on:
+      - minio
+      - redis
+      - system
+    ports:
+      - "127.0.0.1:8000:8000"
   logger:
     build:
       context: ..
