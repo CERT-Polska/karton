@@ -4,3 +4,5 @@ orjson
 boto3<=1.35.81
 aioboto3==13.3.0
 typing-extensions
+websockets
+httpx
