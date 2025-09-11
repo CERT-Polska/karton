@@ -131,11 +131,11 @@ class LoggingMixin:
         if not self.identity:
             raise ValueError("Can't setup logger without identity")
 
+        task_context_filter = TaskContextFilter()
         self._log_handler.setFormatter(logging.Formatter())
+        self._log_handler.addFilter(task_context_filter)
 
         logger = logging.getLogger(self.identity)
-        logger.addFilter(TaskContextFilter())
-
         if logger.handlers:
             # If logger already have handlers set: clear them
             logger.handlers.clear()
@@ -148,6 +148,7 @@ class LoggingMixin:
         logger.setLevel(log_level)
         stream_handler = logging.StreamHandler()
         stream_handler.setFormatter(logging.Formatter(self._log_format))
+        stream_handler.addFilter(task_context_filter)
         logger.addHandler(stream_handler)
 
         if not self.debug and self.enable_publish_log:
