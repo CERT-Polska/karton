@@ -3,6 +3,7 @@ import argparse
 import logging
 import os
 import textwrap
+import uuid
 from contextlib import contextmanager
 from typing import Optional, Protocol, Union, cast
 
@@ -218,6 +219,7 @@ class KartonBase(abc.ABC, ConfigMixin, LoggingMixin):
             identity=self.identity,
             karton_version=__version__,
             service_version=self.version,
+            instance_id=str(uuid.uuid4()),
         )
 
         self.backend = backend or self._backend_factory(
