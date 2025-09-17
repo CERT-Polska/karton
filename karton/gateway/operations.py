@@ -59,12 +59,19 @@ class UserSession:
     def __init__(self, user: User, service_info: KartonServiceInfo):
         self.user = user
         self.service_info = service_info
+        if self.service_info.karton_version is None:
+            raise ValueError("Karton version in service_info cannot be None")
+        self._karton_version: str = self.service_info.karton_version
         self.karton_bind: KartonBind | None = None
         self.backend: KartonAsyncBackend | None = None
 
     @property
     def identity(self) -> str:
         return self.service_info.identity
+
+    @property
+    def karton_version(self) -> str:
+        return self._karton_version
 
     @property
     def username(self) -> str:
@@ -162,7 +169,7 @@ async def handle_bind_request(
     bind = KartonBind(
         identity=session.service_info.identity,
         info=request.message.info,
-        version=session.service_info.karton_version,
+        version=session.karton_version,
         persistent=request.message.persistent,
         filters=request.message.filters,
         service_version=session.service_info.service_version,

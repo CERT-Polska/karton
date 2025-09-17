@@ -75,7 +75,7 @@ async def initiate_session(websocket: WebSocket) -> UserSession:
         identity=hello_request.message.identity,
         karton_version=hello_request.message.library_version,
         service_version=hello_request.message.service_version,
-        secondary=hello_request.message.secondary_connection,
+        instance_id=hello_request.message.instance_id,
     )
     user_session = UserSession(
         user=user,

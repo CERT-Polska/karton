@@ -44,28 +44,28 @@ logger = logging.getLogger(__name__)
 
 
 def make_redis_client_name(service_info: KartonServiceInfo) -> str:
-    params = {
-        "karton_version": service_info.karton_version,
-    }
+    params = {}
+    if service_info.karton_version is not None:
+        params["karton_version"] = service_info.karton_version
     if service_info.service_version is not None:
-        params.update({"service_version": service_info.service_version})
-    if service_info.secondary:
-        params.update({"secondary": "1"})
-    return f"{service_info.identity}?{urllib.parse.urlencode(params)}"
+        params["service_version"] = service_info.service_version
+    if service_info.instance_id is not None:
+        params["instance_id"] = service_info.instance_id
+    encoded_params = f"?{urllib.parse.urlencode(params)}" if params else ""
+    return f"{service_info.identity}{encoded_params}"
 
 
 def parse_redis_client_name(client_name: str) -> KartonServiceInfo:
+    if "?" not in client_name:
+        return KartonServiceInfo(identity=client_name)
+
     identity, params_string = client_name.split("?", 1)
     params = dict(urllib.parse.parse_qsl(params_string))
-    karton_version = params.get("karton_version", "")
-    service_version = params.get("service_version")
-    assert params.get("secondary", "0") in ["0", "1"]
-    secondary = params.get("secondary", "0") == "1"
     return KartonServiceInfo(
         identity=identity,
-        karton_version=karton_version,
-        service_version=service_version,
-        secondary=secondary,
+        karton_version=params.get("karton_version"),
+        service_version=params.get("service_version"),
+        instance_id=params.get("instance_id"),
     )
 
 
@@ -391,7 +391,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
 
     def get_online_services(self) -> List[KartonServiceInfo]:
         """
-        Gets all online services providing extended service information.
+        Gets all online services.
 
         .. versionadded:: 5.1.0
 
@@ -400,13 +400,12 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         bound_services = []
         for client in self.redis.client_list():
             name = client["name"]
-            if "?" in name:
-                try:
-                    service_info = parse_redis_client_name(name)
-                    bound_services.append(service_info)
-                except Exception:
-                    logger.exception("Fatal error while parsing client name: %s", name)
-                    continue
+            try:
+                service_info = parse_redis_client_name(name)
+                bound_services.append(service_info)
+            except Exception:
+                logger.exception("Fatal error while parsing client name: %s", name)
+                continue
         return bound_services
 
     def get_task(self, task_uid: str) -> Optional[Task]:

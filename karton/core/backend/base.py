@@ -1,5 +1,6 @@
 import dataclasses
 import enum
+import uuid
 from typing import IO, Any, Iterator, Protocol
 
 from karton.core.__version__ import __version__
@@ -40,7 +41,7 @@ class KartonServiceInfo:
     identity: str
     karton_version: str | None = None
     service_version: str | None = None
-    secondary: bool = False
+    instance_id: str | None = None
 
 
 def resolve_service_info(
@@ -63,6 +64,7 @@ def resolve_service_info(
         service_info = KartonServiceInfo(
             identity=identity,
             karton_version=__version__,
+            instance_id=str(uuid.uuid4()),
         )
     disallowed_chars = [" ", "?"]
     if any(

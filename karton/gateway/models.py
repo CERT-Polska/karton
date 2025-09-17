@@ -43,7 +43,7 @@ class HelloRequestMessage(BaseModel):
     identity: str
     service_version: str | None
     library_version: str
-    secondary_connection: bool
+    instance_id: str
     credentials: AuthCredentials | None = None
 
 
