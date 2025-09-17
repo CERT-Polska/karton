@@ -54,11 +54,6 @@ from .models import (
 )
 from .task import TaskTokenInfo, make_task_token, map_resources, parse_task_token
 
-gateway_service_info = KartonServiceInfo(
-    identity="karton.gateway", karton_version=__version__, service_version=__version__
-)
-gateway_backend = KartonAsyncBackend(karton_config, service_info=gateway_service_info)
-
 
 class UserSession:
     def __init__(self, user: User, service_info: KartonServiceInfo):

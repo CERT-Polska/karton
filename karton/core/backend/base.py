@@ -38,7 +38,7 @@ class KartonServiceInfo:
     """
 
     identity: str
-    karton_version: str
+    karton_version: str | None = None
     service_version: str | None = None
     secondary: bool = False
 

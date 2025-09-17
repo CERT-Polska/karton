@@ -9,6 +9,7 @@ from websockets.exceptions import ConnectionClosed
 from karton.core.backend import KartonServiceInfo
 
 from .auth import authorize_user, get_anonymous_user
+from .backend import gateway_backend
 from .config import gateway_config
 from .errors import (
     BadCredentialsError,
@@ -22,7 +23,6 @@ from .models import HelloRequest, Request
 from .operations import (
     UserSession,
     call_request_handler,
-    gateway_backend,
     send_error,
     send_hello,
     send_success,

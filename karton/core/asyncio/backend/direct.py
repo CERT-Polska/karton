@@ -206,8 +206,12 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         :param task: Task object
         :param pipe: Optional pipeline object if operation is a part of pipeline
         """
-        rs = pipe or self.redis
-        await rs.set(f"{KARTON_TASK_NAMESPACE}:{task.uid}", task.serialize())
+        key = f"{KARTON_TASK_NAMESPACE}:{task.uid}"
+        value = task.serialize()
+        if pipe:
+            pipe.set(key, value)
+        else:
+            await self.redis.set(key, value)
 
     async def set_task_status(
         self, task: Task, status: TaskState, pipe: Optional[Pipeline] = None
@@ -243,6 +247,17 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         else:
             return None
 
+    async def get_binds(self) -> List[KartonBind]:
+        """
+        Get all binds registered in Redis
+
+        :return: List of KartonBind objects for subsequent identities
+        """
+        return [
+            self.unserialize_bind(identity, raw_bind)
+            for identity, raw_bind in (await self.redis.hgetall(KARTON_BINDS_HSET)).items()
+        ]
+
     async def get_bind(self, identity: str) -> KartonBind:
         """
         Get bind object for given identity
@@ -263,6 +278,25 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         :param task: Task object
         """
         await self.redis.rpush(KARTON_TASKS_QUEUE, task.uid)
+
+    async def produce_routed_task(
+        self, identity: str, task: Task, pipe: Optional[Pipeline] = None
+    ) -> None:
+        """
+        Add given task to routed task queue of given identity
+
+        Task must be registered using :py:meth:`register_task`
+
+        :param identity: Karton service identity
+        :param task: Task object
+        :param pipe: Optional pipeline object if operation is a part of pipeline
+        """
+        key = self.get_queue_name(identity, task.priority)
+        value = task.uid
+        if pipe:
+            pipe.rpush(key, value)
+        else:
+            await self.redis.rpush(key, value)
 
     async def consume_queues(
         self, queues: Union[str, List[str]], timeout: int = 0
@@ -290,6 +324,83 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         return Task.unserialize(
             task_data, resource_unserializer=self.unserialize_resource
         )
+
+    async def _iter_scan_task_keys(
+        self, task_uid_pattern: str, chunk_size: int = 1000
+    ) -> AsyncIterator[list[str]]:
+        """
+        Iterates all task keys registered in Redis matching pattern
+        :param task_uid_pattern: Task UID pattern
+        :param chunk_size: Size of chunks passed to the Redis SCAN and MGET command
+        :return: Iterator with chunked task keys
+        """
+        chunk = []
+        async for task_key in self.redis.scan_iter(
+            match=f"{KARTON_TASK_NAMESPACE}:{task_uid_pattern}", count=chunk_size
+        ):
+            chunk.append(task_key)
+            if len(chunk) == chunk_size:
+                yield chunk
+                chunk = []
+        if chunk:
+            yield chunk
+
+    async def _iter_tasks(
+        self,
+        task_keys: AsyncIterator[list[str]],
+        parse_resources: bool = True,
+    ) -> AsyncIterator[Task]:
+        async for chunk in task_keys:
+            for task_data in await self.redis.mget(chunk):
+                if task_data is None:
+                    continue
+                yield Task.unserialize(
+                    task_data,
+                    parse_resources=parse_resources,
+                    resource_unserializer=self.unserialize_resource,
+                )
+
+    async def iter_all_tasks(
+        self, chunk_size: int = 1000, parse_resources: bool = True
+    ) -> AsyncIterator[Task]:
+        """
+        Iterates all tasks registered in Redis
+        :param chunk_size: Size of chunks passed to the Redis SCAN and MGET command
+        :param parse_resources: If set to False, resources are not parsed.
+            It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
+            to learn more.
+        :return: Iterator with Task objects
+        """
+        task_keys = self._iter_scan_task_keys("*", chunk_size=chunk_size)
+        return self._iter_tasks(task_keys, parse_resources=parse_resources)
+
+    async def iter_task_tree(
+        self, root_uid: str, chunk_size: int = 1000, parse_resources: bool = True
+    ) -> AsyncIterator[Task]:
+        """
+        Iterates all tasks that belong to the same analysis task tree
+        and have the same root_uid
+
+        :param root_uid: Root identifier of task tree
+        :param chunk_size: Size of chunks passed to the Redis SCAN and MGET command
+        :param parse_resources: If set to False, resources are not parsed.
+            It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
+            to learn more.
+        :return: Iterator with task objects
+        """
+        # Process <5.4.0 tasks (unrouted from <5.4.0 producers
+        # or existing before upgrade)
+        task_keys = self._iter_scan_task_keys("[^{{]*", chunk_size=chunk_size)
+        async for task in self._iter_tasks(task_keys, parse_resources=parse_resources):
+            if task.root_uid == root_uid:
+                yield task
+
+        # Process >=5.4.0 tasks
+        task_keys = self._iter_scan_task_keys(
+            f"{{{root_uid}}}:*", chunk_size=chunk_size
+        )
+        async for task in self._iter_tasks(task_keys, parse_resources=parse_resources):
+            yield task
 
     async def consume_routed_task(
         self, identity: str, timeout: int = 5
@@ -319,6 +430,31 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             return None
         queue, data = item
         return await self.get_task(data)
+
+    async def restart_task(self, task: Task) -> Task:
+        """
+        Requeues consumed task back to the consumer queue.
+
+        New task is created with new uid and can be consumed by any active replica.
+
+        Original task is marked as finished.
+
+        :param task: Task to be restarted
+        :return: Restarted task object
+        """
+        new_task = task.fork_task()
+        # Preserve orig_uid to point at unrouted task
+        new_task.orig_uid = task.orig_uid
+        new_task.status = TaskState.SPAWNED
+
+        async with self.redis.pipeline(transaction=False) as pipe:
+            await self.register_task(new_task, pipe=pipe)
+            await self.produce_routed_task(
+                new_task.headers["receiver"], new_task, pipe=pipe
+            )
+            await self.set_task_status(task, status=TaskState.FINISHED, pipe=pipe)
+            await pipe.execute()
+        return new_task
 
     async def increment_metrics(
         self, metric: KartonMetrics, identity: str, pipe: Optional[Pipeline] = None
