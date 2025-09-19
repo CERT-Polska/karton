@@ -19,6 +19,7 @@ from karton.core.backend.direct import (
     KARTON_TASK_NAMESPACE,
     KARTON_TASKS_QUEUE,
     KartonBackendBase,
+    parse_redis_client_name,
 )
 from karton.core.config import Config
 from karton.core.exceptions import BindExpiredError
@@ -255,7 +256,9 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         """
         return [
             self.unserialize_bind(identity, raw_bind)
-            for identity, raw_bind in (await self.redis.hgetall(KARTON_BINDS_HSET)).items()
+            for identity, raw_bind in (
+                await self.redis.hgetall(KARTON_BINDS_HSET)
+            ).items()
         ]
 
     async def get_bind(self, identity: str) -> KartonBind:
@@ -310,6 +313,25 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         :return: Tuple of [queue_name, item] objects or None if timeout has been reached
         """
         return await self.redis.blpop(queues, timeout=timeout)
+
+    async def get_online_services(self) -> List[KartonServiceInfo]:
+        """
+        Gets all online services.
+
+        .. versionadded:: 5.1.0
+
+        :return: List of KartonServiceInfo objects
+        """
+        bound_services = []
+        for client in await self.redis.client_list():
+            name = client["name"]
+            try:
+                service_info = parse_redis_client_name(name)
+                bound_services.append(service_info)
+            except Exception:
+                logger.exception("Fatal error while parsing client name: %s", name)
+                continue
+        return bound_services
 
     async def get_task(self, task_uid: str) -> Optional[Task]:
         """
@@ -372,7 +394,8 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         :return: Iterator with Task objects
         """
         task_keys = self._iter_scan_task_keys("*", chunk_size=chunk_size)
-        return self._iter_tasks(task_keys, parse_resources=parse_resources)
+        async for task in self._iter_tasks(task_keys, parse_resources=parse_resources):
+            yield task
 
     async def iter_task_tree(
         self, root_uid: str, chunk_size: int = 1000, parse_resources: bool = True

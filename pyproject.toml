@@ -33,6 +33,7 @@ packages = [
     "karton.core.backend",
     "karton.core.asyncio.backend",
     "karton.gateway",
+    "karton.gateway.dashboard",
     "karton.system"
 ]
 

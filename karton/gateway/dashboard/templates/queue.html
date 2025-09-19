@@ -1,0 +1,58 @@
+{% extends 'queue_layout.html' %}
+{% block tasks %}
+<h4>
+  <span class="align-middle">Tasks</span>
+  {% if queue.pending_tasks %}
+  <div class="btn-group float-right">
+    <form action={{url_for('cancel_pending_queue_tasks', queue_name=queue.bind.identity)}} method="POST" id="cancelQueue">
+      <button class="btn btn-sm btn-secondary" type="submit" form="cancelQueue" value="Submit" title="cancel all tasks">Cancel all</button>
+    </form>  
+  </div> 
+{% endif %}
+</h4>
+<table class="table table-hover">
+  <thead>
+    <tr>
+      <th scope="col">task</th>
+      <th scope="col">last update</th>
+      <th scope="col">headers</th>
+      <th scope="col">actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for task in queue.pending_tasks|sort(attribute='last_update', reverse=True) %}
+    <tr>
+      <td>
+        <a href="{{ url_for('get_task', task_id=task.uid) }}">{{ task.uid | short_task_uid }}</a>
+      </td>
+      <td><pre>{{ task.last_update|render_timestamp }}</pre></td>
+      <td>
+        {% if task.priority != 'normal' %}
+        <span class="badge bg-dark">{{task.priority}}</span>
+        {% endif %}
+        <span class="badge bg-light">{{task.status}}</span>
+        {% for hdrname, hdrval in task.headers.items() %}
+        {% if hdrname == 'type' %}
+        <span class="badge bg-primary">{{hdrname}}:{{hdrval}}</span>
+        {% elif hdrname == 'kind' %}
+        <span class="badge bg-info">{{hdrname}}:{{hdrval}}</span>
+        {% elif hdrname == 'stage' %}
+        <span class="badge bg-success">{{hdrname}}:{{hdrval}}</span>
+        {% elif hdrname == 'receiver' %}
+        {% else %}
+        <span class="badge bg-secondary">{{hdrname}}:{{hdrval}}</span>
+        {% endif %}
+        {% endfor %}
+      </td>
+      <td>
+        <div class="btn-group">
+          <form action={{url_for('cancel_task', task_id=task.uid)}} method="POST">
+            <button class="btn btn-dark" type="submit" value="Submit" title="cancel task">✕</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

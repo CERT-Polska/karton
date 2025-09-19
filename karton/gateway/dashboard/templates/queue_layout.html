@@ -1,0 +1,80 @@
+{% extends 'layout.html' %}
+{% block title %}{{ name }}{% endblock %}
+{% block content %}
+<div class="bs-component" style="padding-top: 10px">
+  <h3 class="text-center">queue {{ queue.bind.identity }}</h3>
+  <dl class="row">
+    <dt class="col-3">Description</dt>
+    <dd class="col-9">
+      {% if queue.bind.info %}
+      {{queue.bind.info|render_description|safe}}
+      {% else %}
+      <pre>(none)</pre>
+      {% endif %}
+    </dd>
+    <dt class="col-3">Filters</dt>
+    <dd class="col-9">
+      {% for filter in queue.bind.filters %}
+          <div>
+            {% for filtername, filterval in filter.items() %}
+            {% if filtername == 'type' %}
+            <span class="badge bg-primary">{{filtername}}:{{filterval}}</span>
+            {% elif filtername == 'kind' %}
+            <span class="badge bg-info">{{filtername}}:{{filterval}}</span>
+            {% elif filtername == 'stage' %}
+            <span class="badge bg-success">{{filtername}}:{{filterval}}</span>
+            {% else %}
+            <span class="badge bg-secondary">{{filtername}}:{{filterval}}</span>
+            {% endif %}
+            {% endfor %}
+          </div>
+      {% endfor %}
+    </dd>
+    <dt class="col-3">Karton-core library version</dt>
+    <dd class="col-9">
+      <span class="badge bg-info">{{ queue.bind.version }}</span>
+    </dd>
+    <dt class="col-3">Service version</dt>
+    <dd class="col-9">
+      <span class="badge bg-secondary">{{ queue.bind.service_version or 'unknown' }}</span>
+    </dd>
+    <dt class="col-3">Queue persistence</dt>
+    <dd class="col-9">
+      {% if queue.bind.persistent %}
+      <span class="badge bg-success">yes</span>
+      {% else %}
+      <span class="badge bg-danger">no</span>
+      {% endif %}
+    </dd>
+    <dt class="col-3"><a href={{url_for('get_queue', queue_name=queue.bind.identity)}}>Spawned tasks</a></dt>
+    <dd class="col-9">
+      {% set length = queue.pending_tasks | length %}
+      {% if length == 0 %}
+      <span class="badge bg-success">{{length}}</span>
+      {% elif length < 25 %}
+      <span class="badge bg-warning">{{length}}</span>
+      {% else %}
+      <span class="badge bg-danger">{{length}}</span>
+      {% endif %}
+    </dd>
+    <dt class="col-3"><a href={{url_for('get_crashed_queue', queue_name=queue.bind.identity)}}>Crashed tasks</a></dt>
+    <dd class="col-9">
+      {% if queue.crashed_tasks | length > 0 %}
+      <span class="badge bg-danger">{{queue.crashed_tasks | length }}</span>
+      {% else %}
+      <span class="badge bg-success">{{queue.crashed_tasks | length }}</span>
+      {% endif %}
+    </dd>
+    <dt class="col-3">Replicas online</dt>
+    <dd class="col-9">
+      {% if queue.active_consumers > 0 %}
+      <span class="badge bg-success">{{queue.active_consumers}}</span>
+      {% else %}
+      <span class="badge bg-danger">{{queue.active_consumers}}</span>
+      {% endif %}
+    </dd>
+  </dl>
+  {% block tasks %}
+  {% endblock %}
+</div>
+{% endblock %}

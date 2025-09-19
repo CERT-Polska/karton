@@ -1,0 +1,64 @@
+{% extends 'layout.html' %}
+{% block title %}karton task {{ task.uid }}{% endblock %}
+{% block content %}
+<div class="bs-component" style="padding-top: 10px">
+  <h3 class="text-center">task <code>{{ task.task_uid }}</code></h3>
+
+  <dl class="row">
+    <dt class="col-3">Status</dt>
+    <dd class="col-9"><span class="badge bg-light">{{task.status.value}}</span></dd>
+    <dt class="col-3">Priority</dt>
+    <dd class="col-9"><span class="badge bg-dark">{{task.priority.value}}</span></dd>
+    <dt class="col-3">Last status change</dt>
+    <dd class="col-9">{{task.last_update | render_timestamp }} ({{task.last_update | pretty_delta}})</dd>
+    <dt class="col-3">Full UID</dt>
+    <dd class="col-9">{{task.uid}}</dd>
+    <dt class="col-3">Parent UID</dt>
+    <dd class="col-9">{{task.parent_uid}}</dd>
+    <dt class="col-3">Root UID</dt>
+    <dd class="col-9">
+      <a href="{{url_for('get_analysis', root_id=task.root_uid)}}">
+      {{task.root_uid}}
+      </a>
+    </dd>
+    <dt class="col-3">Origin</dt>
+    <dd class="col-9">
+      <a href="{{url_for('get_queue', queue_name=task.headers['origin'])}}">{{task.headers['origin']}}</a>
+    </dd>
+    <dt class="col-3">Receiver</dt>
+    <dd class="col-9">
+      <a href="{{url_for('get_queue', queue_name=task.headers['receiver'])}}">{{task.headers['receiver']}}</a>
+    </dd>
+    <dt class="col-3">Xrefs</dt>
+    <dd class="col-9">
+      <div class="btn-group btn-group-toggle" data-toggle="buttons">
+        {% for label, link in xrefs %}
+        <a href="{{link}}"
+          class="btn btn-sm btn-secondary">
+          {{label}}
+        </a>
+        {% endfor %}
+      </div>
+    </dd>
+    <dt class="col-3">Headers</dt>
+    <dd class="col-9">
+      {% for hdrname, hdrval in task.headers.items() %}
+      {% if hdrname == 'type' %}
+      <span class="badge bg-primary">{{hdrname}}:{{hdrval}}</span>
+      {% elif hdrname == 'kind' %}
+      <span class="badge bg-info">{{hdrname}}:{{hdrval}}</span>
+      {% elif hdrname == 'stage' %}
+      <span class="badge bg-success">{{hdrname}}:{{hdrval}}</span>
+      {% elif hdrname == 'receiver' %}
+      {% else %}
+      <span class="badge bg-secondary">{{hdrname}}:{{hdrval}}</span>
+      {% endif %}
+      {% endfor %}
+    </dd>
+  </dl>
+
+  <h4>Raw</h4>
+  <pre><code>{{task.to_json(indent=4)}}</code></pre>
+
+</div>
+{% endblock %}

@@ -14,10 +14,9 @@ from karton.core.config import Config
 from karton.core.exceptions import BindExpiredError, TaskTimeoutError
 from karton.core.task import Task, TaskState
 
-from . import RemoteResource
 from .backend import KartonAsyncBackendProtocol
 from .base import KartonAsyncBase, KartonAsyncServiceBase
-from .resource import LocalResource
+from .resource import LocalResource, RemoteResource
 
 
 class Producer(KartonAsyncBase):

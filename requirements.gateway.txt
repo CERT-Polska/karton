@@ -3,3 +3,5 @@ argon2-cffi
 pyjwt
 uvicorn
 websockets
+jinja2
+mistune

@@ -1,0 +1,78 @@
+{% extends 'queue_layout.html' %}
+{% block tasks %}
+<h4>
+<span class="align-middle">Crashed tasks</span>
+{% if queue.crashed_tasks %}
+  <div class="btn-group float-right">
+    <form action={{url_for('restart_crashed_queue_tasks', queue_name=queue.bind.identity)}} method="POST">
+      <button class="btn btn-sm btn-danger mx-1" type="submit" value="Submit" title="restart all tasks">Restart all</button>
+    </form>
+    <div class="divider"></div>
+    <form action={{url_for('cancel_crashed_queue_tasks', queue_name=queue.bind.identity)}} method="POST" id="cancelQueue">
+      <button class="btn btn-sm btn-danger" type="submit" form="cancelQueue" value="Submit" title="cancel all tasks">Cancel all</button>
+    </form>
+  </div>
+{% endif %}
+</h4>
+<table class="table table-hover">
+  <thead>
+    <tr>
+      <th scope="col">task</th>
+      <th scope="col">last update</th>
+      <th scope="col">headers</th>
+      <th scope="col">exception</th>
+      <th scope="col">actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for task in queue.crashed_tasks|sort(attribute='last_update', reverse=True) %}
+    <tr>
+      <td>
+        <a href="{{url_for('get_task', task_id=task.uid)}}">{{ task.uid | short_task_uid }}</a>
+      </td>
+      <td><pre>{{ task.last_update|render_timestamp }}</pre></td>
+      <td>
+        {% if task.priority != 'normal' %}
+        <span class="badge bg-dark">{{task.priority.value}}</span>
+        {% endif %}
+        <span class="badge bg-light">{{task.status.value}}</span>
+        {% for hdrname, hdrval in task.headers.items() %}
+        {% if hdrname == 'type' %}
+        <span class="badge bg-primary">{{hdrname}}:{{hdrval}}</span>
+        {% elif hdrname == 'kind' %}
+        <span class="badge bg-info">{{hdrname}}:{{hdrval}}</span>
+        {% elif hdrname == 'stage' %}
+        <span class="badge bg-success">{{hdrname}}:{{hdrval}}</span>
+        {% elif hdrname == 'receiver' %}
+        {% else %}
+        <span class="badge bg-secondary">{{hdrname}}:{{hdrval}}</span>
+        {% endif %}
+        {% endfor %}
+      </td>
+      <td>
+        <code>{{ task.error[-1] }}</code>
+      </td> 
+      <td>
+        <div class="btn-group">
+          <form action={{url_for('restart_task', task_id=task.uid)}} method="POST">
+            <button class="btn btn-info mx-1" type="submit" value="Submit" title="restart task">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16">
+                <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+                <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+              </svg>
+            </button>
+          </form>
+          <form action={{url_for('cancel_task', task_id=task.uid)}} method="POST">
+            <button class="btn btn-danger" type="submit" value="Submit" title="cancel task">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash-fill" viewBox="0 0 16 16">
+                <path d="M2.5 1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1H3v9a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V4h.5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H10a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1H2.5zm3 4a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 .5-.5zM8 5a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7A.5.5 0 0 1 8 5zm3 .5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 1 0z"/>
+              </svg>
+            </button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="bs-component">
+  <link rel="stylesheet" href="{{ url_for('dashboard.static', path='graph/style.css') }}">
+  <script
+    type="text/javascript"
+    src="https://code.jquery.com/jquery-3.4.1.min.js"
+    integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
+    crossorigin="anonymous"></script>
+  <script
+    type="text/javascript"
+    src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.3.2/echarts.min.js"></script>
+  <script
+    type="text/javascript"
+    src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.3.2/extension/dataTool.min.js"></script>
+  <script
+    type="text/javascript"
+    src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.0.15/marked.min.js"></script>
+  <script
+    type="text/javascript"
+    src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.3.6/purify.min.js"></script>
+
+  <div class="menu-hover">
+    <div class="side-menu">
+      <div class="info">
+        <div class="name"></div>
+        <div class="version"></div>
+        <div class="about"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="graph-container" data-generate-url="{{ url_for('dashboard.generate_graph') }}" style="height: 100vh;"></div>
+  <script src="{{ url_for('dashboard.static', path='graph/graph.js') }}"></script>
+</div>
+{% endblock %}

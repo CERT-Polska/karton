@@ -5,15 +5,21 @@ from fastapi import APIRouter, HTTPException
 from karton.core.task import TaskState
 
 from ..backend import gateway_backend
-from .models import AnalysisResponseModel, SuccessResponseModel, TaskResponseModel, \
-    QueueListEntryResponseModel, QueueListResponseModel
+from .models import (
+    AnalysisResponseModel,
+    QueueListResponseModel,
+    QueueResponseModel,
+    SuccessResponseModel,
+    TaskResponseModel,
+)
+from .operations import get_queue_info, get_queues_info
 
-rest_api = APIRouter(
+api_routes = APIRouter(
     prefix="/api",
 )
 
 
-@rest_api.get("/task/{task_uid}")
+@api_routes.get("/task/{task_uid}")
 async def get_task(task_uid: str):
     task = await gateway_backend.get_task(task_uid=task_uid)
     if not task:
@@ -21,7 +27,7 @@ async def get_task(task_uid: str):
     return TaskResponseModel.model_validate(task.serialize())
 
 
-@rest_api.post("/task/{task_uid}/cancel")
+@api_routes.post("/task/{task_uid}/cancel")
 async def cancel_task(task_uid: str):
     task = await gateway_backend.get_task(task_uid=task_uid)
     if not task:
@@ -30,7 +36,7 @@ async def cancel_task(task_uid: str):
     return SuccessResponseModel()
 
 
-@rest_api.post("/task/{task_uid}/restart")
+@api_routes.post("/task/{task_uid}/restart")
 async def restart_task(task_uid: str):
     task = await gateway_backend.get_task(task_uid=task_uid)
     if not task:
@@ -41,7 +47,7 @@ async def restart_task(task_uid: str):
     return TaskResponseModel.model_validate(new_task.serialize())
 
 
-@rest_api.get("/analysis/{root_uid}")
+@api_routes.get("/analysis/{root_uid}")
 async def get_analysis(root_uid: str):
     queues = defaultdict(list)
     async for task in gateway_backend.iter_task_tree(
@@ -57,44 +63,33 @@ async def get_analysis(root_uid: str):
     )
 
 
-@rest_api.post("/queue")
+@api_routes.get("/queue")
 async def get_queues():
-    binds = await gateway_backend.get_binds()
-    services = await gateway_backend.get_online_services()
-    queue_counters = {
-        bind.identity: QueueListEntryResponseModel(bind=bind)
-        for bind in binds
-    }
-    async for task in gateway_backend.iter_all_tasks(parse_resources=False):
-        if task.status is TaskState.FINISHED:
-            continue
-        queue = task.receiver
-        if not queue or queue not in queue_counters:
-            continue
-        if task.status is not TaskState.CRASHED:
-            queue_counters[queue].pending_tasks += 1
-        else:
-            queue_counters[queue].crashed_tasks += 1
+    queues = await get_queues_info()
     return QueueListResponseModel(
-        queues=queue_counters,
+        queues=queues,
     )
 
 
-@rest_api.get("/queue/{queue_name}")
-async def get_queue(queue_name: str): ...
+@api_routes.get("/queue/{queue_name}")
+async def get_queue(queue_name: str):
+    queue_info = await get_queue_info(queue_name)
+    if not queue_info:
+        raise HTTPException(status_code=404, detail="Queue not found")
+    return queue_info
 
 
-@rest_api.post("/queue/{queue_name}/cancel_crashed")
+@api_routes.post("/queue/{queue_name}/cancel_crashed")
 async def cancel_crashed_tasks(queue_name: str): ...
 
 
-@rest_api.post("/queue/{queue_name}/restart_crashed")
+@api_routes.post("/queue/{queue_name}/restart_crashed")
 async def restart_crashed_tasks(queue_name: str): ...
 
 
-@rest_api.get("/service")
+@api_routes.get("/service")
 async def get_services(): ...
 
 
-@rest_api.post("/graph")
+@api_routes.post("/graph")
 async def get_graph(): ...

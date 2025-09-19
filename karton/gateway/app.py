@@ -11,6 +11,7 @@ from karton.core.backend import KartonServiceInfo
 from .auth import authorize_user, get_anonymous_user
 from .backend import gateway_backend
 from .config import gateway_config
+from .dashboard import mount_dashboard
 from .errors import (
     BadCredentialsError,
     BadRequestError,
@@ -136,3 +137,6 @@ async def gateway_endpoint(websocket: WebSocket):
         internal_error = InternalError("Internal server error")
         await send_error(websocket, internal_error)
         await websocket.close()
+
+
+mount_dashboard(app)

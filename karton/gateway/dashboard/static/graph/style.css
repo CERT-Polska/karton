@@ -1,0 +1,31 @@
+body {
+  height: 100%;
+  overflow-y: hidden;
+}
+
+.side-menu {
+  font-size: 10pt;
+  line-height: 20px;
+  letter-spacing: 0.5px;
+  top: 65px;
+  padding: 10px;
+  position: absolute;
+  width: 230px;
+  color: #fff;
+  background-color: rgb(42, 67, 92);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  width: 320px;
+  left: -300px;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.side-menu {
+  z-index: 1;
+}
+
+.page-content {
+  width: 100%;
+  max-width: 100%;
+}
