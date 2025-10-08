@@ -153,7 +153,7 @@ def print_bind_list(config: Config, output_format: str) -> None:
         print("-" * 72)
         for bind in backend.get_binds():
             print(
-                f"{bind.identity:50} {bind.service_version or "-":10} {bind.version:10}"
+                f"{bind.identity:50} {bind.service_version or '-':10} {bind.version:10}"
             )
     elif output_format == "json":
         # Use JSONL, each line is a JSON representing next bind
