@@ -206,15 +206,18 @@ class SystemService(KartonServiceBase):
                 and task.last_update is not None
                 and current_time > task.last_update + self.task_spawned_timeout
             ):
-                # Task is in SPAWNED state for too long: need to make several checks to avoid race condition
+                # Task is in SPAWNED state for too long:
+                #    need to make several checks to avoid race condition
                 # 1. Task is not in a queue to be processed
-                # 2. Get task body once more: if task is still in SPAWNED state, we can crash it
+                # 2. Get task body once more:
+                #    if task is still in SPAWNED state, we can crash it
                 task_identity = task.headers.get("receiver", None)
                 if task_identity is None:
                     # Malformed task, no receiver header
                     to_crash.append(task)
                     self.log.error(
-                        "Task %s is in Spawned state more than %d seconds but has no receiver header. "
+                        "Task %s is in Spawned state more than %d seconds "
+                        "but has no receiver header. "
                         "Crashed.",
                         task.uid,
                         self.task_spawned_timeout,
