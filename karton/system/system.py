@@ -13,7 +13,7 @@ from karton.core.backend import (
 )
 from karton.core.base import KartonServiceBase
 from karton.core.config import Config
-from karton.core.task import Task, TaskPriority, TaskState
+from karton.core.task import Task, TaskState
 from karton.core.utils import StrictClassMethod
 
 
