@@ -1,4 +1,5 @@
-redis
+# 5.0.8 introduces hash field expiration commands
+redis>=5.0.8
 orjson
 # See also https://github.com/CERT-Polska/karton/pull/270
 boto3<=1.35.81

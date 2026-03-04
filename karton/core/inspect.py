@@ -122,7 +122,7 @@ class KartonState:
     def __init__(self, backend: KartonBackend, parse_resources: bool = False) -> None:
         self.backend = backend
         self.binds = {bind.identity: bind for bind in backend.get_binds()}
-        self.replicas = backend.get_online_consumers()
+        self.replicas = backend.get_online_identities()
         self.parse_resources = parse_resources
 
         self._tasks: Optional[List[Task]] = None

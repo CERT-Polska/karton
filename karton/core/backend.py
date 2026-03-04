@@ -20,6 +20,7 @@ from redis.client import Pipeline
 from redis.connection import parse_url as parse_redis_url
 from urllib3.response import HTTPResponse
 
+from .__version__ import __version__
 from .config import Config
 from .exceptions import InvalidIdentityError
 from .resource import LocalResource, RemoteResource
@@ -32,6 +33,7 @@ KARTON_LOG_CHANNEL = "karton.log"
 KARTON_BINDS_HSET = "karton.binds"
 KARTON_TASK_NAMESPACE = "karton.task"
 KARTON_OUTPUTS_NAMESPACE = "karton.outputs"
+KARTON_SERVICES_NAMESPACE = "karton.services"
 
 KartonBind = namedtuple(
     "KartonBind",
@@ -70,8 +72,13 @@ class KartonServiceInfo:
     """
 
     identity: str = dataclasses.field(metadata={"serializable": False})
-    karton_version: str
+    # This is optional only for compatibility reasons to represent
+    # the services that have identity but don't provide extended version
+    # information (with_service_info)
+    karton_version: Optional[str] = None
     service_version: Optional[str] = None
+    # instance_id is required for services connecting to Karton Gateway
+    instance_id: Optional[str] = None
     # Extra information about Redis client
     redis_client_info: Optional[Dict[str, str]] = dataclasses.field(
         default=None, hash=False, compare=False, metadata={"serializable": False}
@@ -88,7 +95,10 @@ class KartonServiceInfo:
             for k, v in dataclasses.asdict(self).items()
             if k in included_keys and v is not None
         }
-        return f"{self.identity}?{urllib.parse.urlencode(params)}"
+        if params:
+            return f"{self.identity}?{urllib.parse.urlencode(params)}"
+        else:
+            return self.identity
 
     @classmethod
     def parse_client_name(
@@ -99,18 +109,56 @@ class KartonServiceInfo:
             for field in dataclasses.fields(cls)
             if field.metadata.get("serializable", True)
         ]
-        identity, params_string = client_name.split("?", 1)
-        # Filter out unknown params to not get crashed by future extensions
-        params = dict(
-            [
-                (key, value)
-                for key, value in urllib.parse.parse_qsl(params_string)
-                if key in included_keys
-            ]
-        )
+        if "?" in client_name:
+            identity, params_string = client_name.split("?", 1)
+            # Filter out unknown params to not get crashed by future extensions
+            params = dict(
+                [
+                    (key, value)
+                    for key, value in urllib.parse.parse_qsl(params_string)
+                    if key in included_keys
+                ]
+            )
+        else:
+            identity = client_name
+            params = {}
         return KartonServiceInfo(
             identity, redis_client_info=redis_client_info, **params
         )
+
+
+def resolve_service_info(
+    identity: str | None, service_info: KartonServiceInfo | None
+) -> KartonServiceInfo | None:
+    """
+    Resolves KartonServiceInfo object from backend parameters that identify the service.
+    This is mostly for compatibility reasons, in previous versions services could be
+    nameless or without extended version information. Karton Gateway requires complete
+    service info to be provided.
+
+    If only identity is provided: KartonServiceInfo containing only an identity and
+    karton_version information is created.
+
+    If service_info is provided: object is passed through and validated if identity is
+    correct and doesn't contain disallowed characters.
+
+    If none are provided: None is returned.
+    """
+    if service_info is None:
+        if identity is None:
+            return None
+        service_info = KartonServiceInfo(
+            identity=identity,
+            karton_version=__version__,
+        )
+    disallowed_chars = [" ", "?"]
+    if any(
+        disallowed_char in service_info.identity for disallowed_char in disallowed_chars
+    ):
+        raise InvalidIdentityError(
+            f"Karton identity must not contain {disallowed_chars}"
+        )
+    return service_info
 
 
 class KartonBackendBase:
@@ -121,20 +169,13 @@ class KartonBackendBase:
         service_info: Optional[KartonServiceInfo] = None,
     ):
         self.config = config
+        self.service_info = resolve_service_info(identity, service_info)
 
-        if identity is not None:
-            self._validate_identity(identity)
-        self.identity = identity
-
-        self.service_info = service_info
-
-    @staticmethod
-    def _validate_identity(identity: str):
-        disallowed_chars = [" ", "?"]
-        if any(disallowed_char in identity for disallowed_char in disallowed_chars):
-            raise InvalidIdentityError(
-                f"Karton identity should not contain {disallowed_chars}"
-            )
+    @property
+    def identity(self) -> str | None:
+        if self.service_info is None:
+            return None
+        return self.service_info.identity
 
     @property
     def default_bucket_name(self) -> str:
@@ -441,6 +482,9 @@ class KartonBackend(KartonBackendBase):
         Actually this method returns all services having an identity,
         so the list is not limited to consumers.
 
+        Deprecated: it doesn't return consumers connected to Karton Gateway.
+        Use :py:meth:`get_online_identities` instead.
+
         :return: Dictionary {identity: [list of clients]}
         """
         bound_identities = defaultdict(list)
@@ -452,31 +496,99 @@ class KartonBackend(KartonBackendBase):
             bound_identities[name].append(client)
         return bound_identities
 
-    def get_online_services(self) -> List[KartonServiceInfo]:
+    def _get_online_gateway_services(self) -> Iterator[KartonServiceInfo]:
+        for service_key in self.redis.scan_iter(
+            match=f"{KARTON_SERVICES_NAMESPACE}:*",
+            count=100,
+        ):
+            for client_name in self.redis.hvals(service_key):
+                try:
+                    yield KartonServiceInfo.parse_client_name(client_name)
+                except Exception:
+                    logger.exception(
+                        "Fatal error while parsing client name: %s", client_name
+                    )
+                    continue
+
+    def _get_online_direct_services(self) -> Iterator[KartonServiceInfo]:
+        for client in self.redis.client_list():
+            name = client["name"]
+            try:
+                service_info = KartonServiceInfo.parse_client_name(
+                    name, redis_client_info=client
+                )
+                yield service_info
+            except Exception:
+                logger.exception("Fatal error while parsing client name: %s", name)
+                continue
+
+    def _get_online_services(self) -> Iterator[KartonServiceInfo]:
+        # Services having instance_id should be returned only once per instance_id
+        # Services without instance_id are counted by amount of Redis connections
+        # so they should be returned as many times as they appear in the output
+        services: defaultdict[KartonServiceInfo, int] = defaultdict(int)
+        for service in self._get_online_direct_services():
+            services[service] += 1
+        for service in self._get_online_gateway_services():
+            services[service] += 1
+
+        for service in services.keys():
+            if service.instance_id is None:
+                for _ in range(services[service]):
+                    yield service
+            else:
+                yield service
+
+    def get_online_services(self, _legacy=True) -> List[KartonServiceInfo]:
         """
         Gets all online services providing extended service information.
 
-        Consumers by default don't provide that information and it's included in binds
-        instead. If you want to get information about all services, use
-        :py:meth:`KartonBackend.get_online_consumers`.
+        This method stays compatible with <=5.10.0 and doesn't return information
+        about legacy consumers (without with_service_info) flag. It also nullifies
+        the instance_id to aggregate KartonServiceInfo objects by equality for
+        counting the number of instances. New code should not rely on that behavior.
+
+        This method will return complete information about services in >=6.0.0.
+        You can turn on the new behavior by enabling _legacy=True, although this
+        argument will be removed as well in future major version.
 
         .. versionadded:: 5.1.0
 
         :return: List of KartonServiceInfo objects
         """
-        bound_services = []
-        for client in self.redis.client_list():
-            name = client["name"]
-            if "?" in name:
-                try:
-                    service_info = KartonServiceInfo.parse_client_name(
-                        name, redis_client_info=client
-                    )
-                    bound_services.append(service_info)
-                except Exception:
-                    logger.exception("Fatal error while parsing client name: %s", name)
-                    continue
-        return bound_services
+        if not _legacy:
+            return list(self._get_online_services())
+
+        # Legacy users of this method doesn't expect two things:
+        # - that karton_version can be None in case of pre-5.10.0 consumers
+        # - that KartonServiceInfo are not equal per identity+version
+        #   but per instance (e.g. karton-dashboard)
+        #
+        # That loop removes instance_id and filters out services without
+        # karton_version
+        return [
+            KartonServiceInfo(
+                identity=service.identity,
+                karton_version=service.karton_version,
+                service_version=service.service_version,
+                instance_id=None,
+                redis_client_info=service.redis_client_info,
+            )
+            for service in self._get_online_services()
+            if service.karton_version is not None
+        ]
+
+    def get_online_identities(self) -> Dict[str, List[KartonServiceInfo]]:
+        """
+        Returns a dictionary for all online identities with list of
+        KartonServiceInfo of each instance
+
+        :return: Dictionary {identity: [list of KartonServiceInfo objects]}
+        """
+        identities: defaultdict[str, List[KartonServiceInfo]] = defaultdict(list)
+        for service in self._get_online_services():
+            identities[service.identity].append(service)
+        return dict(identities)
 
     def get_task(self, task_uid: str) -> Optional[Task]:
         """

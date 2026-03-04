@@ -15,6 +15,7 @@ from karton.core import Config, Task
 from karton.core.asyncio.resource import LocalResource, RemoteResource
 from karton.core.backend import (
     KARTON_BINDS_HSET,
+    KARTON_SERVICES_NAMESPACE,
     KARTON_TASK_NAMESPACE,
     KARTON_TASKS_QUEUE,
     KartonBackendBase,
@@ -376,4 +377,73 @@ class KartonAsyncBackend(KartonBackendBase):
                 self._log_channel(logger_name, level), json.dumps(log_record)
             )
             > 0
+        )
+
+    async def register_service(
+        self, service_info: KartonServiceInfo, expires_after: int
+    ):
+        """
+        Registers a new online service.
+
+        Services using gateway backend can't be identified by Redis connection name,
+        so Karton Gateway uses heartbeat-based approach to track them.
+
+        Used internally by Karton Gateway.
+        This method requires at least Redis >= 7.4.0
+
+        :param service_info: Service info of the connected service
+        :param expires_after: Time to live for the record (in seconds)
+        """
+        if service_info.instance_id is None:
+            raise ValueError("instance_id in service_info can't be None")
+        async with self.redis.pipeline(transaction=True) as pipe:
+            await pipe.hset(
+                f"{KARTON_SERVICES_NAMESPACE}:{service_info.identity}",
+                service_info.instance_id,
+                service_info.make_client_name(),
+            )
+            await pipe.hexpire(
+                f"{KARTON_SERVICES_NAMESPACE}:{service_info.identity}",
+                expires_after,
+                service_info.instance_id,
+            )
+            await pipe.execute()
+
+    async def heartbeat_service(
+        self, service_info: KartonServiceInfo, expires_after: int
+    ):
+        """
+        Updates a heartbeat for the registered online service
+
+        See also: register_service
+
+        Used internally by Karton Gateway.
+        This method requires at least Redis >= 7.4.0
+
+        :param service_info: Service info of the connected service
+        :param expires_after: Time to live for the record (in seconds)
+        """
+        if service_info.instance_id is None:
+            raise ValueError("instance_id in service_info can't be None")
+        await self.redis.hexpire(
+            f"{KARTON_SERVICES_NAMESPACE}:{service_info.identity}",
+            expires_after,
+            service_info.instance_id,
+        )
+
+    async def unregister_service(self, service_info: KartonServiceInfo):
+        """
+        Removes a record for online service, making it offline.
+
+        See also: register_service
+
+        Used internally by Karton Gateway.
+
+        :param service_info: Service info of the connected service
+        """
+        if service_info.instance_id is None:
+            raise ValueError("instance_id in service_info can't be None")
+        await self.redis.hdel(
+            f"{KARTON_SERVICES_NAMESPACE}:{service_info.identity}",
+            service_info.instance_id,
         )
