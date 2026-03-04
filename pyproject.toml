@@ -15,7 +15,7 @@ classifiers = [
     "Operating System :: OS Independent"
 ]
 dynamic = ["version", "dependencies"]
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 
 [project.urls]
 Homepage = "https://github.com/CERT-Polska/karton"
@@ -50,7 +50,7 @@ extra-requirements = "redis<5.0.0 botocore-stubs"
 [tool.mypy]
 explicit_package_bases = true
 namespace_packages = true
-python_version = "3.8"
+python_version = "3.10"
 
 [[tool.mypy.overrides]]
 module = "urllib3.*"

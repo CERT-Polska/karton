@@ -1,6 +1,7 @@
 import abc
 import asyncio
 import signal
+import uuid
 from asyncio import CancelledError
 from typing import Optional
 
@@ -28,8 +29,6 @@ class KartonAsyncBase(abc.ABC, ConfigMixin, LoggingMixin):
     identity: str = ""
     #: Karton service version
     version: Optional[str] = None
-    #: Include extended service information for non-consumer services
-    with_service_info: bool = False
 
     def __init__(
         self,
@@ -39,16 +38,15 @@ class KartonAsyncBase(abc.ABC, ConfigMixin, LoggingMixin):
     ) -> None:
         ConfigMixin.__init__(self, config, identity)
 
-        self.service_info = None
-        if self.identity is not None and self.with_service_info:
-            self.service_info = KartonServiceInfo(
-                identity=self.identity,
-                karton_version=__version__,
-                service_version=self.version,
-            )
-
+        self.instance_id = str(uuid.uuid4())
+        self.service_info = KartonServiceInfo(
+            identity=self.identity,
+            karton_version=__version__,
+            service_version=self.version,
+            instance_id=self.instance_id,
+        )
         self.backend = backend or KartonAsyncBackend(
-            self.config, identity=self.identity, service_info=self.service_info
+            self.config, service_info=self.service_info
         )
 
         log_handler = KartonAsyncLogHandler(backend=self.backend, channel=self.identity)

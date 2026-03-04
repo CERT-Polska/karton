@@ -3,6 +3,7 @@ import argparse
 import logging
 import os
 import textwrap
+import uuid
 from contextlib import contextmanager
 from typing import Optional, Union, cast
 
@@ -194,8 +195,6 @@ class KartonBase(abc.ABC, ConfigMixin, LoggingMixin):
     identity: str = ""
     #: Karton service version
     version: Optional[str] = None
-    #: Include extended service information for non-consumer services
-    with_service_info: bool = False
 
     def __init__(
         self,
@@ -205,16 +204,15 @@ class KartonBase(abc.ABC, ConfigMixin, LoggingMixin):
     ) -> None:
         ConfigMixin.__init__(self, config, identity)
 
-        self.service_info = None
-        if self.identity is not None and self.with_service_info:
-            self.service_info = KartonServiceInfo(
-                identity=self.identity,
-                karton_version=__version__,
-                service_version=self.version,
-            )
-
+        self.instance_id = str(uuid.uuid4())
+        self.service_info = KartonServiceInfo(
+            identity=self.identity,
+            karton_version=__version__,
+            service_version=self.version,
+            instance_id=self.instance_id,
+        )
         self.backend = backend or KartonBackend(
-            self.config, identity=self.identity, service_info=self.service_info
+            self.config, service_info=self.service_info
         )
 
         log_handler = KartonLogHandler(backend=self.backend, channel=self.identity)

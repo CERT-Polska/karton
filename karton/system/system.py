@@ -122,7 +122,7 @@ class SystemService(KartonServiceBase):
         to_crash = []
 
         queues_to_clear = set()
-        online_consumers = self.backend.get_online_consumers()
+        online_consumers = self.backend.get_online_identities()
         for bind in self.backend.get_binds():
             identity = bind.identity
             if identity not in online_consumers and not bind.persistent:
