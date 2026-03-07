@@ -11,10 +11,10 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from . import query
 from .__version__ import __version__
-from .backend import KartonBackend, KartonBind, KartonMetrics
+from .backend import KartonBackendProtocol, KartonBind, KartonMetrics
 from .base import KartonBase, KartonServiceBase
 from .config import Config
-from .exceptions import TaskTimeoutError
+from .exceptions import BindExpiredError, TaskTimeoutError
 from .resource import LocalResource
 from .task import Task, TaskState
 from .utils import timeout
@@ -56,7 +56,7 @@ class Producer(KartonBase):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -110,13 +110,13 @@ class Consumer(KartonServiceBase):
     filters: List[Dict[str, Any]] = []
     persistent: bool = True
     version: Optional[str] = None
-    task_timeout = None
+    task_timeout: Optional[int] = None
 
     def __init__(
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -351,17 +351,11 @@ class Consumer(KartonServiceBase):
 
         with self.graceful_killer():
             while not self.shutdown:
-                current_bind = self.backend.get_bind(self.identity)
-                if current_bind != self._bind:
-                    self.log.info(
-                        "Binds changed, shutting down. "
-                        "Old binds: %s "
-                        "New binds: %s",
-                        self._bind,
-                        current_bind,
-                    )
+                try:
+                    task = self.backend.consume_routed_task(self.identity)
+                except BindExpiredError as e:
+                    self.log.info("%s", e)
                     break
-                task = self.backend.consume_routed_task(self.identity)
                 if task:
                     self.internal_process(task)
 
@@ -388,7 +382,7 @@ class LogConsumer(KartonServiceBase):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -440,7 +434,7 @@ class Karton(Consumer, Producer):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 

@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from karton.core.logger import LogLineFormatterMixin
 
-from .backend import KartonAsyncBackend
+from .backend import KartonAsyncBackendProtocol
 
 HOSTNAME = platform.node()
 
@@ -17,7 +17,9 @@ QueuedRecord = Optional[Tuple[Dict[str, Any], str]]
 
 
 async def async_log_consumer(
-    queue: asyncio.Queue[QueuedRecord], backend: KartonAsyncBackend, channel: str
+    queue: asyncio.Queue[QueuedRecord],
+    backend: KartonAsyncBackendProtocol,
+    channel: str,
 ) -> None:
     while True:
         item = await queue.get()
@@ -32,7 +34,7 @@ class KartonAsyncLogHandler(logging.Handler, LogLineFormatterMixin):
     logging.Handler that passes logs to the Karton backend.
     """
 
-    def __init__(self, backend: KartonAsyncBackend, channel: str) -> None:
+    def __init__(self, backend: KartonAsyncBackendProtocol, channel: str) -> None:
         logging.Handler.__init__(self)
         self._consumer: Optional[asyncio.Task] = None
         self._queue: asyncio.Queue[QueuedRecord] = asyncio.Queue()
