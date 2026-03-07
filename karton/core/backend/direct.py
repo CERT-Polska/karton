@@ -1,9 +1,6 @@
-import dataclasses
-import enum
 import json
 import logging
 import time
-import urllib.parse
 import warnings
 from collections import defaultdict, namedtuple
 from typing import IO, Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
@@ -20,12 +17,20 @@ from redis.client import Pipeline
 from redis.connection import parse_url as parse_redis_url
 from urllib3.response import HTTPResponse
 
-from .__version__ import __version__
-from .config import Config
-from .exceptions import InvalidIdentityError
-from .resource import LocalResource, RemoteResource
-from .task import Task, TaskPriority, TaskState
-from .utils import chunks, chunks_iter
+from karton.core.config import Config
+from karton.core.exceptions import BindExpiredError
+from karton.core.resource import LocalResource, RemoteResource
+from karton.core.task import Task, TaskPriority, TaskState
+from karton.core.utils import chunks, chunks_iter
+
+from .base import (
+    KartonBackendProtocol,
+    KartonBind,
+    KartonMetrics,
+    KartonServiceInfo,
+    resolve_service_info,
+    unserialize_bind,
+)
 
 KARTON_TASKS_QUEUE = "karton.tasks"
 KARTON_OPERATIONS_QUEUE = "karton.operations"
@@ -35,133 +40,16 @@ KARTON_TASK_NAMESPACE = "karton.task"
 KARTON_OUTPUTS_NAMESPACE = "karton.outputs"
 KARTON_SERVICES_NAMESPACE = "karton.services"
 
-KartonBind = namedtuple(
-    "KartonBind",
-    [
-        "identity",
-        "info",
-        "version",
-        "persistent",
-        "filters",
-        "service_version",
-        "is_async",
-    ],
-)
-
-
 KartonOutputs = namedtuple("KartonOutputs", ["identity", "outputs"])
 logger = logging.getLogger(__name__)
 
 
-class KartonMetrics(enum.Enum):
-    TASK_PRODUCED = "karton.metrics.produced"
-    TASK_CONSUMED = "karton.metrics.consumed"
-    TASK_CRASHED = "karton.metrics.crashed"
-    TASK_ASSIGNED = "karton.metrics.assigned"
-    TASK_GARBAGE_COLLECTED = "karton.metrics.garbage-collected"
-
-
-@dataclasses.dataclass(frozen=True, order=True)
-class KartonServiceInfo:
-    """
-    Extended Karton service information.
-
-    Instances of this dataclass are meant to be aggregated to count service replicas
-    in Karton Dashboard. They're considered equal if identity and versions strings
-    are the same.
-    """
-
-    identity: str = dataclasses.field(metadata={"serializable": False})
-    # This is optional only for compatibility reasons to represent
-    # the services that have identity but don't provide extended version
-    # information (with_service_info)
-    karton_version: Optional[str] = None
-    service_version: Optional[str] = None
-    # instance_id is required for services connecting to Karton Gateway
-    instance_id: Optional[str] = None
-    # Extra information about Redis client
-    redis_client_info: Optional[Dict[str, str]] = dataclasses.field(
-        default=None, hash=False, compare=False, metadata={"serializable": False}
-    )
-
-    def make_client_name(self) -> str:
-        included_keys = [
-            field.name
-            for field in dataclasses.fields(self)
-            if field.metadata.get("serializable", True)
-        ]
-        params = {
-            k: v
-            for k, v in dataclasses.asdict(self).items()
-            if k in included_keys and v is not None
-        }
-        if params:
-            return f"{self.identity}?{urllib.parse.urlencode(params)}"
-        else:
-            return self.identity
-
-    @classmethod
-    def parse_client_name(
-        cls, client_name: str, redis_client_info: Optional[Dict[str, str]] = None
-    ) -> "KartonServiceInfo":
-        included_keys = [
-            field.name
-            for field in dataclasses.fields(cls)
-            if field.metadata.get("serializable", True)
-        ]
-        if "?" in client_name:
-            identity, params_string = client_name.split("?", 1)
-            # Filter out unknown params to not get crashed by future extensions
-            params = dict(
-                [
-                    (key, value)
-                    for key, value in urllib.parse.parse_qsl(params_string)
-                    if key in included_keys
-                ]
-            )
-        else:
-            identity = client_name
-            params = {}
-        return KartonServiceInfo(
-            identity, redis_client_info=redis_client_info, **params
-        )
-
-
-def resolve_service_info(
-    identity: str | None, service_info: KartonServiceInfo | None
-) -> KartonServiceInfo | None:
-    """
-    Resolves KartonServiceInfo object from backend parameters that identify the service.
-    This is mostly for compatibility reasons, in previous versions services could be
-    nameless or without extended version information. Karton Gateway requires complete
-    service info to be provided.
-
-    If only identity is provided: KartonServiceInfo containing only an identity and
-    karton_version information is created.
-
-    If service_info is provided: object is passed through and validated if identity is
-    correct and doesn't contain disallowed characters.
-
-    If none are provided: None is returned.
-    """
-    if service_info is None:
-        if identity is None:
-            return None
-        service_info = KartonServiceInfo(
-            identity=identity,
-            karton_version=__version__,
-        )
-    disallowed_chars = [" ", "?"]
-    if any(
-        disallowed_char in service_info.identity for disallowed_char in disallowed_chars
-    ):
-        raise InvalidIdentityError(
-            f"Karton identity must not contain {disallowed_chars}"
-        )
-    return service_info
-
-
 class KartonBackendBase:
+    """
+    Direct KartonBackend base class shared between
+    sync and async implementation.
+    """
+
     def __init__(
         self,
         config: Config,
@@ -170,6 +58,9 @@ class KartonBackendBase:
     ):
         self.config = config
         self.service_info = resolve_service_info(identity, service_info)
+        # Bind is stored for expiration check done by consume_routed_task
+        # Explicit expiration check is not required when using Karton Gateway
+        self._current_bind: Optional[KartonBind] = None
 
     @property
     def identity(self) -> str | None:
@@ -288,15 +179,7 @@ class KartonBackendBase:
                 service_version=None,
                 is_async=False,
             )
-        return KartonBind(
-            identity=identity,
-            info=bind["info"],
-            version=bind["version"],
-            persistent=bind["persistent"],
-            filters=bind["filters"],
-            service_version=bind.get("service_version"),
-            is_async=bind.get("is_async", False),
-        )
+        return unserialize_bind(identity, bind)
 
     @staticmethod
     def unserialize_output(identity: str, output_data: Set[str]) -> KartonOutputs:
@@ -317,7 +200,7 @@ class KartonBackendBase:
         )
 
 
-class KartonBackend(KartonBackendBase):
+class KartonBackend(KartonBackendBase, KartonBackendProtocol):
     def __init__(
         self,
         config: Config,
@@ -453,6 +336,7 @@ class KartonBackend(KartonBackendBase):
             pipe.hset(KARTON_BINDS_HSET, bind.identity, self.serialize_bind(bind))
             old_serialized_bind, _ = pipe.execute()
 
+        self._current_bind = bind
         if old_serialized_bind:
             return self.unserialize_bind(bind.identity, old_serialized_bind)
         else:
@@ -501,6 +385,8 @@ class KartonBackend(KartonBackendBase):
             match=f"{KARTON_SERVICES_NAMESPACE}:*",
             count=100,
         ):
+            # KartonServiceInfo is returned per connection
+            # so returned services can be duplicated
             for client_name in self.redis.hvals(service_key):
                 try:
                     yield KartonServiceInfo.parse_client_name(client_name)
@@ -969,6 +855,14 @@ class KartonBackend(KartonBackendBase):
         :param timeout: Waiting for task timeout (default: 5)
         :return: Task object
         """
+        if self._current_bind is not None:
+            current_bind = self.get_bind(identity)
+            if current_bind != self._current_bind:
+                raise BindExpiredError(
+                    "Binds changed, shutting down. "
+                    f"Old binds: {self._current_bind} "
+                    f"New binds: {current_bind}"
+                )
         item = self.consume_queues(
             self.get_queue_names(identity),
             timeout=timeout,
@@ -1107,6 +1001,37 @@ class KartonBackend(KartonBackendBase):
         """
         return {k: int(v) for k, v in self.redis.hgetall(metric.value).items()}
 
+    def upload_resource(
+        self,
+        resource: LocalResource,
+        content: Union[bytes, IO[bytes]],
+    ) -> None:
+        """
+        Upload resource object to underlying object storage (S3)
+
+        :param resource: Resource to upload
+        :param content: Object content as bytes or file-like stream
+        """
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be uploaded because its bucket is not set"
+            )
+        self.s3.put_object(Bucket=resource.bucket, Key=resource.uid, Body=content)
+
+    def upload_resource_from_file(self, resource: LocalResource, path: str) -> None:
+        """
+        Upload resource object file to underlying object storage
+
+        :param resource: Resource to upload
+        :param path: Path to the object content
+        """
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be uploaded because its bucket is not set"
+            )
+        with open(path, "rb") as f:
+            self.s3.put_object(Bucket=resource.bucket, Key=resource.uid, Body=f)
+
     def upload_object(
         self,
         bucket: str,
@@ -1115,6 +1040,9 @@ class KartonBackend(KartonBackendBase):
     ) -> None:
         """
         Upload resource object to underlying object storage (S3)
+
+        .. deprecated:: 5.10.0
+           Use :py:meth:`upload_resource` instead
 
         :param bucket: Bucket name
         :param object_uid: Object identifier
@@ -1125,6 +1053,9 @@ class KartonBackend(KartonBackendBase):
     def upload_object_from_file(self, bucket: str, object_uid: str, path: str) -> None:
         """
         Upload resource object file to underlying object storage
+
+        .. deprecated:: 5.10.0
+           Use :py:meth:`upload_resource_from_file` instead
 
         :param bucket: Bucket name
         :param object_uid: Object identifier
@@ -1147,9 +1078,40 @@ class KartonBackend(KartonBackendBase):
         """
         return self.s3.get_object(Bucket=bucket, Key=object_uid)["Body"]
 
+    def download_resource(self, resource: RemoteResource) -> bytes:
+        """
+        Download resource object from object storage.
+
+        :param resource: Resource to download
+        :return: Content bytes
+        """
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be downloaded because its bucket is not set"
+            )
+        with self.s3.get_object(Bucket=resource.bucket, Key=resource.uid)["Body"] as f:
+            ret = f.read()
+        return ret
+
+    def download_resource_to_file(self, resource: RemoteResource, path: str) -> None:
+        """
+        Download resource object from object storage to file
+
+        :param resource: Resource to download
+        :param path: Target file path
+        """
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be downloaded because its bucket is not set"
+            )
+        self.s3.download_file(Bucket=resource.bucket, Key=resource.uid, Filename=path)
+
     def download_object(self, bucket: str, object_uid: str) -> bytes:
         """
         Download resource object from object storage.
+
+        .. deprecated:: 5.10.0
+           Use :py:meth:`download_resource` instead
 
         :param bucket: Bucket name
         :param object_uid: Object identifier
@@ -1162,6 +1124,9 @@ class KartonBackend(KartonBackendBase):
     def download_object_to_file(self, bucket: str, object_uid: str, path: str) -> None:
         """
         Download resource object from object storage to file
+
+        .. deprecated:: 5.10.0
+           Use :py:meth:`download_resource_to_file` instead
 
         :param bucket: Bucket name
         :param object_uid: Object identifier

@@ -27,7 +27,7 @@ karton-system = "karton.system:SystemService.main"
 karton = "karton.core.main:main"
 
 [tool.setuptools]
-packages = ["karton.core", "karton.core.asyncio", "karton.system"]
+packages = ["karton.core", "karton.core.asyncio", "karton.core.backend", "karton.core.asyncio.backend", "karton.system", "karton.gateway"]
 
 [tool.setuptools.dynamic]
 version = {attr = "karton.core.__version__.__version__"}
@@ -50,7 +50,7 @@ extra-requirements = "redis<5.0.0 botocore-stubs"
 [tool.mypy]
 explicit_package_bases = true
 namespace_packages = true
-python_version = "3.10"
+python_version = "3.11"
 
 [[tool.mypy.overrides]]
 module = "urllib3.*"
