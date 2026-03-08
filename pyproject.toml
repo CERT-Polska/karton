@@ -15,7 +15,7 @@ classifiers = [
     "Operating System :: OS Independent"
 ]
 dynamic = ["version", "dependencies"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 [project.urls]
 Homepage = "https://github.com/CERT-Polska/karton"
