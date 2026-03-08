@@ -38,6 +38,7 @@ class HelloRequestMessage(BaseModel):
     library_version: str
     instance_id: str
     service_version: str | None
+    secondary_connection: bool = False
 
 
 class HelloRequest(BaseModel):

@@ -1,18 +1,21 @@
 import contextlib
-import json
 import logging
-import random
 import time
 import urllib.parse
 from io import BytesIO
 from typing import IO, Any, Callable, Iterator
 
 import httpx
-from websockets.protocol import CLOSED
-from websockets.sync.client import ClientConnection, connect
 
 from karton.core.config import Config
 from karton.core.exceptions import BindExpiredError
+from karton.core.gateway_client import (
+    AsyncGatewayClient,
+    ClientConnection,
+    GatewayBindExpiredError,
+    OperationTimeoutError,
+    SyncGatewayClient,
+)
 from karton.core.resource import (
     LocalResource,
     LocalResourceBase,
@@ -59,40 +62,51 @@ class KartonGatewayBackendBase:
             "gateway", "retry_base_timeout", 2
         )
         self.gateway_retry_jitter = self.config.getint("gateway", "retry_jitter", 1)
+        self.gateway_connect_timeout = self.config.getint(
+            "gateway", "connect_timeout", 5
+        )
         self.gateway_response_timeout = self.config.getint(
             "gateway", "response_timeout", 5
         )
+        self._karton_bind: KartonBind | None = None
 
+        async def _session_initiator(
+            gateway_client: AsyncGatewayClient,
+            connection: ClientConnection,
+            secondary: bool,
+        ):
+            await gateway_client.recv(connection, expected_response="hello")
+            await gateway_client.send(
+                connection,
+                request="hello",
+                message={
+                    "identity": self.service_info.identity,
+                    "service_version": self.service_info.service_version,
+                    "library_version": self.service_info.karton_version,
+                    "instance_id": self.service_info.instance_id,
+                },
+            )
+            if not secondary and self._karton_bind is not None:
+                # If it's main connection and bind is already registered
+                # we need to re-register it for new session.
+                bind = self._karton_bind
+                await gateway_client.send(
+                    connection,
+                    request="bind",
+                    message={
+                        "info": bind.info,
+                        "filters": bind.filters,
+                        "persistent": bind.persistent,
+                        "is_async": bind.is_async,
+                    },
+                )
+                await gateway_client.recv(
+                    connection,
+                    expected_response="bind",
+                )
+            await gateway_client.recv(connection)
 
-class GatewayError(Exception):
-    code = ""
-
-    def __init__(self, message: str, code: str | None = None):
-        self.code = code or self.code
-        self.message = message
-
-
-class OperationTimeoutError(GatewayError):
-    code = "timeout"
-
-
-class GatewayBindExpiredError(GatewayError):
-    code = "expired_bind"
-
-
-class GatewayShutdownError(GatewayError):
-    code = "shutdown_in_progress"
-
-
-class GatewayHandshakeError(Exception):
-    pass
-
-
-def make_gateway_error(code: str, message: str) -> GatewayError:
-    for error_class in GatewayError.__subclasses__():
-        if error_class.code == code:
-            return error_class(message)
-    return GatewayError(code, message)
+        self._session_initiator = _session_initiator
 
 
 def override_presigned_url(presigned_url: str, override_host: str) -> tuple[str, str]:
@@ -151,168 +165,19 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
     ):
         super().__init__(config, identity, service_info)
 
-        self._connection: ClientConnection | None = None
-        self._karton_bind: KartonBind | None = None
-        self._connection_used: bool = False
-
-    def _recv(
-        self,
-        connection: ClientConnection,
-        expected_response: str = "success",
-        timeout: int = 10,
-    ) -> dict[str, Any]:
-        data = connection.recv(timeout=timeout)
-        message = json.loads(data)
-        if "response" not in message:
-            raise RuntimeError("Incorrect gateway response, missing 'response' key")
-        if message["response"] == "error":
-            error = message["message"]
-            code = error["code"]
-            error_message = error["error_message"]
-            raise make_gateway_error(code, error_message)
-        if message["response"] != expected_response:
-            raise RuntimeError(
-                f"Got unexpected gateway response: {message['response']}, "
-                f"expected {expected_response}"
-            )
-        return message["message"]
-
-    def _send(
-        self, connection: ClientConnection, request: str, message: dict[str, Any]
-    ) -> None:
-        data = json.dumps(
-            {
-                "request": request,
-                "message": message,
-            }
+        self._gateway_client = SyncGatewayClient(
+            url=self.gateway_url,
+            session_initiator=self._session_initiator,
+            retries=self.gateway_retries,
+            retry_base_timeout=self.gateway_retry_base_timeout,
+            retry_jitter=self.gateway_retry_jitter,
+            connect_timeout=self.gateway_connect_timeout,
+            response_timeout=self.gateway_response_timeout,
+            connection_pool_soft_limit=1,
         )
-        connection.send(data)
-
-    def _init_connection(self, connection: ClientConnection) -> None:
-        self._recv(
-            connection, expected_response="hello", timeout=self.gateway_response_timeout
-        )
-        self._send(
-            connection,
-            request="hello",
-            message={
-                "identity": self.service_info.identity,
-                "service_version": self.service_info.service_version,
-                "library_version": self.service_info.karton_version,
-                "instance_id": self.service_info.instance_id,
-            },
-        )
-        self._recv(connection, timeout=self.gateway_response_timeout)
-
-    def _connect(self, secondary=False) -> ClientConnection:
-        _connection = connect(self.gateway_url)
-        self._init_connection(_connection)
-        if not secondary and self._karton_bind is not None:
-            # If it's main connection and bind is already registered
-            # we need to re-register it for new session.
-            bind = self._karton_bind
-            self._send(
-                _connection,
-                request="bind",
-                message={
-                    "info": bind.info,
-                    "filters": bind.filters,
-                    "persistent": bind.persistent,
-                    "is_async": bind.is_async,
-                },
-            )
-            self._recv(
-                _connection,
-                expected_response="bind",
-                timeout=self.gateway_response_timeout,
-            )
-        return _connection
-
-    @contextlib.contextmanager
-    def _get_connection(self) -> Iterator[ClientConnection]:
-        if self._connection_used:
-            # There are corner cases where Karton tries to send command
-            # while connection is used for handling another one.
-            # One of them is self.log.info("Got signal, shutting down...")
-            # that is called on CTRL-C during waiting in consume_routed_task
-            # This causes ConcurrencyError. Let's initiate a secondary connection
-            # in that case just for that operation.
-            _connection = self._connect(secondary=True)
-            try:
-                yield _connection
-                return
-            finally:
-                _connection.close()
-        try:
-            self._connection_used = True
-            if self._connection is not None and self._connection.state is not CLOSED:
-                yield self._connection
-                return
-            self._connection = self._connect()
-            yield self._connection
-            return
-        except Exception:
-            raise
-        except BaseException:
-            # On BaseException we forcefully close connection
-            # to immediately interrupt blocking operations
-            # (e.g. HardShutdownInterrupt during task recv)
-            if self._connection:
-                self._connection.close()
-                self._connection = None
-            raise
-        finally:
-            self._connection_used = False
-            if self._connection is not None and self._connection.state is CLOSED:
-                self._connection = None
-
-    def _retry_delay(self, try_no):
-        delay = self.gateway_retry_base_timeout * (2**try_no) + (
-            (random.random() * 2 - 1) * self.gateway_retry_jitter
-        )
-        if delay <= 0:
-            delay = self.gateway_retry_base_timeout
-        logger.warning(
-            "Failed to send request to gateway. Retry %d/%d after %.1f seconds",
-            try_no + 1,
-            self.gateway_retries,
-            delay,
-        )
-        time.sleep(delay)
-
-    def make_request(
-        self, request: str, message: dict[str, Any], expected_response: str
-    ):
-        for try_no in range(self.gateway_retries + 1):
-            request_sent = False
-            try:
-                with self._get_connection() as connection:
-                    self._send(connection, request=request, message=message)
-                    request_sent = True
-                    return self._recv(
-                        connection,
-                        expected_response=expected_response,
-                        timeout=self.gateway_response_timeout,
-                    )
-            except (ConnectionError, TimeoutError, GatewayShutdownError) as e:
-                # Close the main connection, even if secondary connection
-                # was the cause. We would need to reconnect to server anyway.
-                if self._connection:
-                    self._connection.close()
-                if not isinstance(e, GatewayShutdownError) and request_sent:
-                    # If request was successfully sent and we got
-                    # ConnectionError/TimeoutError during waiting
-                    # for an answer, we can't safely repeat it
-                    # because request could be (partially)
-                    # processed by gateway. The best we can do
-                    # is to fail operation with an exception
-                    raise
-                if try_no == self.gateway_retries:
-                    raise
-            self._retry_delay(try_no)
 
     def register_bind(self, bind: KartonBind) -> KartonBind | None:
-        response = self.make_request(
+        response = self._gateway_client.make_request(
             request="bind",
             message={
                 "info": bind.info,
@@ -334,7 +199,7 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
             task.payload_persistent
         )
         resources.update(resources_persistent)
-        response = self.make_request(
+        response = self._gateway_client.make_request(
             request="declare_task",
             message={
                 "task": {
@@ -362,14 +227,14 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
         message: dict[str, Any] = {"token": task.token, "status": status.value}
         if status is TaskState.CRASHED:
             message["error"] = task.error
-        self.make_request(
+        self._gateway_client.make_request(
             request="set_task_status",
             message=message,
             expected_response="success",
         )
 
     def produce_unrouted_task(self, task: Task) -> None:
-        self.make_request(
+        self._gateway_client.make_request(
             request="send_task",
             message={
                 "token": task.token,
@@ -379,7 +244,7 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
 
     def consume_routed_task(self, identity: str, timeout: int = 5) -> Task | None:
         try:
-            response = self.make_request(
+            response = self._gateway_client.make_request(
                 request="get_task", message={}, expected_response="task"
             )
         except OperationTimeoutError:
@@ -505,7 +370,7 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
     def produce_log(
         self, log_record: dict[str, Any], logger_name: str, level: str
     ) -> bool:
-        status = self.make_request(
+        status = self._gateway_client.make_request(
             request="send_log",
             message={
                 "log_record": log_record,
@@ -522,33 +387,15 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
         logger_filter: str | None = None,
         level: str | None = None,
     ) -> Iterator[dict[str, Any] | None]:
-        try_no = 0
-        while True:
-            try:
-                with self._get_connection() as connection:
-                    self._send(
-                        connection,
-                        request="subscribe_logs",
-                        message={
-                            "logger_filter": logger_filter,
-                            "level": level,
-                        },
-                    )
-                    while True:
-                        try:
-                            log = self._recv(connection, expected_response="log")
-                            yield log["log_record"]
-                        except OperationTimeoutError:
-                            yield None
-                        # Successful log receive should reset retry counter
-                        try_no = 0
-            except (ConnectionError, TimeoutError, GatewayShutdownError):
-                if self._connection:
-                    self._connection.close()
-                if try_no >= self.gateway_retries:
-                    raise
-            self._retry_delay(try_no)
-            try_no += 1
+        for log_response in self._gateway_client.make_streaming_request(
+            request="subscribe_logs",
+            message={
+                "logger_filter": logger_filter,
+                "level": level,
+            },
+            expected_response="log",
+        ):
+            yield log_response["log_record"]
 
     def increment_metrics(self, metric: KartonMetrics, identity: str) -> None:
         # This is no-op, Karton gateway manages all metrics

@@ -19,7 +19,7 @@ from .errors import (
     OperationTimeoutError,
     ShutdownError,
 )
-from .messages import send_error, send_success
+from .messages import send_success
 from .shutdown import shutdown_latch
 from .task import (
     TaskTokenInfo,
@@ -378,7 +378,7 @@ async def handle_subscribe_logs_request(
     Handler for 'subscribe_log' request which implements consume_log operation
     in the backend. Returns a stream of log records matching the provided filter.
     If there is no log for 5 seconds, returns 'timeout' error. In that case,
-    client should retry the request and continue operation  unless requested by user
+    client should retry the request and continue operation unless requested by user
     to shut down.
 
     :param websocket: WebSocket that received the request
@@ -391,9 +391,7 @@ async def handle_subscribe_logs_request(
         if shutdown_latch.shutdown_in_progress:
             raise ShutdownError("Operation terminated, shutdown is in progress")
         if not log_record:
-            error = OperationTimeoutError("No log found, try again")
-            await send_error(websocket, error)
-            break
+            continue
         log_message = LogResponseMessage(log_record=log_record)
         log_response = LogResponse(message=log_message)
         await websocket.send_text(log_response.model_dump_json())

@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import random
 from contextlib import asynccontextmanager
 
@@ -18,12 +19,16 @@ from .shutdown import shutdown_latch
 HEARTBEAT_BASE_INTERVAL = 5.0
 HEARTBEAT_HARD_TIMEOUT = 15
 INIT_SESSION_TIMEOUT = 30.0
+IDLE_SECONDARY_TIMEOUT = 30.0
+
+logger = logging.getLogger(__name__)
 
 
 class ClientSession:
-    def __init__(self, service_info: KartonServiceInfo):
+    def __init__(self, service_info: KartonServiceInfo, secondary_connection: bool):
         self.service_info = service_info
         self.karton_bind: KartonBind | None = None
+        self.secondary_connection: bool = secondary_connection
 
     @property
     def is_bound(self) -> bool:
@@ -75,7 +80,10 @@ class ClientSession:
             instance_id=hello_request.message.instance_id,
         )
 
-        session = cls(service_info=service_info)
+        session = cls(
+            service_info=service_info,
+            secondary_connection=hello_request.message.secondary_connection,
+        )
         await gateway_backend.register_service(
             service_info, connection_id, HEARTBEAT_HARD_TIMEOUT
         )
@@ -90,7 +98,19 @@ class ClientSession:
 
     async def message_loop(self, websocket: WebSocket):
         while True:
-            request_json = await websocket.receive_text()
+            if not self.secondary_connection:
+                request_json = await websocket.receive_text()
+            else:
+                try:
+                    async with asyncio.timeout(IDLE_SECONDARY_TIMEOUT):
+                        request_json = await websocket.receive_text()
+                except TimeoutError:
+                    logger.info(
+                        "Secondary connection was idle for %d seconds. Closing.",
+                        IDLE_SECONDARY_TIMEOUT,
+                    )
+                    await websocket.close(reason="Secondary connection was idle")
+                    break
             try:
                 request = Request.model_validate_json(request_json)
             except ValidationError as exc:
