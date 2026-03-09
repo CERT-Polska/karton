@@ -10,11 +10,29 @@ from .logger import set_connection_id, setup_logger
 from .messages import send_error
 from .session import ClientSession
 
+# Karton Gateway uses HEXPIRE (hash key expiration)
+# which was implemented in Redis 7.4.0
+REQUIRED_REDIS_VERSION = (7, 4, 0)
+
+
+async def check_redis_version():
+    redis_version = await gateway_backend.get_redis_version()
+    print(redis_version)
+    if redis_version < REQUIRED_REDIS_VERSION:
+        required_version_str = ".".join(map(str, REQUIRED_REDIS_VERSION))
+        current_version_str = ".".join(map(str, redis_version))
+        raise RuntimeError(
+            f"Redis server version is too old. Karton Gateway "
+            f"requires {required_version_str} "
+            f"but current Redis server version is {current_version_str}"
+        )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
         await gateway_backend.connect()
+        await check_redis_version()
         yield
     finally:
         await gateway_backend.close()

@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import time
 from typing import IO, Any, AsyncIterator, Dict, List, Optional, Tuple, Union
 
@@ -157,6 +158,14 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             rs = Redis(**redis_args)
             await rs.ping()
         return rs
+
+    async def get_redis_version(self) -> tuple[int, ...]:
+        redis_server_info = await self.redis.info(section="server")
+        redis_version = redis_server_info["redis_version"]
+        version_match = re.match(r"(\d+)[.](\d+)[.](\d+)", redis_version)
+        if not version_match:
+            raise RuntimeError(f"Failed to parse redis version: {redis_version}")
+        return tuple(int(v) for v in version_match.groups())
 
     def unserialize_resource(self, resource_spec: Dict[str, Any]) -> RemoteResource:
         """
