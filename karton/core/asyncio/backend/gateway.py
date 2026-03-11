@@ -1,162 +1,35 @@
 import contextlib
 import logging
 import time
-import urllib.parse
 from io import BytesIO
-from typing import IO, Any, Callable, Iterator
+from typing import IO, Any, AsyncIterator
 
 import httpx
 
+from karton.core.asyncio.resource import LocalResource, RemoteResource
+from karton.core.backend import KartonBind, KartonMetrics, KartonServiceInfo
+from karton.core.backend.base import unserialize_bind
+from karton.core.backend.gateway import (
+    KartonGatewayBackendBase,
+    deserialize_resources,
+    override_presigned_url,
+    serialize_resources,
+)
 from karton.core.config import Config
 from karton.core.exceptions import BindExpiredError
 from karton.core.gateway_client import (
     AsyncGatewayClient,
-    ClientConnection,
     GatewayBindExpiredError,
     OperationTimeoutError,
-    SyncGatewayClient,
-)
-from karton.core.resource import (
-    LocalResource,
-    LocalResourceBase,
-    RemoteResource,
-    ResourceBase,
 )
 from karton.core.task import Task, TaskPriority, TaskState, root_uid_from_task_uid
-from karton.core.utils import recursive_map
 
-from .base import (
-    KartonBackendProtocol,
-    KartonBind,
-    KartonMetrics,
-    KartonServiceInfo,
-    resolve_service_info,
-    unserialize_bind,
-)
+from .base import KartonAsyncBackendProtocol
 
 logger = logging.getLogger(__name__)
 
 
-class KartonGatewayBackendBase:
-    def __init__(
-        self,
-        config: Config,
-        identity: str | None = None,
-        service_info: KartonServiceInfo | None = None,
-    ):
-        self.config = config
-        service_info = resolve_service_info(identity, service_info)
-        if service_info is None:
-            raise RuntimeError(
-                "Service identity can't be None while using Karton Gateway"
-            )
-        self.service_info: KartonServiceInfo = service_info
-
-        self.gateway_url = self.config.get("gateway", "url")
-        self.gateway_s3_hostname_override = self.config.get(
-            "gateway", "s3_hostname_override"
-        )
-
-        self.gateway_retries = self.config.getint("gateway", "retries", 5)
-        self.gateway_retry_base_timeout = self.config.getint(
-            "gateway", "retry_base_timeout", 2
-        )
-        self.gateway_retry_jitter = self.config.getint("gateway", "retry_jitter", 1)
-        self.gateway_connect_timeout = self.config.getint(
-            "gateway", "connect_timeout", 5
-        )
-        self.gateway_response_timeout = self.config.getint(
-            "gateway", "response_timeout", 5
-        )
-        self._karton_bind: KartonBind | None = None
-
-        async def _session_initiator(
-            gateway_client: AsyncGatewayClient,
-            connection: ClientConnection,
-            secondary: bool,
-        ):
-            await gateway_client.recv(connection, expected_response="hello")
-            await gateway_client.send(
-                connection,
-                request="hello",
-                message={
-                    "identity": self.service_info.identity,
-                    "service_version": self.service_info.service_version,
-                    "library_version": self.service_info.karton_version,
-                    "instance_id": self.service_info.instance_id,
-                },
-            )
-            if not secondary and self._karton_bind is not None:
-                # If it's main connection and bind is already registered
-                # we need to re-register it for new session.
-                bind = self._karton_bind
-                await gateway_client.send(
-                    connection,
-                    request="bind",
-                    message={
-                        "info": bind.info,
-                        "filters": bind.filters,
-                        "persistent": bind.persistent,
-                        "is_async": bind.is_async,
-                    },
-                )
-                await gateway_client.recv(
-                    connection,
-                    expected_response="bind",
-                )
-            await gateway_client.recv(connection)
-
-        self._session_initiator = _session_initiator
-
-
-def override_presigned_url(presigned_url: str, override_host: str) -> tuple[str, str]:
-    """
-    Overrides presigned URL with new hostname.
-    Returns URL netloc (to be put in Host header) and new URL
-    """
-    parsed_url = urllib.parse.urlparse(presigned_url)
-    url_host = parsed_url.netloc
-    return url_host, parsed_url._replace(netloc=override_host).geturl()
-
-
-def serialize_resources(
-    payload: dict[str, Any]
-) -> tuple[dict[str, Any], dict[str, LocalResourceBase]]:
-    local_resources: dict[str, LocalResourceBase] = {}
-
-    def serialize_resource(obj: Any) -> Any:
-        if isinstance(obj, ResourceBase):
-            if to_upload := isinstance(obj, LocalResourceBase):
-                local_resources[obj.uid] = obj
-            return {
-                "__karton_resource__": {
-                    "uid": obj.uid,
-                    "name": obj.name,
-                    "size": obj.size,
-                    "metadata": obj.metadata,
-                    "sha256": obj.sha256,
-                    "bucket": obj.bucket,
-                    "to_upload": to_upload,
-                }
-            }
-        return obj
-
-    return recursive_map(serialize_resource, payload), local_resources
-
-
-def deserialize_resources(
-    payload: dict[str, Any],
-    resource_deserializer: Callable[[dict[str, Any]], ResourceBase],
-) -> dict[str, Any]:
-    def deserialize_resource(obj: Any) -> Any:
-        if type(obj) is dict and obj.keys() == {"__karton_resource__"}:
-            return resource_deserializer(obj["__karton_resource__"])
-        return obj
-
-    return recursive_map(deserialize_resource, payload)
-
-
-class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
+class KartonGatewayBackend(KartonGatewayBackendBase, KartonAsyncBackendProtocol):
     def __init__(
         self,
         config: Config,
@@ -164,8 +37,10 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
         service_info: KartonServiceInfo | None = None,
     ):
         super().__init__(config, identity, service_info)
-
-        self._gateway_client = SyncGatewayClient(
+        self.gateway_connection_pool_soft_limit = self.config.getint(
+            "gateway", "connection_pool_soft_limit", 4
+        )
+        self._gateway_client = AsyncGatewayClient(
             url=self.gateway_url,
             session_initiator=self._session_initiator,
             retries=self.gateway_retries,
@@ -173,11 +48,15 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
             retry_jitter=self.gateway_retry_jitter,
             connect_timeout=self.gateway_connect_timeout,
             response_timeout=self.gateway_response_timeout,
-            connection_pool_soft_limit=1,
+            connection_pool_soft_limit=self.gateway_connection_pool_soft_limit,
         )
+        self._http_client = httpx.AsyncClient()
 
-    def register_bind(self, bind: KartonBind) -> KartonBind | None:
-        response = self._gateway_client.make_request(
+    async def connect(self) -> None:
+        pass
+
+    async def register_bind(self, bind: KartonBind) -> KartonBind | None:
+        response = await self._gateway_client.make_request(
             request="bind",
             message={
                 "info": bind.info,
@@ -192,14 +71,14 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
         old_bind = response["old_bind"]
         return unserialize_bind(old_bind["identity"], old_bind)
 
-    def declare_task(self, task: Task) -> None:
+    async def declare_task(self, task: Task) -> None:
         # Serialize resources
         payload, resources = serialize_resources(task.payload)
         payload_persistent, resources_persistent = serialize_resources(
             task.payload_persistent
         )
         resources.update(resources_persistent)
-        response = self._gateway_client.make_request(
+        response = await self._gateway_client.make_request(
             request="declare_task",
             message={
                 "task": {
@@ -219,7 +98,7 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
         for upload_url in response["upload_urls"]:
             resources[upload_url["uid"]].bind_upload_url(upload_url["url"])
 
-    def set_task_status(self, task: Task, status: TaskState) -> None:
+    async def set_task_status(self, task: Task, status: TaskState) -> None:
         if task.status == status:
             return
         task.status = status
@@ -227,14 +106,14 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
         message: dict[str, Any] = {"token": task.token, "status": status.value}
         if status is TaskState.CRASHED:
             message["error"] = task.error
-        self._gateway_client.make_request(
+        await self._gateway_client.make_request(
             request="set_task_status",
             message=message,
             expected_response="success",
         )
 
-    def produce_unrouted_task(self, task: Task) -> None:
-        self._gateway_client.make_request(
+    async def produce_unrouted_task(self, task: Task) -> None:
+        await self._gateway_client.make_request(
             request="send_task",
             message={
                 "token": task.token,
@@ -242,9 +121,9 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
             expected_response="success",
         )
 
-    def consume_routed_task(self, identity: str, timeout: int = 5) -> Task | None:
+    async def consume_routed_task(self, identity: str, timeout: int = 5) -> Task | None:
         try:
-            response = self._gateway_client.make_request(
+            response = await self._gateway_client.make_request(
                 request="get_task", message={}, expected_response="task"
             )
         except OperationTimeoutError:
@@ -280,13 +159,13 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
             _token=response["token"],
         )
 
-    def upload_resource(
+    async def upload_resource(
         self, resource: LocalResource, content: bytes | IO[bytes]
     ) -> None:
         if type(content) is bytes:
             content = BytesIO(content)
 
-        def streamer():
+        async def streamer():
             while data := content.read(32768):
                 yield data
 
@@ -296,41 +175,45 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
             host, upload_url = override_presigned_url(
                 resource.upload_url, self.gateway_s3_hostname_override
             )
-            response = httpx.put(
+            response = await self._http_client.put(
                 upload_url, content=streamer(), headers={**headers, "Host": host}
             )
         else:
-            response = httpx.put(
+            response = await self._http_client.put(
                 resource.upload_url, content=streamer(), headers=headers
             )
 
         response.raise_for_status()
 
-    def upload_resource_from_file(self, resource: LocalResource, path: str) -> None:
+    async def upload_resource_from_file(
+        self, resource: LocalResource, path: str
+    ) -> None:
         with open(path, "rb") as f:
-            self.upload_resource(resource, f)
+            await self.upload_resource(resource, f)
 
     def _get_download_stream(
         self, resource: RemoteResource
-    ) -> contextlib.AbstractContextManager[httpx.Response]:
+    ) -> contextlib.AbstractAsyncContextManager[httpx.Response]:
         if self.gateway_s3_hostname_override is not None:
             host, download_url = override_presigned_url(
                 resource.download_url, self.gateway_s3_hostname_override
             )
-            return httpx.stream("GET", download_url, headers={"Host": host})
+            return self._http_client.stream("GET", download_url, headers={"Host": host})
         else:
-            return httpx.stream("GET", resource.download_url)
+            return self._http_client.stream("GET", resource.download_url)
 
-    def download_resource(self, resource: RemoteResource) -> bytes:
-        with self._get_download_stream(resource) as response:
+    async def download_resource(self, resource: RemoteResource) -> bytes:
+        async with self._get_download_stream(resource) as response:
             response.raise_for_status()
-            return response.read()
+            return await response.aread()
 
-    def download_resource_to_file(self, resource: RemoteResource, path: str) -> None:
-        with self._get_download_stream(resource) as response:
+    async def download_resource_to_file(
+        self, resource: RemoteResource, path: str
+    ) -> None:
+        async with self._get_download_stream(resource) as response:
             response.raise_for_status()
             with open(path, "wb") as f:
-                for chunk in response.iter_bytes():
+                async for chunk in response.aiter_bytes():
                     f.write(chunk)
 
     def upload_object(
@@ -367,10 +250,10 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
             "Gateway backend doesn't allow to remove arbitrary S3 objects"
         )
 
-    def produce_log(
+    async def produce_log(
         self, log_record: dict[str, Any], logger_name: str, level: str
     ) -> bool:
-        status = self._gateway_client.make_request(
+        status = await self._gateway_client.make_request(
             request="send_log",
             message={
                 "log_record": log_record,
@@ -381,13 +264,13 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
         )
         return status["was_received"]
 
-    def consume_log(
+    async def consume_log(
         self,
         timeout: int = 5,
         logger_filter: str | None = None,
         level: str | None = None,
-    ) -> Iterator[dict[str, Any] | None]:
-        for log_response in self._gateway_client.make_streaming_request(
+    ) -> AsyncIterator[dict[str, Any] | None]:
+        async for log_response in self._gateway_client.make_streaming_request(
             request="subscribe_logs",
             message={
                 "logger_filter": logger_filter,
@@ -397,6 +280,6 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
         ):
             yield log_response["log_record"]
 
-    def increment_metrics(self, metric: KartonMetrics, identity: str) -> None:
+    async def increment_metrics(self, metric: KartonMetrics, identity: str) -> None:
         # This is no-op, Karton gateway manages all metrics
         return

@@ -1,6 +1,5 @@
 import json
 import logging
-import re
 import time
 from typing import IO, Any, AsyncIterator, Dict, List, Optional, Tuple, Union
 
@@ -158,14 +157,6 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             rs = Redis(**redis_args)
             await rs.ping()
         return rs
-
-    async def get_redis_version(self) -> tuple[int, ...]:
-        redis_server_info = await self.redis.info(section="server")
-        redis_version = redis_server_info["redis_version"]
-        version_match = re.match(r"(\d+)[.](\d+)[.](\d+)", redis_version)
-        if not version_match:
-            raise RuntimeError(f"Failed to parse redis version: {redis_version}")
-        return tuple(int(v) for v in version_match.groups())
 
     def unserialize_resource(self, resource_spec: Dict[str, Any]) -> RemoteResource:
         """
@@ -329,6 +320,45 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         rs = pipe or self.redis
         await rs.hincrby(metric.value, identity, 1)
 
+    async def upload_resource(
+        self,
+        resource: LocalResource,
+        content: Union[bytes, IO[bytes]],
+    ) -> None:
+        """
+        Upload resource object to underlying object storage (S3)
+
+        :param resource: Resource to upload
+        :param content: Object content as bytes or file-like stream
+        """
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be uploaded because its bucket is not set"
+            )
+        async with self.s3 as client:
+            await client.put_object(
+                Bucket=resource.bucket, Key=resource.uid, Body=content
+            )
+
+    async def upload_resource_from_file(
+        self, resource: LocalResource, path: str
+    ) -> None:
+        """
+        Upload resource object file to underlying object storage
+
+        :param resource: Resource to upload
+        :param path: Path to the object content
+        """
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be uploaded because its bucket is not set"
+            )
+        with open(path, "rb") as f:
+            async with self.s3 as client:
+                await client.put_object(
+                    Bucket=resource.bucket, Key=resource.uid, Body=f
+                )
+
     async def upload_object(
         self,
         bucket: str,
@@ -358,6 +388,39 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         async with self.s3 as client:
             with open(path, "rb") as f:
                 await client.put_object(Bucket=bucket, Key=object_uid, Body=f)
+
+    async def download_resource(self, resource: RemoteResource) -> bytes:
+        """
+        Download resource object from object storage.
+
+        :param resource: Resource to download
+        :return: Content bytes
+        """
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be downloaded because its bucket is not set"
+            )
+        async with self.s3 as client:
+            obj = await client.get_object(Bucket=resource.bucket, Key=resource.uid)
+            return await obj["Body"].read()
+
+    async def download_resource_to_file(
+        self, resource: RemoteResource, path: str
+    ) -> None:
+        """
+        Download resource object from object storage to file
+
+        :param resource: Resource to download
+        :param path: Target file path
+        """
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be downloaded because its bucket is not set"
+            )
+        async with self.s3 as client:
+            await client.download_file(
+                Bucket=resource.bucket, Key=resource.uid, Filename=path
+            )
 
     async def download_object(self, bucket: str, object_uid: str) -> bytes:
         """
@@ -446,7 +509,6 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         so Karton Gateway uses heartbeat-based approach to track them.
 
         Used internally by Karton Gateway.
-        This method requires at least Redis >= 7.4.0
 
         :param service_info: Service info of the connected service
         :param connection_id: Connection identifier
@@ -454,18 +516,12 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         """
         if service_info.instance_id is None:
             raise ValueError("instance_id in service_info can't be None")
-        async with self.redis.pipeline(transaction=True) as pipe:
-            await pipe.hset(
-                f"{KARTON_SERVICES_NAMESPACE}:{service_info.identity}",
-                f"{service_info.instance_id}:{connection_id}",
-                service_info.make_client_name(),
-            )
-            await pipe.hexpire(
-                f"{KARTON_SERVICES_NAMESPACE}:{service_info.identity}",
-                expires_after,
-                f"{service_info.instance_id}:{connection_id}",
-            )
-            await pipe.execute()
+        await self.redis.set(
+            f"{KARTON_SERVICES_NAMESPACE}:{service_info.identity}:"
+            f"{service_info.instance_id}:{connection_id}",
+            service_info.make_client_name(),
+            ex=expires_after,
+        )
 
     async def heartbeat_service(
         self, service_info: KartonServiceInfo, connection_id: str, expires_after: int
@@ -476,7 +532,6 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         See also: register_service
 
         Used internally by Karton Gateway.
-        This method requires at least Redis >= 7.4.0
 
         :param service_info: Service info of the connected service
         :param connection_id: Connection identifier
@@ -484,10 +539,10 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         """
         if service_info.instance_id is None:
             raise ValueError("instance_id in service_info can't be None")
-        await self.redis.hexpire(
-            f"{KARTON_SERVICES_NAMESPACE}:{service_info.identity}",
-            expires_after,
+        await self.redis.expire(
+            f"{KARTON_SERVICES_NAMESPACE}:{service_info.identity}:"
             f"{service_info.instance_id}:{connection_id}",
+            expires_after,
         )
 
     async def unregister_service(
@@ -506,8 +561,8 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         """
         if service_info.instance_id is None:
             raise ValueError("instance_id in service_info can't be None")
-        await self.redis.hdel(
-            f"{KARTON_SERVICES_NAMESPACE}:{service_info.identity}",
+        await self.redis.delete(
+            f"{KARTON_SERVICES_NAMESPACE}:{service_info.identity}:"
             f"{service_info.instance_id}:{connection_id}",
         )
 

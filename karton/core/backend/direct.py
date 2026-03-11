@@ -381,13 +381,18 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         return bound_identities
 
     def _get_online_gateway_services(self) -> Iterator[KartonServiceInfo]:
-        for service_key in self.redis.scan_iter(
-            match=f"{KARTON_SERVICES_NAMESPACE}:*",
-            count=100,
+        for service_keys in chunks_iter(
+            self.redis.scan_iter(
+                match=f"{KARTON_SERVICES_NAMESPACE}:*",
+                count=100,
+            ),
+            size=100,
         ):
             # KartonServiceInfo is returned per connection
             # so returned services can be duplicated
-            for client_name in self.redis.hvals(service_key):
+            for client_name in self.redis.mget(*service_keys):
+                if not client_name:
+                    continue
                 try:
                     yield KartonServiceInfo.parse_client_name(client_name)
                 except Exception:
