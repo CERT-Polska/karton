@@ -1,5 +1,4 @@
 import json
-import os
 from typing import List
 
 from pydantic import BaseModel, Field
@@ -26,6 +25,5 @@ def get_gateway_config(config: Config) -> GatewayServerConfig:
     )
 
 
-config_file = os.getenv("KARTON_CONFIG_FILE")
-karton_config = Config(config_file)
+karton_config = Config()
 gateway_config = get_gateway_config(karton_config)
