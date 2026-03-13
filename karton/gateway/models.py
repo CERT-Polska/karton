@@ -39,6 +39,7 @@ class HelloRequestMessage(BaseModel):
     instance_id: str
     service_version: str | None
     secondary_connection: bool = False
+    password: str | None
 
 
 class HelloRequest(BaseModel):

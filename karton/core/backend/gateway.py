@@ -53,6 +53,7 @@ class KartonGatewayBackendBase:
         self.service_info: KartonServiceInfo = service_info
 
         self.gateway_url = self.config.get("gateway", "url")
+        self.gateway_password = self.config.get("gateway", "password")
         self.gateway_s3_hostname_override = self.config.get(
             "gateway", "s3_hostname_override"
         )
@@ -84,6 +85,7 @@ class KartonGatewayBackendBase:
                     "service_version": self.service_info.service_version,
                     "library_version": self.service_info.karton_version,
                     "instance_id": self.service_info.instance_id,
+                    "password": self.gateway_password,
                 },
             )
             if not secondary and self._karton_bind is not None:

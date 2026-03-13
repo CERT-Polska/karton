@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import random
+import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import WebSocket
@@ -10,7 +11,13 @@ from karton.core.__version__ import __version__
 from karton.core.asyncio.backend import KartonBind, KartonServiceInfo
 
 from .backend import gateway_backend
-from .errors import BadRequestError, KartonGatewayError, OperationTimeoutError
+from .config import gateway_config
+from .errors import (
+    BadCredentialsError,
+    BadRequestError,
+    KartonGatewayError,
+    OperationTimeoutError,
+)
 from .messages import send_error, send_success
 from .models import HelloRequest, HelloResponse, HelloResponseMessage, Request
 from .operations import call_request_handler
@@ -66,6 +73,13 @@ class ClientSession:
             async with asyncio.timeout(timeout):
                 request_json = await websocket.receive_text()
                 hello_request = HelloRequest.model_validate_json(request_json)
+                if gateway_config.password is not None and (
+                    not hello_request.message.password
+                    or not secrets.compare_digest(
+                        hello_request.message.password, gateway_config.password
+                    )
+                ):
+                    raise BadCredentialsError("Client has provided wrong password")
         except TimeoutError as exc:
             raise OperationTimeoutError(
                 "Client has not replied in required time"
