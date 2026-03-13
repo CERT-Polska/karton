@@ -67,7 +67,7 @@ class KartonGatewayBackendBase:
             "gateway", "connect_timeout", 5
         )
         self.gateway_response_timeout = self.config.getint(
-            "gateway", "response_timeout", 5
+            "gateway", "response_timeout", 15
         )
         self._karton_bind: KartonBind | None = None
 
@@ -397,7 +397,8 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
             },
             expected_response="log",
         ):
-            yield log_response["log_record"]
+            if log_response["log_record"]:
+                yield log_response["log_record"]
 
     def increment_metrics(self, metric: KartonMetrics, identity: str) -> None:
         # This is no-op, Karton gateway manages all metrics
