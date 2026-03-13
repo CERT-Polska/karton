@@ -1,10 +1,14 @@
 # ONLY FOR LOCAL DEVELOPMENT
-version: "3"
 services:
   redis:
     image: library/redis
     ports:
       - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 3s
+      timeout: 3s
+      retries: 10
   minio:
     image: minio/minio
     command: "server --address 0.0.0.0:9000 --console-address :9001 /data"
@@ -12,19 +16,40 @@ services:
       - /tmp/minio:/data
     ports:
       - "127.0.0.1:9000:9000"
+    healthcheck:
+      test: timeout 5s bash -c ':> /dev/tcp/127.0.0.1/9000' || exit 1
+      interval: 3s
+      timeout: 5s
+      retries: 10
     environment:
       - MINIO_ACCESS_KEY=karton-test-access
       - MINIO_SECRET_KEY=karton-test-key
   system:
     build:
       context: ..
+      dockerfile: system.Dockerfile
     env_file:
       - karton-vars.env
     command:
       - "--setup-bucket"
     depends_on:
-      - minio
-      - redis
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+  gateway:
+    build:
+      context: ..
+      dockerfile: gateway.Dockerfile
+    env_file:
+      - karton-vars.env
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
   logger:
     build:
       context: ..
