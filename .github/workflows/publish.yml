@@ -26,9 +26,21 @@ jobs:
       - name: Build and push the image
         uses: docker/build-push-action@v4
         with:
+          file: system.Dockerfile
           tags: |
             certpl/karton-system:${{ github.sha }}
             certpl/karton-system:master
+          push: ${{ github.event_name == 'push' }}
+          # Flux v1 doesn't support OCI-compliant manifests
+          provenance: false
+          platforms: linux/arm64,linux/amd64
+      - name: Build and push the image
+        uses: docker/build-push-action@v4
+        with:
+          file: gateway.Dockerfile
+          tags: |
+            certpl/karton-gateway:${{ github.sha }}
+            certpl/karton-gateway:master
           push: ${{ github.event_name == 'push' }}
           # Flux v1 doesn't support OCI-compliant manifests
           provenance: false
