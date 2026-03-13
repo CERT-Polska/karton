@@ -1,4 +1,4 @@
-from typing import IO, Any, Protocol
+from typing import IO, Any, AsyncIterator, Protocol
 
 from karton.core.asyncio.resource import LocalResource, RemoteResource
 from karton.core.backend import KartonBind, KartonMetrics
@@ -47,3 +47,10 @@ class KartonAsyncBackendProtocol(Protocol):
     async def produce_log(
         self, log_record: dict[str, Any], logger_name: str, level: str
     ) -> bool: ...
+
+    def consume_log(
+        self,
+        timeout: int = 5,
+        logger_filter: str | None = None,
+        level: str | None = None,
+    ) -> AsyncIterator[dict[str, Any] | None]: ...
