@@ -391,7 +391,7 @@ async def handle_subscribe_logs_request(
         if shutdown_latch.shutdown_in_progress:
             raise ShutdownError("Operation terminated, shutdown is in progress")
         if not log_record:
-            continue
+            log_record = {}
         log_message = LogResponseMessage(log_record=log_record)
         log_response = LogResponse(message=log_message)
         await websocket.send_text(log_response.model_dump_json())

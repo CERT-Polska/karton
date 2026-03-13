@@ -72,6 +72,8 @@ class BackendMock:
         content: Union[bytes, BinaryIO],
         length: Optional[int] = None,
     ) -> None:
+        if resource.bucket is None:
+            raise RuntimeError("Bucket should not be None")
         log.debug("Uploading object %s to bucket %s", resource.uid, resource.bucket)
         if isinstance(content, bytes):
             self.buckets[resource.bucket][resource.uid] = content
@@ -79,16 +81,30 @@ class BackendMock:
             self.buckets[resource.bucket][resource.uid] = content.read()
 
     def download_resource(self, resource: RemoteResource) -> bytes:
+        if resource.bucket is None:
+            raise RuntimeError("Bucket should not be None")
         log.debug("Downloading object %s from bucket %s", resource.uid, resource.bucket)
         return self.buckets[resource.bucket][resource.uid]
 
     def upload_resource_from_file(self, resource: LocalResource, path: str) -> None:
-        log.debug("Uploading object %s from file from bucket %s", resource.uid, resource.bucket)
+        if resource.bucket is None:
+            raise RuntimeError("Bucket should not be None")
+        log.debug(
+            "Uploading object %s from file from bucket %s",
+            resource.uid,
+            resource.bucket,
+        )
         with open(path, "rb") as f:
             self.buckets[resource.bucket][resource.uid] = f.read()
 
     def download_resource_to_file(self, resource: RemoteResource, path: str) -> None:
-        log.debug("Downloading object %s from bucket %s to file", resource.uid, resource.bucket)
+        if resource.bucket is None:
+            raise RuntimeError("Bucket should not be None")
+        log.debug(
+            "Downloading object %s from bucket %s to file",
+            resource.uid,
+            resource.bucket,
+        )
         with open(path, "wb") as f:
             f.write(self.buckets[resource.bucket][resource.uid])
 
