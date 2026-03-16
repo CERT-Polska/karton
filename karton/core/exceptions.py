@@ -8,3 +8,7 @@ class TaskTimeoutError(BaseException):
 
 class HardShutdownInterrupt(BaseException):
     pass
+
+
+class BindExpiredError(Exception):
+    pass

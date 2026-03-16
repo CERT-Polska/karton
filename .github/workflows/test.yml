@@ -25,7 +25,7 @@ jobs:
         with:
           python-version: 3.${{ matrix.minor }}
       - run: pip install -r requirements.txt
-      - run: python -m unittest discover
+      - run: python -m unittest discover -s tests
   docs:
     runs-on: ubuntu-latest
     steps:

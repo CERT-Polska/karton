@@ -1,7 +1,7 @@
 import json
 import logging
 import time
-from typing import IO, Any, Dict, List, Optional, Tuple, Union
+from typing import IO, Any, AsyncIterator, Dict, List, Optional, Tuple, Union
 
 import aioboto3
 from aiobotocore.credentials import ContainerProvider, InstanceMetadataProvider
@@ -13,22 +13,24 @@ from redis.exceptions import AuthenticationError
 
 from karton.core import Config, Task
 from karton.core.asyncio.resource import LocalResource, RemoteResource
-from karton.core.backend import (
+from karton.core.backend import KartonBind, KartonMetrics, KartonServiceInfo
+from karton.core.backend.direct import (
     KARTON_BINDS_HSET,
+    KARTON_SERVICES_NAMESPACE,
     KARTON_TASK_NAMESPACE,
     KARTON_TASKS_QUEUE,
     KartonBackendBase,
-    KartonBind,
-    KartonMetrics,
-    KartonServiceInfo,
 )
+from karton.core.exceptions import BindExpiredError
 from karton.core.resource import LocalResource as SyncLocalResource
 from karton.core.task import TaskState
+
+from .base import KartonAsyncBackendProtocol
 
 logger = logging.getLogger(__name__)
 
 
-class KartonAsyncBackend(KartonBackendBase):
+class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
     def __init__(
         self,
         config: Config,
@@ -102,6 +104,13 @@ class KartonAsyncBackend(KartonBackendBase):
 
         session = aioboto3.Session()
         self._s3_session = session
+
+    async def close(self) -> None:
+        if self._redis is not None:
+            await self._redis.close()
+            self._redis = None
+        if self._s3_session is not None:
+            self._s3_session = None
 
     async def iam_auth_s3(self):
         boto_session = get_session()
@@ -215,6 +224,7 @@ class KartonAsyncBackend(KartonBackendBase):
             await pipe.hset(KARTON_BINDS_HSET, bind.identity, self.serialize_bind(bind))
             old_serialized_bind, _ = await pipe.execute()
 
+        self._current_bind = bind
         if old_serialized_bind:
             return self.unserialize_bind(bind.identity, old_serialized_bind)
         else:
@@ -280,6 +290,14 @@ class KartonAsyncBackend(KartonBackendBase):
         :param timeout: Waiting for task timeout (default: 5)
         :return: Task object
         """
+        if self._current_bind is not None:
+            current_bind = await self.get_bind(identity)
+            if current_bind != self._current_bind:
+                raise BindExpiredError(
+                    "Binds changed, shutting down. "
+                    f"Old binds: {self._current_bind} "
+                    f"New binds: {current_bind}"
+                )
         item = await self.consume_queues(
             self.get_queue_names(identity),
             timeout=timeout,
@@ -301,6 +319,45 @@ class KartonAsyncBackend(KartonBackendBase):
         """
         rs = pipe or self.redis
         await rs.hincrby(metric.value, identity, 1)
+
+    async def upload_resource(
+        self,
+        resource: LocalResource,
+        content: Union[bytes, IO[bytes]],
+    ) -> None:
+        """
+        Upload resource object to underlying object storage (S3)
+
+        :param resource: Resource to upload
+        :param content: Object content as bytes or file-like stream
+        """
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be uploaded because its bucket is not set"
+            )
+        async with self.s3 as client:
+            await client.put_object(
+                Bucket=resource.bucket, Key=resource.uid, Body=content
+            )
+
+    async def upload_resource_from_file(
+        self, resource: LocalResource, path: str
+    ) -> None:
+        """
+        Upload resource object file to underlying object storage
+
+        :param resource: Resource to upload
+        :param path: Path to the object content
+        """
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be uploaded because its bucket is not set"
+            )
+        with open(path, "rb") as f:
+            async with self.s3 as client:
+                await client.put_object(
+                    Bucket=resource.bucket, Key=resource.uid, Body=f
+                )
 
     async def upload_object(
         self,
@@ -331,6 +388,39 @@ class KartonAsyncBackend(KartonBackendBase):
         async with self.s3 as client:
             with open(path, "rb") as f:
                 await client.put_object(Bucket=bucket, Key=object_uid, Body=f)
+
+    async def download_resource(self, resource: RemoteResource) -> bytes:
+        """
+        Download resource object from object storage.
+
+        :param resource: Resource to download
+        :return: Content bytes
+        """
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be downloaded because its bucket is not set"
+            )
+        async with self.s3 as client:
+            obj = await client.get_object(Bucket=resource.bucket, Key=resource.uid)
+            return await obj["Body"].read()
+
+    async def download_resource_to_file(
+        self, resource: RemoteResource, path: str
+    ) -> None:
+        """
+        Download resource object from object storage to file
+
+        :param resource: Resource to download
+        :param path: Target file path
+        """
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be downloaded because its bucket is not set"
+            )
+        async with self.s3 as client:
+            await client.download_file(
+                Bucket=resource.bucket, Key=resource.uid, Filename=path
+            )
 
     async def download_object(self, bucket: str, object_uid: str) -> bytes:
         """
@@ -377,3 +467,143 @@ class KartonAsyncBackend(KartonBackendBase):
             )
             > 0
         )
+
+    async def consume_log(
+        self,
+        timeout: int = 5,
+        logger_filter: Optional[str] = None,
+        level: Optional[str] = None,
+    ) -> AsyncIterator[Optional[Dict[str, Any]]]:
+        """
+        Subscribe to logs channel and yield subsequent log records
+        or None if timeout has been reached.
+
+        If you want to subscribe only to a specific logger name
+        and/or log level, pass them via logger_filter and level arguments.
+
+        :param timeout: Waiting for log record timeout (default: 5)
+        :param logger_filter: Filter for name of consumed logger
+        :param level: Log level
+        :return: Dict with log record or None if timeout has been reached
+        """
+        async with self.redis.pubsub() as pubsub:
+            await pubsub.psubscribe(self._log_channel(logger_filter, level))
+            while pubsub.subscribed:
+                item = await pubsub.get_message(
+                    ignore_subscribe_messages=True, timeout=timeout
+                )
+                if item and item["type"] == "pmessage":
+                    body = json.loads(item["data"])
+                    if "task" in body and isinstance(body["task"], str):
+                        body["task"] = json.loads(body["task"])
+                    yield body
+                yield None
+
+    async def register_service(
+        self, service_info: KartonServiceInfo, connection_id: str, expires_after: int
+    ):
+        """
+        Registers a connection for an online service.
+
+        Services using gateway backend can't be identified by Redis connection name,
+        so Karton Gateway uses heartbeat-based approach to track them.
+
+        Used internally by Karton Gateway.
+
+        :param service_info: Service info of the connected service
+        :param connection_id: Connection identifier
+        :param expires_after: Time to live for the record (in seconds)
+        """
+        if service_info.instance_id is None:
+            raise ValueError("instance_id in service_info can't be None")
+        await self.redis.set(
+            f"{KARTON_SERVICES_NAMESPACE}:{service_info.identity}:"
+            f"{service_info.instance_id}:{connection_id}",
+            service_info.make_client_name(),
+            ex=expires_after,
+        )
+
+    async def heartbeat_service(
+        self, service_info: KartonServiceInfo, connection_id: str, expires_after: int
+    ):
+        """
+        Updates a heartbeat for the registered connection of an online service
+
+        See also: register_service
+
+        Used internally by Karton Gateway.
+
+        :param service_info: Service info of the connected service
+        :param connection_id: Connection identifier
+        :param expires_after: Time to live for the record (in seconds)
+        """
+        if service_info.instance_id is None:
+            raise ValueError("instance_id in service_info can't be None")
+        await self.redis.expire(
+            f"{KARTON_SERVICES_NAMESPACE}:{service_info.identity}:"
+            f"{service_info.instance_id}:{connection_id}",
+            expires_after,
+        )
+
+    async def unregister_service(
+        self, service_info: KartonServiceInfo, connection_id: str
+    ):
+        """
+        Removes a record for a connection of an online service.
+        If all connections are dropped, service is considered offline.
+
+        See also: register_service
+
+        Used internally by Karton Gateway.
+
+        :param service_info: Service info of the connected service
+        :param connection_id: Connection identifier
+        """
+        if service_info.instance_id is None:
+            raise ValueError("instance_id in service_info can't be None")
+        await self.redis.delete(
+            f"{KARTON_SERVICES_NAMESPACE}:{service_info.identity}:"
+            f"{service_info.instance_id}:{connection_id}",
+        )
+
+    async def get_presigned_object_download_url(
+        self, bucket: str, object_uid: str, expires_in: int = 3600
+    ) -> str:
+        """
+        Creates presigned url for downloading resource (GET) from S3 bucket.
+
+        :param bucket: Bucket name
+        :param object_uid: Resource object identifier
+        :param expires_in: URL expiration time in seconds
+        :return: Presigned download URL
+        """
+        async with self.s3 as client:
+            return await client.generate_presigned_url(
+                "get_object",
+                Params={
+                    "Bucket": bucket,
+                    "Key": object_uid,
+                },
+                ExpiresIn=expires_in,
+            )
+
+    async def get_presigned_object_upload_url(
+        self, bucket: str, object_uid: str, expires_in: int = 3600
+    ) -> str:
+        """
+        Creates presigned url for uploading resource (PUT) into S3 bucket.
+
+        :param bucket: Bucket name
+        :param object_uid: Resource object identifier
+        :param expires_in: URL expiration time in seconds
+        :return: Presigned upload URL
+        """
+        async with self.s3 as client:
+            return await client.generate_presigned_url(
+                "put_object",
+                Params={
+                    "Bucket": bucket,
+                    "Key": object_uid,
+                },
+                ExpiresIn=expires_in,
+            )

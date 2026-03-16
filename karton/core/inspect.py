@@ -29,7 +29,11 @@ class KartonQueue:
     @property
     def online_consumers_count(self) -> int:
         """Get number of consumers listening on this queue"""
-        return len(self.state.replicas[self.bind.identity])
+        return (
+            len(self.state.replicas[self.bind.identity])
+            if self.bind.identity in self.state.replicas
+            else 0
+        )
 
     @property
     def pending_tasks(self) -> List[Task]:
@@ -122,7 +126,7 @@ class KartonState:
     def __init__(self, backend: KartonBackend, parse_resources: bool = False) -> None:
         self.backend = backend
         self.binds = {bind.identity: bind for bind in backend.get_binds()}
-        self.replicas = backend.get_online_consumers()
+        self.replicas = backend.get_online_identities()
         self.parse_resources = parse_resources
 
         self._tasks: Optional[List[Task]] = None
