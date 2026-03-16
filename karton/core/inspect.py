@@ -29,7 +29,11 @@ class KartonQueue:
     @property
     def online_consumers_count(self) -> int:
         """Get number of consumers listening on this queue"""
-        return len(self.state.replicas[self.bind.identity])
+        return (
+            len(self.state.replicas[self.bind.identity])
+            if self.bind.identity in self.state.replicas
+            else 0
+        )
 
     @property
     def pending_tasks(self) -> List[Task]:
