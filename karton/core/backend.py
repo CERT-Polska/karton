@@ -289,8 +289,8 @@ class KartonBackend(KartonBackendBase):
             config, identity=identity, service_info=service_info
         )
 
-        endpoint = config.get("s3", "address") or os.getenv("AWS_ENDPOINT")
-        access_key = config.get("s3", "access_key") or os.getenv("AWS_ACCESS_ID_KEY")
+        endpoint = config.get("s3", "address") or os.getenv("AWS_ENDPOINT_URL")
+        access_key = config.get("s3", "access_key") or os.getenv("AWS_ACCESS_KEY_ID")
         secret_key = config.get("s3", "secret_key") or os.getenv("AWS_SECRET_ACCESS_KEY")
         iam_auth = config.getboolean("s3", "iam_auth")
 
