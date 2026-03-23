@@ -17,7 +17,6 @@ from botocore.credentials import (
 from botocore.session import get_session
 from redis import AuthenticationError, StrictRedis
 from redis.client import Pipeline
-from redis.connection import parse_url as parse_redis_url
 from urllib3.response import HTTPResponse
 
 from .config import Config
@@ -156,7 +155,7 @@ class KartonBackendBase:
 
         redis_url = config.get("redis", "url")
         if redis_url is not None:
-            redis_conf = parse_redis_url(redis_url)
+            redis_conf = {"url": config["redis"]["url"]}
         else:
             redis_conf = {
                 "host": config["redis"]["host"],
@@ -167,9 +166,7 @@ class KartonBackendBase:
 
         if username := config.get("redis", "username"):
             redis_conf["username"] = username
-            password = config.get("redis", "password")
-            if password is None:
-                raise RuntimeError("You must set both username and password, or none")
+        if password := config.get("redis", "password"):
             redis_conf["password"] = password
         # Don't set if set to 0
         if socket_timeout := config.getint("redis", "socket_timeout", 30):
@@ -357,15 +354,23 @@ class KartonBackend(KartonBackendBase):
             config, identity=identity, service_info=service_info
         )
         try:
-            redis = StrictRedis(**redis_args)
+            if "url" in redis_args:
+                redis = StrictRedis.from_url(**redis_args)
+            else:
+                redis = StrictRedis(**redis_args)
             redis.ping()
         except AuthenticationError:
             # Maybe we've sent a wrong password.
             # Or maybe the server is not (yet) password protected
             # To make smooth transition possible, try to login insecurely
-            del redis_args["username"]
-            del redis_args["password"]
-            redis = StrictRedis(**redis_args)
+            if "username" in redis_args:
+                del redis_args["username"]
+            if "password" in redis_args:
+                del redis_args["password"]
+            if "url" in redis_args:
+                redis = StrictRedis.from_url(**redis_args)
+            else:
+                redis = StrictRedis(**redis_args)
             redis.ping()
         return redis
 
