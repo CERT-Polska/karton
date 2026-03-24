@@ -58,8 +58,12 @@ class KartonAsyncBackend(KartonBackendBase):
                 endpoint_url=endpoint,
             )
         else:
-            access_key = self.config.get("s3", "access_key") or os.getenv("AWS_ACCESS_KEY_ID")
-            secret_key = self.config.get("s3", "secret_key") or os.getenv("AWS_SECRET_ACCESS_KEY")
+            access_key = self.config.get("s3", "access_key") or os.getenv(
+                "AWS_ACCESS_KEY_ID"
+            )
+            secret_key = self.config.get("s3", "secret_key") or os.getenv(
+                "AWS_SECRET_ACCESS_KEY"
+            )
             return self._s3_session.client(
                 "s3",
                 endpoint_url=endpoint,
