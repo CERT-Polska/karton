@@ -2,6 +2,7 @@ import dataclasses
 import enum
 import json
 import logging
+import os
 import time
 import urllib.parse
 import warnings
@@ -285,9 +286,11 @@ class KartonBackend(KartonBackendBase):
             config, identity=identity, service_info=service_info
         )
 
-        endpoint = config.get("s3", "address")
-        access_key = config.get("s3", "access_key")
-        secret_key = config.get("s3", "secret_key")
+        endpoint = config.get("s3", "address") or os.getenv("AWS_ENDPOINT_URL")
+        access_key = config.get("s3", "access_key") or os.getenv("AWS_ACCESS_KEY_ID")
+        secret_key = config.get("s3", "secret_key") or os.getenv(
+            "AWS_SECRET_ACCESS_KEY"
+        )
         iam_auth = config.getboolean("s3", "iam_auth")
 
         if not endpoint:

@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import time
 from typing import IO, Any, Dict, List, Optional, Tuple, Union
 
@@ -50,15 +51,19 @@ class KartonAsyncBackend(KartonBackendBase):
     def s3(self) -> ClientCreatorContext:
         if not self._s3_session:
             raise RuntimeError("Call connect() first before using KartonAsyncBackend")
-        endpoint = self.config.get("s3", "address")
+        endpoint = self.config.get("s3", "address") or os.getenv("AWS_ENDPOINT_URL")
         if self._s3_iam_auth:
             return self._s3_session.client(
                 "s3",
                 endpoint_url=endpoint,
             )
         else:
-            access_key = self.config.get("s3", "access_key")
-            secret_key = self.config.get("s3", "secret_key")
+            access_key = self.config.get("s3", "access_key") or os.getenv(
+                "AWS_ACCESS_KEY_ID"
+            )
+            secret_key = self.config.get("s3", "secret_key") or os.getenv(
+                "AWS_SECRET_ACCESS_KEY"
+            )
             return self._s3_session.client(
                 "s3",
                 endpoint_url=endpoint,
