@@ -142,15 +142,23 @@ class KartonAsyncBackend(KartonBackendBase):
             config, identity=identity, service_info=service_info
         )
         try:
-            rs = Redis(**redis_args)
+            if "url" in redis_args:
+                rs = Redis.from_url(**redis_args)
+            else:
+                rs = Redis(**redis_args)
             await rs.ping()
         except AuthenticationError:
             # Maybe we've sent a wrong password.
             # Or maybe the server is not (yet) password protected
             # To make smooth transition possible, try to login insecurely
-            del redis_args["username"]
-            del redis_args["password"]
-            rs = Redis(**redis_args)
+            if "username" in redis_args:
+                del redis_args["username"]
+            if "password" in redis_args:
+                del redis_args["password"]
+            if "url" in redis_args:
+                rs = Redis.from_url(**redis_args)
+            else:
+                rs = Redis(**redis_args)
             await rs.ping()
         return rs
 
