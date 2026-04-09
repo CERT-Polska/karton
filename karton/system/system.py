@@ -31,6 +31,7 @@ class SystemService(KartonServiceBase):
     TASK_DISPATCHED_TIMEOUT = 24 * 3600
     TASK_STARTED_TIMEOUT = 24 * 3600
     TASK_CRASHED_TIMEOUT = 3 * 24 * 3600
+    TASK_SPAWNED_TIMEOUT = 24 * 3600
     TASK_TRACKING_TTL = 30 * 24 * 3600
 
     def __init__(self, config: Optional[Config]) -> None:
@@ -44,6 +45,9 @@ class SystemService(KartonServiceBase):
         )
         self.task_crashed_timeout = self.config.getint(
             "system", "task_crashed_timeout", self.TASK_CRASHED_TIMEOUT
+        )
+        self.task_spawned_timeout = self.config.getint(
+            "system", "task_spawned_timeout", self.TASK_SPAWNED_TIMEOUT
         )
         self.enable_gc = self.config.getboolean("system", "enable_gc", True)
         self.enable_router = self.config.getboolean("system", "enable_router", True)
@@ -68,6 +72,7 @@ class SystemService(KartonServiceBase):
             " gc_interval:\t%s\n"
             " task_dispatched_timeout:\t%s\n"
             " task_started_timeout:\t%s\n"
+            " task_spawned_timeout:\t%s\n"
             " task_crashed_timeout:\t%s\n"
             " enable_gc:\t%s\n"
             " enable_router:\t%s\n"
@@ -78,6 +83,7 @@ class SystemService(KartonServiceBase):
             self.gc_interval,
             self.task_dispatched_timeout,
             self.task_started_timeout,
+            self.task_spawned_timeout,
             self.task_crashed_timeout,
             self.enable_gc,
             self.enable_router,
@@ -195,6 +201,45 @@ class SystemService(KartonServiceBase):
                     self.task_crashed_timeout,
                     task.headers.get("receiver", "<unknown>"),
                 )
+            elif (
+                task.status == TaskState.SPAWNED
+                and task.last_update is not None
+                and current_time > task.last_update + self.task_spawned_timeout
+            ):
+                # Task is in SPAWNED state for too long:
+                #    need to make several checks to avoid race condition
+                # 1. Task is not in a queue to be processed
+                # 2. Get task body once more:
+                #    if task is still in SPAWNED state, we can crash it
+                task_identity = task.headers.get("receiver", None)
+                if task_identity is None:
+                    # Malformed task, no receiver header
+                    to_crash.append(task)
+                    self.log.error(
+                        "Task %s is in Spawned state more than %d seconds "
+                        "but has no receiver header. "
+                        "Crashed.",
+                        task.uid,
+                        self.task_spawned_timeout,
+                    )
+                    continue
+
+                task_priority = task.priority
+                if task.uid in self.backend.get_task_ids_from_queue(
+                    self.backend.get_queue_name(task_identity, task_priority)
+                ):
+                    # Task is still in the queue: skip crashing
+                    running_root_tasks.add(task.root_uid)
+                    continue
+                to_crash.append(task)
+                self.log.error(
+                    "Task %s is in Spawned state more than %d seconds. "
+                    "Crashed. (receiver: %s)",
+                    task.uid,
+                    self.task_spawned_timeout,
+                    task.headers.get("receiver", "<unknown>"),
+                )
+
             else:
                 running_root_tasks.add(task.root_uid)
 
@@ -212,8 +257,8 @@ class SystemService(KartonServiceBase):
             ]
             for task in to_crash:
                 task.error = [
-                    "This task was STARTED too long (TASK_STARTED_TIMEOUT), "
-                    "so status was changes to CRASHED."
+                    "This task was %s too long, "
+                    "so status was changes to CRASHED." % (task.status.name)
                 ]
                 self.backend.set_task_status(task, TaskState.CRASHED)
             self.backend.increment_metrics_list(
@@ -379,6 +424,9 @@ class SystemService(KartonServiceBase):
             "--task-crashed-timeout", help="Timeout for tasks in Crashed state"
         )
         parser.add_argument(
+            "--task-spawned-timeout", help="Timeout for tasks in Spawned state"
+        )
+        parser.add_argument(
             "--crash-started-task-on-timeout",
             action="store_const",
             dest="crash_started_tasks",
@@ -400,6 +448,7 @@ class SystemService(KartonServiceBase):
                     "task_dispatched_timeout": args.task_dispatched_timeout,
                     "task_started_timeout": args.task_started_timeout,
                     "task_crashed_timeout": args.task_crashed_timeout,
+                    "task_spawned_timeout": args.task_spawned_timeout,
                 }
             }
         )
