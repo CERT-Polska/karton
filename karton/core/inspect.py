@@ -34,7 +34,11 @@ class KartonQueue:
     @property
     def pending_tasks(self) -> List[Task]:
         """Get queue pending tasks"""
-        return [task for task in self.tasks if task.status != TaskState.CRASHED]
+        return [
+            task
+            for task in self.tasks
+            if task.status not in (TaskState.FINISHED, TaskState.CRASHED)
+        ]
 
     @property
     def crashed_tasks(self) -> List[Task]:
@@ -69,7 +73,11 @@ class KartonAnalysis:
     @property
     def pending_tasks(self) -> List[Task]:
         """Get analysis pending tasks"""
-        return [task for task in self.tasks if task.status != TaskState.CRASHED]
+        return [
+            task
+            for task in self.tasks
+            if task.status not in (TaskState.FINISHED, TaskState.CRASHED)
+        ]
 
     @property
     def pending_queues(self) -> Dict[str, KartonQueue]:
@@ -142,7 +150,9 @@ class KartonState:
     def pending_tasks(self) -> List[Task]:
         if self._pending_tasks is None:
             self._pending_tasks = [
-                task for task in self.tasks if task.status != TaskState.FINISHED
+                task
+                for task in self.tasks
+                if task.status not in (TaskState.FINISHED, TaskState.CRASHED)
             ]
         return self._pending_tasks
 
