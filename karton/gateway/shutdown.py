@@ -62,4 +62,4 @@ async def uvicorn_shutdown(self: Server, sockets=None):
     await original_shutdown(self, sockets)
 
 
-Server.shutdown = uvicorn_shutdown  # type: ignore
+Server.shutdown = uvicorn_shutdown
