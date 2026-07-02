@@ -167,7 +167,7 @@ class KartonTestCase(unittest.TestCase):
                         break
                     h.update(block)
         else:
-            h.update(cast(bytes, resource.content))
+            h.update(resource.content)
         return h.hexdigest()
 
     def assertResourceEqual(

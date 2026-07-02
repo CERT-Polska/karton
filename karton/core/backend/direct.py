@@ -256,7 +256,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         for provider in iam_providers:
             creds = provider.load()
             if creds:
-                boto_session._credentials = creds  # type: ignore
+                boto_session._credentials = creds
                 return boto3.Session(botocore_session=boto_session).client(
                     "s3",
                     endpoint_url=endpoint,
