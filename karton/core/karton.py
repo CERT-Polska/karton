@@ -24,10 +24,10 @@ class Producer(KartonBase):
     """
     Producer part of Karton. Used for dispatching initial tasks into karton.
 
+    :param identity: Producer name
+    :type identity: str
     :param config: Karton configuration object (optional)
     :type config: :class:`karton.Config`
-    :param identity: Producer name (optional)
-    :type identity: str
 
     Usage example:
 
@@ -54,8 +54,8 @@ class Producer(KartonBase):
 
     def __init__(
         self,
+        identity: str,
         config: Optional[Config] = None,
-        identity: Optional[str] = None,
         backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
