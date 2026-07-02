@@ -107,7 +107,7 @@ class KartonAsyncServiceBase(KartonAsyncBase):
     # Base class for Karton services
     async def loop(self) -> None:
         if self.enable_publish_log and hasattr(self.log_handler, "start_consuming"):
-            self.log_handler.start_consuming()
+            self.log_handler.start_consuming()  # type: ignore
         await self.connect()
         event_loop = asyncio.get_event_loop()
         for sig in (signal.SIGTERM, signal.SIGINT):
@@ -119,7 +119,7 @@ class KartonAsyncServiceBase(KartonAsyncBase):
             for sig in (signal.SIGTERM, signal.SIGINT):
                 event_loop.remove_signal_handler(sig)
             if self.enable_publish_log and hasattr(self.log_handler, "stop_consuming"):
-                await self.log_handler.stop_consuming()
+                await self.log_handler.stop_consuming()  # type: ignore
 
     @StrictClassMethod
     def main(cls) -> None:

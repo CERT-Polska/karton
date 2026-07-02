@@ -1,7 +1,7 @@
 import dataclasses
 import enum
-import urllib.parse
 import uuid
+from urllib.parse import urlencode, parse_qsl
 from typing import IO, Any, Iterator, Protocol, Self
 
 from karton.core.__version__ import __version__
@@ -67,7 +67,7 @@ class KartonExternalServiceInfo:
             params = dict(
                 [
                     (key, value)
-                    for key, value in urllib.parse.parse_qsl(params_string)
+                    for key, value in parse_qsl(params_string)
                     if key in included_keys
                 ]
             )
@@ -131,7 +131,7 @@ class KartonServiceInfo:
             if k in included_keys and v is not None
         }
         if params:
-            return f"{self.identity}?{urllib.parse.urlencode(params)}"
+            return f"{self.identity}?{urlencode(params)}"
         else:
             return self.identity
 

@@ -150,7 +150,7 @@ class LoggingMixin:
         if level is None:
             level = self.config.get("logging", "level", logging.INFO)
 
-        if type(level) is str and cast(str, level).isdigit():
+        if isinstance(level, str) and level.isdigit():
             log_level: Union[str, int] = int(level)
         else:
             log_level = level
