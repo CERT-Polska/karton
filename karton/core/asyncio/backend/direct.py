@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import time
 from typing import IO, Any, AsyncIterator, Dict, List, Optional, Tuple, Union
 
@@ -52,15 +53,19 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
     def s3(self) -> ClientCreatorContext:
         if not self._s3_session:
             raise RuntimeError("Call connect() first before using KartonAsyncBackend")
-        endpoint = self.config.get("s3", "address")
+        endpoint = self.config.get("s3", "address") or os.getenv("AWS_ENDPOINT_URL")
         if self._s3_iam_auth:
             return self._s3_session.client(
                 "s3",
                 endpoint_url=endpoint,
             )
         else:
-            access_key = self.config.get("s3", "access_key")
-            secret_key = self.config.get("s3", "secret_key")
+            access_key = self.config.get("s3", "access_key") or os.getenv(
+                "AWS_ACCESS_KEY_ID"
+            )
+            secret_key = self.config.get("s3", "secret_key") or os.getenv(
+                "AWS_SECRET_ACCESS_KEY"
+            )
             return self._s3_session.client(
                 "s3",
                 endpoint_url=endpoint,
@@ -146,15 +151,23 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             config, identity=identity, service_info=service_info
         )
         try:
-            rs = Redis(**redis_args)
+            if "url" in redis_args:
+                rs = Redis.from_url(**redis_args)
+            else:
+                rs = Redis(**redis_args)
             await rs.ping()
         except AuthenticationError:
             # Maybe we've sent a wrong password.
             # Or maybe the server is not (yet) password protected
             # To make smooth transition possible, try to login insecurely
-            del redis_args["username"]
-            del redis_args["password"]
-            rs = Redis(**redis_args)
+            if "username" in redis_args:
+                del redis_args["username"]
+            if "password" in redis_args:
+                del redis_args["password"]
+            if "url" in redis_args:
+                rs = Redis.from_url(**redis_args)
+            else:
+                rs = Redis(**redis_args)
             await rs.ping()
         return rs
 
