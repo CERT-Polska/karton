@@ -76,6 +76,7 @@ def request_handler(request_type: Type[RequestType]):
             raise ValueError(f"Handler for request type {request_type} is already defined")
         REQUEST_HANDLERS[request_type] = handler_fn
         return handler_fn
+    return request_handler_inner
 
 
 async def call_request_handler(
