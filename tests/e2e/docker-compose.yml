@@ -1,0 +1,96 @@
+services:
+  redis:
+    image: library/redis
+    ports:
+      - "127.0.0.1:6379:6379"
+  minio:
+    image: minio/minio
+    command: "server --address 0.0.0.0:9000 --console-address :9001 /data"
+    volumes:
+      - /tmp/minio:/data
+    ports:
+      - "127.0.0.1:9000:9000"
+    environment:
+      - MINIO_ACCESS_KEY=karton-test-access
+      - MINIO_SECRET_KEY=karton-test-key
+  system:
+    build:
+      context: ../..
+    env_file:
+      - karton-vars.env
+    command:
+      - "--setup-bucket"
+    depends_on:
+      - minio
+      - redis
+  logger:
+    build:
+      context: ../..
+      dockerfile: dev/logger.Dockerfile
+    env_file:
+      - karton-vars.env
+    depends_on:
+      - system
+  test-sync-service-1:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    env_file:
+      - karton-vars.env
+    depends_on:
+      - system
+    environment:
+      - INSTANCE_NAME=first
+    volumes:
+      - ./test_service.py:/app/test_service.py
+    entrypoint: ["python3", "/app/test_service.py", "--identity", "karton.test-sync-service-1"]
+  test-sync-service-2:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    env_file:
+      - karton-vars.env
+    depends_on:
+      - system
+    environment:
+      - INSTANCE_NAME=second
+    volumes:
+      - ./test_service.py:/app/test_service.py
+    entrypoint: ["python3", "/app/test_service.py", "--identity", "karton.test-sync-service-2"]
+  test-async-service-1:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    env_file:
+      - karton-vars.env
+    depends_on:
+      - system
+    environment:
+      - INSTANCE_NAME=first
+    volumes:
+      - ./test_service_async.py:/app/test_service_async.py
+    entrypoint: ["python3", "/app/test_service_async.py", "--identity", "karton.test-async-service-1"]
+  test-async-service-2:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    env_file:
+      - karton-vars.env
+    depends_on:
+      - system
+    environment:
+      - INSTANCE_NAME=second
+    volumes:
+      - ./test_service_async.py:/app/test_service_async.py
+    entrypoint: ["python3", "/app/test_service_async.py", "--identity", "karton.test-async-service-2"]
+  pytest:
+    build:
+      context: ../..
+      dockerfile: tests.Dockerfile
+    env_file:
+      - karton-vars.env
+    depends_on:
+      - system
+    volumes:
+      - ./tests:/app/tests
+    entrypoint: ["pytest", "/app/tests"]
