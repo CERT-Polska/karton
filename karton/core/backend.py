@@ -966,7 +966,10 @@ class KartonBackend(KartonBackendBase):
                     if "task" in body and isinstance(body["task"], str):
                         body["task"] = json.loads(body["task"])
                     yield body
-                yield None
+                else:
+                    # return control back to the caller in case a shutdown or some
+                    # other action was requested and needs to be handled
+                    yield None
 
     def increment_metrics(
         self, metric: KartonMetrics, identity: str, pipe: Optional[Pipeline] = None
