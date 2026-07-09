@@ -968,7 +968,7 @@ class KartonBackend(KartonBackendBase):
                     yield body
                 else:
                     # return control back to the caller in case a shutdown or some
-                    #  other action was requested and needs to be handled
+                    # other action was requested and needs to be handled
                     yield None
 
     def increment_metrics(
