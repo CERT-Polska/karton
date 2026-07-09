@@ -54,6 +54,8 @@ class Config(object):
         self._load_from_env()
 
         if check_sections:
+            if self.has_section("gateway"):
+                return
             if self.has_section("minio") and not self.has_section("s3"):
                 self._map_minio_to_s3()
             if not self.has_section("s3"):
