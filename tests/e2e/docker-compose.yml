@@ -1,14 +1,14 @@
 services:
   redis:
     image: library/redis
-    ports:  # todo :remove
+    ports:
       - "127.0.0.1:6379:6379"
   minio:
     image: minio/minio
     command: "server --address 0.0.0.0:9000 --console-address :9001 /data"
     volumes:
       - /tmp/minio:/data
-    ports:  # todo :remove
+    ports:
       - "127.0.0.1:9000:9000"
     environment:
       - MINIO_ACCESS_KEY=karton-test-access
@@ -86,7 +86,7 @@ services:
   pytest:
     build:
       context: ../..
-      dockerfile: Dockerfile
+      dockerfile: tests.Dockerfile
     env_file:
       - karton-vars.env
     depends_on:

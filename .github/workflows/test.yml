@@ -26,6 +26,12 @@ jobs:
           python-version: 3.${{ matrix.minor }}
       - run: pip install -r requirements.txt
       - run: python -m unittest discover tests/unit
+  e2etest:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Run tests
+      run: docker compose -f tests/e2e/docker-compose.yml up --build --exit-code-from pytest
   docs:
     runs-on: ubuntu-latest
     steps:
