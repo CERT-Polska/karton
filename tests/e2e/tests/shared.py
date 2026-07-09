@@ -9,16 +9,6 @@ from karton.core.task import TaskState
 BACKENDS = ["sync", "async"]
 
 
-@pytest.fixture
-def backend():
-    return KartonBackend(Config())
-
-
-@pytest.fixture
-def producer():
-    return Producer(identity="test-producer")
-
-
 def wait_for_task_state(
     backend: KartonBackend, task_uid: str, state: TaskState, timeout: int
 ) -> Task:

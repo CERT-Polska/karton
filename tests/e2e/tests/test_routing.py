@@ -3,8 +3,6 @@ import pytest
 
 from shared import (
     BACKENDS,
-    backend,
-    producer,
     wait_for_task_state,
     wait_for_routed_tasks,
 )
@@ -52,7 +50,7 @@ def test_multiple_routing(
 ):
     task = Task(
         headers={
-            "type": "multiple-sleep-task",
+            "type": "multiple-routed-task",
             "duration": 5,
             "backend": service_backend,
         }

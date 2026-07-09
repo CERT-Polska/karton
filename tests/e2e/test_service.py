@@ -32,7 +32,7 @@ class TestService(Karton):
         {"instance": INSTANCE_NAME, "backend": BACKEND, "type": "timeout-task"},
         {
             "backend": BACKEND,
-            "type": "multiple-sleep-task",
+            "type": "multiple-routed-task",
             "duration": {"$gt": 0},
         },
     ]
@@ -47,7 +47,7 @@ class TestService(Karton):
         elif task_type == "derive-task":
             new_task = Task(headers={"type": "derived-task"})
             self.send_task(new_task)
-        elif task_type in ("sleep-task", "multiple-sleep-task"):
+        elif task_type in ("sleep-task", "multiple-routed-task"):
             sleep(task.headers["duration"])
         elif task_type == "crash-task":
             raise Exception(task.headers["error"])

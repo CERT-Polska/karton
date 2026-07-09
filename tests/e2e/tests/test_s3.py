@@ -5,8 +5,6 @@ import os
 
 from shared import (
     BACKENDS,
-    backend,
-    producer,
     wait_for_routed_tasks,
     wait_for_task_state,
 )
