@@ -1,7 +1,13 @@
 from time import sleep
 import pytest
 
-from shared import BACKENDS, backend, producer
+from shared import (
+    BACKENDS,
+    backend,
+    producer,
+    wait_for_task_state,
+    wait_for_routed_tasks,
+)
 
 from karton.core import Producer, Consumer, Task, Config
 from karton.core.task import TaskState
@@ -21,19 +27,16 @@ def test_task_crash(backend: KartonBackend, producer: Producer, service_backend:
     )
     producer.send_task(task)
 
-    sleep(2)
-
-    routed_tasks = [
-        x
-        for x in backend.iter_task_tree(root_uid=task.root_uid)
-        if x.receiver is not None
-    ]
+    routed_tasks = wait_for_routed_tasks(backend=backend, task_uid=task.uid, timeout=1)
     assert (len(routed_tasks)) == 1
 
     routed_task = routed_tasks[0]
-    assert routed_task.status == TaskState.CRASHED
-    assert routed_task.error is not None
-    assert error_msg in "\n".join(routed_task.error)
+
+    crashed_task = wait_for_task_state(
+        backend=backend, task_uid=routed_task.uid, state=TaskState.CRASHED, timeout=3
+    )
+    assert crashed_task.error is not None
+    assert error_msg in "\n".join(crashed_task.error)
 
 
 @pytest.mark.parametrize("service_backend", BACKENDS)
@@ -47,23 +50,13 @@ def test_task_timeout(backend: KartonBackend, producer: Producer, service_backen
     )
     producer.send_task(task)
 
-    sleep(1)
+    routed_tasks = wait_for_routed_tasks(backend=backend, task_uid=task.uid, timeout=1)
+    assert len(routed_tasks) == 1
 
-    for _ in range(10):
-        routed_tasks = [
-            x
-            for x in backend.iter_task_tree(root_uid=task.root_uid)
-            if x.receiver is not None
-        ]
-        assert (len(routed_tasks)) == 1
-        routed_task = routed_tasks[0]
+    routed_task = routed_tasks[0]
+    crashed_task = wait_for_task_state(
+        backend=backend, task_uid=routed_task.uid, state=TaskState.CRASHED, timeout=60
+    )
 
-        if routed_task.status != TaskState.STARTED:
-            break
-
-        sleep(10)
-
-    assert routed_task.status == TaskState.CRASHED
-
-    assert routed_task.error is not None
-    assert "karton.core.exceptions.TaskTimeoutError" in "\n".join(routed_task.error)
+    assert crashed_task.error is not None
+    assert "karton.core.exceptions.TaskTimeoutError" in "\n".join(crashed_task.error)

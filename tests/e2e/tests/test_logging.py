@@ -1,7 +1,13 @@
 from time import sleep
 from itertools import islice
 
-from shared import BACKENDS, backend, producer
+from shared import (
+    BACKENDS,
+    backend,
+    producer,
+    wait_for_routed_tasks,
+    wait_for_task_state,
+)
 
 import pytest
 from karton.core import Producer, Consumer, Task, Config
@@ -22,11 +28,11 @@ def test_logging(backend: KartonBackend, producer: Producer, service_backend: st
     )
 
     logs_iterator = backend.consume_log(
-        timeout=5, logger_filter=f"karton.test-{service_backend}-service-1"
+        timeout=10, logger_filter=f"karton.test-{service_backend}-service-1"
     )
 
     producer.send_task(task)
-    service_logs = list(islice(logs_iterator, 5))
 
+    service_logs = list(islice(logs_iterator, 5))
     messages = [x.get("message") for x in service_logs if x]
     assert log_message in messages
