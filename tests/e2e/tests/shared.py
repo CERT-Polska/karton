@@ -4,10 +4,7 @@ from karton.core import Producer, Config
 from karton.core.backend import KartonBackend
 
 
-BACKENDS = [
-    "sync",
-    "async"
-]
+BACKENDS = ["sync", "async"]
 
 
 @pytest.fixture

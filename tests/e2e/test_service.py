@@ -3,21 +3,14 @@ from time import sleep
 import os
 
 
-INSTANCE_NAME = os.environ.get("INSTANCE_NAME")
+INSTANCE_NAME = os.environ["INSTANCE_NAME"]
 BACKEND = "sync"
+
 
 class TestService(Karton):
     filters = [
-        {
-            "instance": INSTANCE_NAME,
-            "backend": BACKEND,
-            "type": "consume-task"
-        },
-        {
-            "instance": INSTANCE_NAME,
-            "backend": BACKEND,
-            "type": "derive-task"
-        },
+        {"instance": INSTANCE_NAME, "backend": BACKEND, "type": "consume-task"},
+        {"instance": INSTANCE_NAME, "backend": BACKEND, "type": "derive-task"},
         {
             "instance": INSTANCE_NAME,
             "backend": BACKEND,
@@ -36,11 +29,7 @@ class TestService(Karton):
             "type": "crash-task",
             "error": "*",
         },
-        {
-            "instance": INSTANCE_NAME,
-            "backend": BACKEND,
-            "type": "timeout-task"
-        },
+        {"instance": INSTANCE_NAME, "backend": BACKEND, "type": "timeout-task"},
         {
             "backend": BACKEND,
             "type": "multiple-sleep-task",
@@ -59,12 +48,14 @@ class TestService(Karton):
             new_task = Task(headers={"type": "derived-task"})
             self.send_task(new_task)
         elif task_type in ("sleep-task", "multiple-sleep-task"):
-            sleep(int(task.headers["duration"]))
+            sleep(task.headers["duration"])
         elif task_type == "crash-task":
             raise Exception(task.headers["error"])
         elif task_type == "timeout-task":
-            if self.task_timeout is not None:
-                sleep(self.task_timeout + 5)
+            if self.task_timeout is None:
+                raise Exception("Cannot timeout because task_timeout is not set")
+
+            sleep(self.task_timeout + 5)
 
 
 if __name__ == "__main__":

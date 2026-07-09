@@ -10,7 +10,14 @@ from karton.core.backend import KartonBackend
 
 @pytest.mark.parametrize("service_backend", BACKENDS)
 def test_simple_task(backend: KartonBackend, producer: Producer, service_backend: str):
-    task = Task(headers={"instance": "first", "backend": service_backend, "type":"sleep-task", "duration": 5})
+    task = Task(
+        headers={
+            "instance": "first",
+            "backend": service_backend,
+            "type": "sleep-task",
+            "duration": 5,
+        }
+    )
     task_id = task.uid
     root_id = task.root_uid
 
@@ -31,7 +38,7 @@ def test_simple_task(backend: KartonBackend, producer: Producer, service_backend
     assert len(analysis_tasks) == 2
 
     routed_tasks = [x for x in analysis_tasks if x.receiver is not None]
-    assert(len(routed_tasks)) == 1
+    assert (len(routed_tasks)) == 1
 
     routed_task = routed_tasks[0]
     assert routed_task.status == TaskState.STARTED
@@ -46,8 +53,16 @@ def test_simple_task(backend: KartonBackend, producer: Producer, service_backend
 
 
 @pytest.mark.parametrize("service_backend", BACKENDS)
-def test_multiple_routing(backend: KartonBackend, producer: Producer, service_backend: str):
-    task = Task(headers={"type":"multiple-sleep-task", "duration": 5, "backend": service_backend})
+def test_multiple_routing(
+    backend: KartonBackend, producer: Producer, service_backend: str
+):
+    task = Task(
+        headers={
+            "type": "multiple-sleep-task",
+            "duration": 5,
+            "backend": service_backend,
+        }
+    )
     producer.send_task(task)
 
     # give karton system a bit of time to process the task
@@ -60,7 +75,7 @@ def test_multiple_routing(backend: KartonBackend, producer: Producer, service_ba
     assert len(analysis_tasks) == 3
 
     routed_tasks = [x for x in analysis_tasks if x.receiver is not None]
-    assert(len(routed_tasks)) == 2
+    assert (len(routed_tasks)) == 2
 
     # wait for the tasks to finish
     sleep(5)
