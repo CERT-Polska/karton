@@ -10,6 +10,7 @@ from .__version__ import __version__
 from .backend import KartonBackend, KartonServiceInfo
 from .config import Config
 from .logger import KartonLogHandler, TaskContextFilter
+from .serialization import serializer
 from .task import Task, get_current_task, set_current_task
 from .utils import HardShutdownInterrupt, StrictClassMethod, graceful_killer
 
@@ -221,6 +222,7 @@ class KartonBase(abc.ABC, ConfigMixin, LoggingMixin):
         LoggingMixin.__init__(
             self, log_handler, log_format="[%(asctime)s][%(levelname)s] %(message)s"
         )
+        serializer.setup(self.config)
 
     @property
     def current_task(self) -> Optional[Task]:
