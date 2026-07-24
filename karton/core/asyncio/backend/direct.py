@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import time
-from typing import IO, Any, AsyncIterator, Dict, List, Optional, Tuple, Union
+from typing import IO, Any, AsyncIterator, Dict, List, Optional, Tuple, Union, cast
 
 import aioboto3
 from aiobotocore.credentials import ContainerProvider, InstanceMetadataProvider
@@ -129,7 +129,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         for provider in iam_providers:
             creds = await provider.load()
             if creds:
-                boto_session._credentials = creds  # type: ignore
+                boto_session._credentials = creds
                 return aioboto3.Session(botocore_session=boto_session)
 
     @classmethod
@@ -251,7 +251,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         :return: KartonBind object
         """
         return self.unserialize_bind(
-            identity, await self.redis.hget(KARTON_BINDS_HSET, identity)
+            identity, cast(str, await self.redis.hget(KARTON_BINDS_HSET, identity))
         )
 
     async def produce_unrouted_task(self, task: Task) -> None:
@@ -275,7 +275,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         :param timeout: Waiting for item timeout (default: 0 = wait forever)
         :return: Tuple of [queue_name, item] objects or None if timeout has been reached
         """
-        return await self.redis.blpop(queues, timeout=timeout)
+        return cast(tuple[str, str] | None, await self.redis.blpop(queues, timeout=timeout))
 
     async def get_task(self, task_uid: str) -> Optional[Task]:
         """
