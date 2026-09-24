@@ -68,14 +68,18 @@ class RequestHandler(Protocol[T]):
 
 REQUEST_HANDLERS: dict[Type[RequestType], RequestHandler] = {}
 
+
 def request_handler(request_type: Type[RequestType]):
     def request_handler_inner(
         handler_fn: RequestHandler[T],
     ) -> RequestHandler[T]:
         if request_type in REQUEST_HANDLERS:
-            raise ValueError(f"Handler for request type {request_type} is already defined")
+            raise ValueError(
+                f"Handler for request type {request_type} is already defined"
+            )
         REQUEST_HANDLERS[request_type] = handler_fn
         return handler_fn
+
     return request_handler_inner
 
 
