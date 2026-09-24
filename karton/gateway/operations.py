@@ -8,7 +8,6 @@ from karton.core.asyncio.backend import KartonBind, KartonMetrics
 from karton.core.exceptions import BindExpiredError as KartonBindExpiredError
 from karton.core.task import Task, TaskState
 
-from .backend import gateway_backend
 from .config import gateway_config
 from .errors import (
     AlreadyBoundError,
@@ -113,8 +112,7 @@ async def handle_bind_request(
         service_version=session.service_info.service_version,
         is_async=request.message.is_async,
     )
-    old_bind = await gateway_backend.register_bind(bind)
-    session.karton_bind = bind
+    old_bind = await session.service_backend.register_bind(bind)
     bind_response_message = BindResponseMessage(
         old_bind=old_bind,
     )
@@ -151,7 +149,7 @@ async def handle_declare_task_request(
         allowed_parent_resources = parent_task_info.resources
 
     allowed_buckets = [
-        gateway_backend.default_bucket_name
+        session.service_backend.default_bucket_name
     ] + gateway_config.allowed_extra_buckets
     payload_bags = (task_params.payload, task_params.payload_persistent)
 
@@ -180,7 +178,7 @@ async def handle_declare_task_request(
         audience=session.identity,
     )
 
-    await gateway_backend.register_task(task)
+    await session.service_backend.register_task(task)
     task_declared_message = TaskDeclaredResponseMessage(
         uid=task.uid,
         token=task_token,
@@ -209,7 +207,7 @@ async def handle_send_task_request(
         secret_key=gateway_config.secret_key,
         audience=session.identity,
     )
-    task = await gateway_backend.get_task(task_info.task_uid)
+    task = await session.service_backend.get_task(task_info.task_uid)
     if task is None:
         raise InvalidTaskError("Task no longer exists")
     if task.status is not TaskState.DECLARED:
@@ -218,8 +216,8 @@ async def handle_send_task_request(
             f"'declared' tasks can be sent"
         )
 
-    await gateway_backend.produce_unrouted_task(task)
-    await gateway_backend.increment_metrics(
+    await session.service_backend.produce_unrouted_task(task)
+    await session.service_backend.increment_metrics(
         KartonMetrics.TASK_PRODUCED, session.identity
     )
     await send_success(websocket)
@@ -247,7 +245,7 @@ async def handle_set_task_status_request(
         secret_key=gateway_config.secret_key,
         audience=session.identity,
     )
-    task = await gateway_backend.get_task(task_info.task_uid)
+    task = await session.service_backend.get_task(task_info.task_uid)
     if task is None:
         raise InvalidTaskError("Task no longer exists")
 
@@ -262,12 +260,12 @@ async def handle_set_task_status_request(
 
     if new_task_status is TaskState.CRASHED:
         task.error = request.message.error
-        await gateway_backend.increment_metrics(
+        await session.service_backend.increment_metrics(
             KartonMetrics.TASK_CRASHED, session.identity
         )
 
-    await gateway_backend.set_task_status(task, new_task_status)
-    await gateway_backend.increment_metrics(
+    await session.service_backend.set_task_status(task, new_task_status)
+    await session.service_backend.increment_metrics(
         KartonMetrics.TASK_CONSUMED, session.identity
     )
     await send_success(websocket)
@@ -297,7 +295,9 @@ async def handle_get_task_request(
         raise InvalidBindError("Service has not declared consumer bind")
 
     try:
-        task = await gateway_backend.consume_routed_task(session.service_info.identity)
+        task = await session.service_backend.consume_routed_task(
+            session.service_info.identity
+        )
     except KartonBindExpiredError as e:
         raise GatewayBindExpiredError(str(e)) from e
 
@@ -306,7 +306,7 @@ async def handle_get_task_request(
 
     try:
         allowed_buckets = [
-            gateway_backend.default_bucket_name
+            session.service_backend.default_bucket_name
         ] + gateway_config.allowed_extra_buckets
         download_urls = await generate_resource_download_urls(task, allowed_buckets)
         task_token_info = TaskTokenInfo(
@@ -340,11 +340,11 @@ async def handle_get_task_request(
         # We need to crash gathered task if something went wrong in the process
         exc_info = sys.exc_info()
         task.error = traceback.format_exception(*exc_info)
-        await gateway_backend.set_task_status(task, TaskState.CRASHED)
-        await gateway_backend.increment_metrics(
+        await session.service_backend.set_task_status(task, TaskState.CRASHED)
+        await session.service_backend.increment_metrics(
             KartonMetrics.TASK_CRASHED, session.identity
         )
-        await gateway_backend.increment_metrics(
+        await session.service_backend.increment_metrics(
             KartonMetrics.TASK_CONSUMED, session.identity
         )
         raise
@@ -364,7 +364,7 @@ async def handle_send_log_request(
     :param request: Parsed request object
     :param session: Client session that initiated the request
     """
-    was_received = await gateway_backend.produce_log(
+    was_received = await session.service_backend.produce_log(
         request.message.log_record,
         request.message.logger_name,
         request.message.level,
@@ -389,7 +389,7 @@ async def handle_subscribe_logs_request(
     :param request: Parsed request object
     :param session: User session that initiated the request
     """
-    async for log_record in gateway_backend.consume_log(
+    async for log_record in session.service_backend.consume_log(
         logger_filter=request.message.logger_filter, level=request.message.level
     ):
         if shutdown_latch.shutdown_in_progress:

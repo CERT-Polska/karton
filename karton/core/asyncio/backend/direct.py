@@ -37,11 +37,14 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         config: Config,
         identity: Optional[str] = None,
         service_info: Optional[KartonServiceInfo] = None,
+        _redis: Optional[Redis] = None,
+        _s3_session: Optional[aioboto3.Session] = None,
+        _s3_iam_auth=False,
     ) -> None:
         super().__init__(config, identity, service_info)
-        self._redis: Optional[Redis] = None
-        self._s3_session: Optional[aioboto3.Session] = None
-        self._s3_iam_auth = False
+        self._redis: Optional[Redis] = _redis
+        self._s3_session: Optional[aioboto3.Session] = _s3_session
+        self._s3_iam_auth = _s3_iam_auth
 
     @property
     def redis(self) -> Redis:
@@ -620,3 +623,28 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
                 },
                 ExpiresIn=expires_in,
             )
+
+
+class KartonAsyncGatewayClientBackend(KartonAsyncBackend):
+    """
+    Backend instance that shares the Redis/S3 connectors
+    and holds bind state for the connected service.
+    """
+
+    def __init__(
+        self,
+        service_info: KartonServiceInfo,
+        gateway_backend: KartonAsyncBackend,
+    ):
+        super().__init__(
+            config=gateway_backend.config,
+            service_info=service_info,
+            _redis=gateway_backend._redis,
+            _s3_session=gateway_backend._s3_session,
+            _s3_iam_auth=gateway_backend._s3_iam_auth,
+        )
+        self._current_bind = None
+
+    @property
+    def karton_bind(self) -> KartonBind | None:
+        return self._current_bind

@@ -8,8 +8,9 @@ from fastapi import WebSocket
 from pydantic import ValidationError
 
 from karton.core.__version__ import __version__
-from karton.core.asyncio.backend import KartonBind, KartonServiceInfo
+from karton.core.asyncio.backend import KartonServiceInfo
 
+from ..core.asyncio.backend.direct import KartonAsyncGatewayClientBackend
 from .backend import gateway_backend
 from .config import gateway_config
 from .errors import (
@@ -32,14 +33,19 @@ logger = logging.getLogger(__name__)
 
 
 class ClientSession:
-    def __init__(self, service_info: KartonServiceInfo, secondary_connection: bool):
+    def __init__(
+        self,
+        service_info: KartonServiceInfo,
+        service_backend: KartonAsyncGatewayClientBackend,
+        secondary_connection: bool,
+    ):
         self.service_info = service_info
-        self.karton_bind: KartonBind | None = None
+        self.service_backend: KartonAsyncGatewayClientBackend = service_backend
         self.secondary_connection: bool = secondary_connection
 
     @property
     def is_bound(self) -> bool:
-        return self.karton_bind is not None
+        return self.service_backend.karton_bind is not None
 
     @property
     def identity(self) -> str:
@@ -93,9 +99,13 @@ class ClientSession:
             service_version=hello_request.message.service_version,
             instance_id=hello_request.message.instance_id,
         )
+        service_backend = KartonAsyncGatewayClientBackend(
+            service_info=service_info, gateway_backend=gateway_backend
+        )
 
         session = cls(
             service_info=service_info,
+            service_backend=service_backend,
             secondary_connection=hello_request.message.secondary_connection,
         )
         await gateway_backend.register_service(
