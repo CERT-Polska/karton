@@ -1,8 +1,9 @@
 import abc
 import asyncio
 import signal
+import uuid
 from asyncio import CancelledError
-from typing import Optional
+from typing import Optional, Protocol
 
 from karton.core import Task
 from karton.core.__version__ import __version__
@@ -12,8 +13,17 @@ from karton.core.config import Config
 from karton.core.task import get_current_task, set_current_task
 from karton.core.utils import StrictClassMethod
 
-from .backend import KartonAsyncBackend
+from .backend import KartonAsyncBackendProtocol, get_backend
 from .logger import KartonAsyncLogHandler
+
+
+class KartonAsyncBackendFactory(Protocol):
+    def __call__(
+        self,
+        config: Config,
+        identity: Optional[str],
+        service_info: Optional[KartonServiceInfo],
+    ) -> KartonAsyncBackendProtocol: ...
 
 
 class KartonAsyncBase(abc.ABC, ConfigMixin, LoggingMixin):
@@ -28,26 +38,25 @@ class KartonAsyncBase(abc.ABC, ConfigMixin, LoggingMixin):
     identity: str = ""
     #: Karton service version
     version: Optional[str] = None
-    #: Include extended service information for non-consumer services
-    with_service_info: bool = False
+    backend: KartonAsyncBackendProtocol
+    _backend_factory: KartonAsyncBackendFactory = staticmethod(get_backend)
 
     def __init__(
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonAsyncBackend] = None,
+        backend: Optional[KartonAsyncBackendProtocol] = None,
     ) -> None:
         ConfigMixin.__init__(self, config, identity)
 
-        self.service_info = None
-        if self.identity is not None and self.with_service_info:
-            self.service_info = KartonServiceInfo(
-                identity=self.identity,
-                karton_version=__version__,
-                service_version=self.version,
-            )
-
-        self.backend = backend or KartonAsyncBackend(
+        self.instance_id = str(uuid.uuid4())
+        self.service_info = KartonServiceInfo(
+            identity=self.identity,
+            karton_version=__version__,
+            service_version=self.version,
+            instance_id=self.instance_id,
+        )
+        self.backend = backend or self._backend_factory(
             self.config, identity=self.identity, service_info=self.service_info
         )
 
@@ -86,7 +95,7 @@ class KartonAsyncServiceBase(KartonAsyncBase):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonAsyncBackend] = None,
+        backend: Optional[KartonAsyncBackendProtocol] = None,
     ) -> None:
         super().__init__(
             config=config,

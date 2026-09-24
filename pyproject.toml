@@ -14,8 +14,8 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent"
 ]
-dynamic = ["version", "dependencies"]
-requires-python = ">=3.8"
+dynamic = ["version", "dependencies", "optional-dependencies"]
+requires-python = ">=3.11"
 
 [project.urls]
 Homepage = "https://github.com/CERT-Polska/karton"
@@ -27,11 +27,14 @@ karton-system = "karton.system:SystemService.main"
 karton = "karton.core.main:main"
 
 [tool.setuptools]
-packages = ["karton.core", "karton.core.asyncio", "karton.system"]
+packages = ["karton.core", "karton.core.asyncio", "karton.core.backend", "karton.core.asyncio.backend", "karton.system", "karton.gateway"]
 
 [tool.setuptools.dynamic]
 version = {attr = "karton.core.__version__.__version__"}
 dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools.dynamic.optional-dependencies]
+gateway = { file = ["requirements.gateway.txt"] }
 
 [tool.isort]
 multi_line_output = 3
@@ -45,12 +48,12 @@ line_length = 88
 lint-version = "2"
 source = "karton/"
 # Temporary workaround for Union[Awaitable[T]], T] mess in Redis typing
-extra-requirements = "redis<5.0.0 botocore-stubs"
+extra-requirements = "redis<5.0.0 botocore-stubs fastapi pydantic uvicorn pyjwt"
 
 [tool.mypy]
 explicit_package_bases = true
 namespace_packages = true
-python_version = "3.8"
+python_version = "3.11"
 
 [[tool.mypy.overrides]]
 module = "urllib3.*"

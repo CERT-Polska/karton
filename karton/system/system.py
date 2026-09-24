@@ -5,11 +5,11 @@ from typing import List, Optional
 
 from karton.core import query
 from karton.core.__version__ import __version__
-from karton.core.backend import (
+from karton.core.backend import KartonBind, KartonMetrics
+from karton.core.backend.direct import (
     KARTON_OPERATIONS_QUEUE,
     KARTON_TASKS_QUEUE,
-    KartonBind,
-    KartonMetrics,
+    KartonBackend,
 )
 from karton.core.base import KartonServiceBase
 from karton.core.config import Config
@@ -24,7 +24,8 @@ class SystemService(KartonServiceBase):
 
     identity = "karton.system"
     version = __version__
-    with_service_info = True
+    backend: KartonBackend
+    _backend_factory = KartonBackend
 
     CRASH_STARTED_TASKS_ON_TIMEOUT = False
     GC_INTERVAL = 3 * 60
@@ -122,7 +123,7 @@ class SystemService(KartonServiceBase):
         to_crash = []
 
         queues_to_clear = set()
-        online_consumers = self.backend.get_online_consumers()
+        online_consumers = self.backend.get_online_identities()
         for bind in self.backend.get_binds():
             identity = bind.identity
             if identity not in online_consumers and not bind.persistent:

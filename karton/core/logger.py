@@ -4,7 +4,7 @@ import traceback
 import warnings
 from typing import Any, Callable, Dict
 
-from .backend import KartonBackend
+from .backend import KartonBackendProtocol
 from .task import get_current_task
 
 HOSTNAME = platform.node()
@@ -69,7 +69,7 @@ class KartonLogHandler(logging.Handler, LogLineFormatterMixin):
     logging.Handler that passes logs to the Karton backend.
     """
 
-    def __init__(self, backend: KartonBackend, channel: str) -> None:
+    def __init__(self, backend: KartonBackendProtocol, channel: str) -> None:
         logging.Handler.__init__(self)
         self.backend = backend
         self.is_consumer_active: bool = True

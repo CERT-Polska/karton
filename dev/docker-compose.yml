@@ -27,10 +27,24 @@ services:
   system:
     build:
       context: ..
+      dockerfile: system.Dockerfile
     env_file:
       - karton-vars.env
     command:
       - "--setup-bucket"
+    depends_on:
+      silo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+  gateway:
+    build:
+      context: ..
+      dockerfile: gateway.Dockerfile
+    env_file:
+      - karton-vars.env
+    ports:
+      - "127.0.0.1:8000:8000"
     depends_on:
       silo:
         condition: service_healthy
