@@ -8,6 +8,7 @@ import aioboto3
 from aiobotocore.credentials import ContainerProvider, InstanceMetadataProvider
 from aiobotocore.session import ClientCreatorContext, get_session
 from aiobotocore.utils import InstanceMetadataFetcher
+from redis import WatchError
 from redis.asyncio import Redis
 from redis.asyncio.client import Pipeline
 from redis.exceptions import AuthenticationError
@@ -245,6 +246,47 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             return self.unserialize_bind(bind.identity, old_serialized_bind)
         else:
             return None
+
+    async def restore_bind(self, bind: KartonBind) -> None:
+        """
+        Restore bind for Karton service after reconnection.
+
+        If the registered bind is different: it is not updated and
+        BindExpiredError is raised.
+
+        :param bind: KartonBind object with bind definition
+        """
+        our_serialized_bind = self.serialize_bind(bind)
+        async with self.redis.pipeline(transaction=True) as pipe:
+            while True:
+                try:
+                    await pipe.watch(KARTON_BINDS_HSET)
+                    current_serialized_bind = await pipe.hget(
+                        KARTON_BINDS_HSET, bind.identity
+                    )
+                    if current_serialized_bind != our_serialized_bind:
+                        await pipe.unwatch()
+                        current_bind = (
+                            self.unserialize_bind(
+                                bind.identity, current_serialized_bind
+                            )
+                            if current_serialized_bind
+                            else "<missing>"
+                        )
+                        raise BindExpiredError(
+                            "Binds changed, shutting down. "
+                            f"Old binds: {bind} "
+                            f"New binds: {current_bind}"
+                        )
+                    pipe.multi()
+                    await pipe.hset(
+                        KARTON_BINDS_HSET, bind.identity, our_serialized_bind
+                    )
+                    await pipe.execute()
+                    self._current_bind = bind
+                    return None
+                except WatchError:
+                    continue
 
     async def get_bind(self, identity: str) -> KartonBind:
         """
@@ -513,7 +555,10 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
                     if "task" in body and isinstance(body["task"], str):
                         body["task"] = json.loads(body["task"])
                     yield body
-                yield None
+                else:
+                    # return control back to the caller in case a shutdown or some
+                    # other action was requested and needs to be handled
+                    yield None
 
     async def register_service(
         self, service_info: KartonServiceInfo, connection_id: str, expires_after: int
@@ -636,6 +681,8 @@ class KartonAsyncGatewayClientBackend(KartonAsyncBackend):
         service_info: KartonServiceInfo,
         gateway_backend: KartonAsyncBackend,
     ):
+        if gateway_backend._redis is None or gateway_backend._s3_session is None:
+            raise RuntimeError("Gateway backend is not connected")
         super().__init__(
             config=gateway_backend.config,
             service_info=service_info,
@@ -648,3 +695,7 @@ class KartonAsyncGatewayClientBackend(KartonAsyncBackend):
     @property
     def karton_bind(self) -> KartonBind | None:
         return self._current_bind
+
+    async def close(self) -> None:
+        # Clients should not close this backend object
+        raise NotImplementedError

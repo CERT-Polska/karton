@@ -44,7 +44,6 @@ class SessionInitiator(Protocol):
         self,
         gateway_client: "AsyncGatewayClient",
         connection: ClientConnection,
-        secondary: bool,
     ): ...
 
 
@@ -112,22 +111,25 @@ class AsyncGatewayClient:
         self.response_timeout = response_timeout
         self.connection_pool_soft_limit = connection_pool_soft_limit
 
-        # Main connection used by main consumer loop. It keeps the bind
+        # Bound connection used by main consumer loop. It keeps the bind
         # registration and is not terminated by server when it's idle for
         # longer time.
-        self._main_connection: ClientConnection | None = None
-        self._main_connection_used = False
+        self._bound_connection: ClientConnection | None = None
+        self._bound_connection_used = False
         # Secondary connections that are free to use
         self._unused_connections: list[ClientConnection] = []
+        # Is connector closed?
+        self._closed = False
 
-    async def _connect(
-        self, secondary: bool, retry_state: RetryState
-    ) -> ClientConnection:
+    async def _connect(self, retry_state: RetryState) -> ClientConnection:
+        """
+        Initiates and returns the connection
+        """
         while True:
             connection: ClientConnection | None = None
             try:
                 connection = await connect(self.url, open_timeout=self.connect_timeout)
-                await self.session_initiator(self, connection, secondary=secondary)
+                await self.session_initiator(self, connection)
                 return connection
             except (ConnectionError, TimeoutError, GatewayShutdownError):
                 if connection is not None:
@@ -135,6 +137,10 @@ class AsyncGatewayClient:
                 retry_state.next_try()
                 if retry_state.last_try():
                     raise
+            except BaseException:
+                if connection is not None:
+                    await connection.close()
+                raise
             delay = retry_state.get_retry_delay()
             logger.warning(
                 "Failed to send request to gateway. Retry %d/%d after %.1f seconds",
@@ -144,64 +150,95 @@ class AsyncGatewayClient:
             )
             await asyncio.sleep(delay)
 
+    async def close(self):
+        self._closed = True
+        if (
+            self._bound_connection is not None
+            and self._bound_connection.state is not CLOSED
+        ):
+            await self._bound_connection.close()
+        self._bound_connection = None
+        self._bound_connection_used = False
+        for connection in self._unused_connections:
+            if connection.state is not CLOSED:
+                await connection.close()
+        self._unused_connections.clear()
+
     async def _get_available_connection(
-        self, retry_state: RetryState
+        self, retry_state: RetryState, use_bound_connection: bool = False
     ) -> ClientConnection:
         """
-        Gets available websocket connection - main or from secondary pool
+        Gets available websocket connection.
+
+        By default, connections are gathered from the connection pool.
+        If use_bound_connection is True, the main consumer connection
+        is acquired which has is connected with the bind registered on
+        the session. Consumer connections are used by register_bind and
+        consume_routed_task methods.
         """
-        if self._main_connection_used:
-            # Drop closed connections
-            self._unused_connections = [
-                connection
-                for connection in self._unused_connections
-                if connection.state is not CLOSED
-            ]
-            if not self._unused_connections:
-                return await self._connect(secondary=True, retry_state=retry_state)
-            else:
-                # We intentionally get it in LIFO manner to
-                # not constantly refresh old connections. If
-                # they are not used, it's unnecessary to keep
-                # so many of them, so they got idle and will
-                # be closed by server.
-                return self._unused_connections.pop()
+        if self._closed:
+            raise RuntimeError("Gateway client is closed")
 
-        self._main_connection_used = True
-        if self._main_connection is None or self._main_connection.state is CLOSED:
-            try:
-                self._main_connection = await self._connect(
-                    secondary=False, retry_state=retry_state
-                )
-            except BaseException:
-                self._main_connection_used = False
-                raise
+        if use_bound_connection:
+            if self._bound_connection_used:
+                # This indicates a bug: there should be only one,
+                # sequential consumer loop that uses the Karton backend
+                raise RuntimeError("Bound connection cannot be used concurrently")
+            self._bound_connection_used = True
+            if self._bound_connection is None or self._bound_connection.state is CLOSED:
+                try:
+                    self._bound_connection = await self._connect(
+                        retry_state=retry_state
+                    )
+                except BaseException:
+                    self._bound_connection_used = False
+                    raise
+            return self._bound_connection
 
-        return self._main_connection
+        # Drop closed pool connections
+        self._unused_connections = [
+            connection
+            for connection in self._unused_connections
+            if connection.state is not CLOSED
+        ]
+        if not self._unused_connections:
+            return await self._connect(retry_state=retry_state)
+        else:
+            # LIFO to avoid refreshing old idle connections, letting the
+            # server close them when idle.
+            return self._unused_connections.pop()
 
     async def _return_connection(self, connection: ClientConnection):
         """
         Returns connection to the pool
         """
-        if connection is not self._main_connection:
-            if len(self._unused_connections) >= (self.connection_pool_soft_limit - 1):
+        if self._closed:
+            if connection.state is not CLOSED:
                 await connection.close()
-                return
-            self._unused_connections.append(connection)
             return
 
-        self._main_connection_used = False
-        return
+        if connection is self._bound_connection:
+            self._bound_connection_used = False
+            return
+
+        if connection.state is CLOSED:
+            return
+        if len(self._unused_connections) >= (self.connection_pool_soft_limit - 1):
+            await connection.close()
+            return
+        self._unused_connections.append(connection)
 
     @contextlib.asynccontextmanager
     async def _connection(
-        self, retry_state: RetryState
+        self, retry_state: RetryState, use_bound_connection: bool = False
     ) -> AsyncIterator[ClientConnection]:
         """
         Context manager that gets available connection from the pool
         and returns it back after context exits
         """
-        connection = await self._get_available_connection(retry_state)
+        connection = await self._get_available_connection(
+            retry_state, use_bound_connection=use_bound_connection
+        )
         try:
             yield connection
         finally:
@@ -241,7 +278,11 @@ class AsyncGatewayClient:
         await connection.send(data)
 
     async def make_request(
-        self, request: str, message: dict[str, Any], expected_response: str
+        self,
+        request: str,
+        message: dict[str, Any],
+        expected_response: str,
+        use_bound_connection: bool = False,
     ) -> dict[str, Any]:
         retry_state = RetryState(
             max_retries=self.retries,
@@ -250,7 +291,9 @@ class AsyncGatewayClient:
         )
         while True:
             request_sent = False
-            async with self._connection(retry_state) as connection:
+            async with self._connection(
+                retry_state, use_bound_connection=use_bound_connection
+            ) as connection:
                 try:
                     await self.send(connection, request, message)
                     request_sent = True
@@ -279,7 +322,11 @@ class AsyncGatewayClient:
             await asyncio.sleep(delay)
 
     async def make_streaming_request(
-        self, request: str, message: dict[str, Any], expected_response: str
+        self,
+        request: str,
+        message: dict[str, Any],
+        expected_response: str,
+        use_bound_connection: bool = False,
     ) -> AsyncIterator[dict[str, Any]]:
         retry_state = RetryState(
             max_retries=self.retries,
@@ -287,7 +334,9 @@ class AsyncGatewayClient:
             jitter=self.retry_jitter,
         )
         while True:
-            async with self._connection(retry_state) as connection:
+            async with self._connection(
+                retry_state, use_bound_connection=use_bound_connection
+            ) as connection:
                 try:
                     await self.send(connection, request, message)
                     while True:
@@ -369,18 +418,37 @@ class SyncGatewayClient:
             connection_pool_soft_limit=connection_pool_soft_limit,
         )
 
+    def close(self) -> None:
+        return run_async(self._async_client.close())
+
     def make_request(
-        self, request: str, message: dict[str, Any], expected_response: str
+        self,
+        request: str,
+        message: dict[str, Any],
+        expected_response: str,
+        use_bound_connection: bool = False,
     ) -> dict[str, Any]:
         return run_async(
-            self._async_client.make_request(request, message, expected_response)
+            self._async_client.make_request(
+                request,
+                message,
+                expected_response,
+                use_bound_connection=use_bound_connection,
+            )
         )
 
     def make_streaming_request(
-        self, request: str, message: dict[str, Any], expected_response: str
+        self,
+        request: str,
+        message: dict[str, Any],
+        expected_response: str,
+        use_bound_connection: bool = False,
     ) -> Iterator[dict[str, Any]]:
         return iter_async(
             self._async_client.make_streaming_request(
-                request, message, expected_response
+                request,
+                message,
+                expected_response,
+                use_bound_connection=use_bound_connection,
             )
         )

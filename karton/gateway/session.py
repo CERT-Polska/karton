@@ -9,8 +9,8 @@ from pydantic import ValidationError
 
 from karton.core.__version__ import __version__
 from karton.core.asyncio.backend import KartonServiceInfo
+from karton.core.asyncio.backend.direct import KartonAsyncGatewayClientBackend
 
-from ..core.asyncio.backend.direct import KartonAsyncGatewayClientBackend
 from .backend import gateway_backend
 from .config import gateway_config
 from .errors import (
@@ -37,11 +37,9 @@ class ClientSession:
         self,
         service_info: KartonServiceInfo,
         service_backend: KartonAsyncGatewayClientBackend,
-        secondary_connection: bool,
     ):
         self.service_info = service_info
         self.service_backend: KartonAsyncGatewayClientBackend = service_backend
-        self.secondary_connection: bool = secondary_connection
 
     @property
     def is_bound(self) -> bool:
@@ -106,7 +104,6 @@ class ClientSession:
         session = cls(
             service_info=service_info,
             service_backend=service_backend,
-            secondary_connection=hello_request.message.secondary_connection,
         )
         await gateway_backend.register_service(
             service_info, connection_id, HEARTBEAT_HARD_TIMEOUT
@@ -122,7 +119,10 @@ class ClientSession:
 
     async def message_loop(self, websocket: WebSocket):
         while True:
-            if not self.secondary_connection:
+            if self.is_bound:
+                # Consumer loop connections are not closed on idle
+                # Active connection maintains heartbeat, which is crucial
+                # for not GC'ing the non-persistent queues too early
                 request_json = await websocket.receive_text()
             else:
                 try:
@@ -130,17 +130,19 @@ class ClientSession:
                         request_json = await websocket.receive_text()
                 except TimeoutError:
                     logger.info(
-                        "Secondary connection was idle for %d seconds. Closing.",
+                        "Connection was idle for %d seconds. Closing.",
                         IDLE_SECONDARY_TIMEOUT,
                     )
-                    await websocket.close(reason="Secondary connection was idle")
+                    await websocket.close(reason="Connection was idle")
                     break
-            try:
-                request = Request.model_validate_json(request_json)
-            except ValidationError as exc:
-                raise BadRequestError("Invalid request", validation_error=exc) from exc
 
             with shutdown_latch:
+                try:
+                    request = Request.model_validate_json(request_json)
+                except ValidationError as exc:
+                    raise BadRequestError(
+                        "Invalid request", validation_error=exc
+                    ) from exc
                 try:
                     await call_request_handler(websocket, request, session=self)
                 except KartonGatewayError as error:

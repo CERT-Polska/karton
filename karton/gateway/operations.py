@@ -112,10 +112,17 @@ async def handle_bind_request(
         service_version=session.service_info.service_version,
         is_async=request.message.is_async,
     )
-    old_bind = await session.service_backend.register_bind(bind)
-    bind_response_message = BindResponseMessage(
-        old_bind=old_bind,
-    )
+    if request.message.reject_if_expired:
+        try:
+            await session.service_backend.restore_bind(bind)
+        except KartonBindExpiredError as e:
+            raise GatewayBindExpiredError(str(e)) from e
+        bind_response_message = BindResponseMessage(old_bind=bind)
+    else:
+        old_bind = await session.service_backend.register_bind(bind)
+        bind_response_message = BindResponseMessage(
+            old_bind=old_bind,
+        )
     bind_response = BindResponse(message=bind_response_message)
     await websocket.send_text(bind_response.model_dump_json())
 
@@ -265,9 +272,10 @@ async def handle_set_task_status_request(
         )
 
     await session.service_backend.set_task_status(task, new_task_status)
-    await session.service_backend.increment_metrics(
-        KartonMetrics.TASK_CONSUMED, session.identity
-    )
+    if new_task_status in [TaskState.FINISHED, TaskState.CRASHED]:
+        await session.service_backend.increment_metrics(
+            KartonMetrics.TASK_CONSUMED, session.identity
+        )
     await send_success(websocket)
 
 

@@ -4,7 +4,7 @@ import time
 from io import BytesIO
 from typing import IO, Any, AsyncIterator
 
-import httpx
+import httpx2
 
 from karton.core.asyncio.resource import LocalResource, RemoteResource
 from karton.core.backend import KartonBind, KartonMetrics, KartonServiceInfo
@@ -50,10 +50,14 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonAsyncBackendProtocol)
             response_timeout=self.gateway_response_timeout,
             connection_pool_soft_limit=self.gateway_connection_pool_soft_limit,
         )
-        self._http_client = httpx.AsyncClient()
+        self._http_client = httpx2.AsyncClient()
 
     async def connect(self) -> None:
         pass
+
+    async def close(self) -> None:
+        await self._http_client.aclose()
+        await self._gateway_client.close()
 
     async def register_bind(self, bind: KartonBind) -> KartonBind | None:
         response = await self._gateway_client.make_request(
@@ -65,7 +69,9 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonAsyncBackendProtocol)
                 "is_async": bind.is_async,
             },
             expected_response="bind",
+            use_bound_connection=True,
         )
+        self._karton_bind = bind
         if response["old_bind"] is None:
             return None
         old_bind = response["old_bind"]
@@ -124,7 +130,10 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonAsyncBackendProtocol)
     async def consume_routed_task(self, identity: str, timeout: int = 5) -> Task | None:
         try:
             response = await self._gateway_client.make_request(
-                request="get_task", message={}, expected_response="task"
+                request="get_task",
+                message={},
+                expected_response="task",
+                use_bound_connection=True,
             )
         except OperationTimeoutError:
             return None
@@ -193,7 +202,7 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonAsyncBackendProtocol)
 
     def _get_download_stream(
         self, resource: RemoteResource
-    ) -> contextlib.AbstractAsyncContextManager[httpx.Response]:
+    ) -> contextlib.AbstractAsyncContextManager[httpx2.Response]:
         if self.gateway_s3_hostname_override is not None:
             host, download_url = override_presigned_url(
                 resource.download_url, self.gateway_s3_hostname_override

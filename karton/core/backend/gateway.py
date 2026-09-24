@@ -5,7 +5,7 @@ import urllib.parse
 from io import BytesIO
 from typing import IO, Any, Callable, Iterator
 
-import httpx
+import httpx2
 
 from karton.core.config import Config
 from karton.core.exceptions import BindExpiredError
@@ -74,7 +74,6 @@ class KartonGatewayBackendBase:
         async def _session_initiator(
             gateway_client: AsyncGatewayClient,
             connection: ClientConnection,
-            secondary: bool,
         ):
             await gateway_client.recv(connection, expected_response="hello")
             await gateway_client.send(
@@ -88,7 +87,7 @@ class KartonGatewayBackendBase:
                     "password": self.gateway_password,
                 },
             )
-            if not secondary and self._karton_bind is not None:
+            if self._karton_bind is not None:
                 # If it's main connection and bind is already registered
                 # we need to re-register it for new session.
                 bind = self._karton_bind
@@ -100,6 +99,7 @@ class KartonGatewayBackendBase:
                         "filters": bind.filters,
                         "persistent": bind.persistent,
                         "is_async": bind.is_async,
+                        "reject_if_expired": True,
                     },
                 )
                 await gateway_client.recv(
@@ -178,6 +178,9 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
             connection_pool_soft_limit=1,
         )
 
+    def close(self) -> None:
+        return self._gateway_client.close()
+
     def register_bind(self, bind: KartonBind) -> KartonBind | None:
         response = self._gateway_client.make_request(
             request="bind",
@@ -188,7 +191,9 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
                 "is_async": bind.is_async,
             },
             expected_response="bind",
+            use_bound_connection=True,
         )
+        self._karton_bind = bind
         if response["old_bind"] is None:
             return None
         old_bind = response["old_bind"]
@@ -247,7 +252,10 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
     def consume_routed_task(self, identity: str, timeout: int = 5) -> Task | None:
         try:
             response = self._gateway_client.make_request(
-                request="get_task", message={}, expected_response="task"
+                request="get_task",
+                message={},
+                expected_response="task",
+                use_bound_connection=True,
             )
         except OperationTimeoutError:
             return None
@@ -298,11 +306,11 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
             host, upload_url = override_presigned_url(
                 resource.upload_url, self.gateway_s3_hostname_override
             )
-            response = httpx.put(
+            response = httpx2.put(
                 upload_url, content=streamer(), headers={**headers, "Host": host}
             )
         else:
-            response = httpx.put(
+            response = httpx2.put(
                 resource.upload_url, content=streamer(), headers=headers
             )
 
@@ -314,14 +322,14 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
 
     def _get_download_stream(
         self, resource: RemoteResource
-    ) -> contextlib.AbstractContextManager[httpx.Response]:
+    ) -> contextlib.AbstractContextManager[httpx2.Response]:
         if self.gateway_s3_hostname_override is not None:
             host, download_url = override_presigned_url(
                 resource.download_url, self.gateway_s3_hostname_override
             )
-            return httpx.stream("GET", download_url, headers={"Host": host})
+            return httpx2.stream("GET", download_url, headers={"Host": host})
         else:
-            return httpx.stream("GET", resource.download_url)
+            return httpx2.stream("GET", resource.download_url)
 
     def download_resource(self, resource: RemoteResource) -> bytes:
         with self._get_download_stream(resource) as response:

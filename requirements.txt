@@ -4,4 +4,4 @@ orjson
 boto3<=1.35.81
 aioboto3==13.3.0
 websockets
-httpx
+httpx2<3.0.0

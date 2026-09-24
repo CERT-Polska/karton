@@ -38,7 +38,6 @@ class HelloRequestMessage(BaseModel):
     library_version: str
     instance_id: str
     service_version: str | None
-    secondary_connection: bool = False
     password: str | None
 
 
@@ -52,6 +51,7 @@ class BindRequestMessage(BaseModel):
     filters: list[dict[str, Any]]
     persistent: bool
     is_async: bool
+    reject_if_expired: bool = False
 
 
 class BindRequest(BaseModel):
