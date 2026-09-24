@@ -68,15 +68,15 @@ class RequestHandler(Protocol[T]):
 
 REQUEST_HANDLERS: dict[Type[RequestType], RequestHandler] = {}
 
-
-def request_handler(
-    handler_fn: RequestHandler[T],
-) -> RequestHandler[T]:
-    request_type = handler_fn.__annotations__["request"]
-    if request_type in REQUEST_HANDLERS:
-        raise ValueError(f"Handler for request type {request_type} is already defined")
-    REQUEST_HANDLERS[request_type] = handler_fn
-    return handler_fn
+def request_handler(request_type: Type[RequestType]):
+    def request_handler_inner(
+        handler_fn: RequestHandler[T],
+    ) -> RequestHandler[T]:
+        if request_type in REQUEST_HANDLERS:
+            raise ValueError(f"Handler for request type {request_type} is already defined")
+        REQUEST_HANDLERS[request_type] = handler_fn
+        return handler_fn
+    return request_handler_inner
 
 
 async def call_request_handler(
@@ -85,7 +85,7 @@ async def call_request_handler(
     await REQUEST_HANDLERS[type(request.root)](websocket, request.root, session)
 
 
-@request_handler
+@request_handler(BindRequest)
 async def handle_bind_request(
     websocket: WebSocket, request: BindRequest, session: "ClientSession"
 ) -> None:
@@ -118,7 +118,7 @@ async def handle_bind_request(
     await websocket.send_text(bind_response.model_dump_json())
 
 
-@request_handler
+@request_handler(DeclareTaskRequest)
 async def handle_declare_task_request(
     websocket: WebSocket, request: DeclareTaskRequest, session: "ClientSession"
 ) -> None:
@@ -186,7 +186,7 @@ async def handle_declare_task_request(
     await websocket.send_text(task_declared_request.model_dump_json())
 
 
-@request_handler
+@request_handler(SendTaskRequest)
 async def handle_send_task_request(
     websocket: WebSocket, request: SendTaskRequest, session: "ClientSession"
 ) -> None:
@@ -221,7 +221,7 @@ async def handle_send_task_request(
     await send_success(websocket)
 
 
-@request_handler
+@request_handler(SetTaskStatusRequest)
 async def handle_set_task_status_request(
     websocket: WebSocket, request: SetTaskStatusRequest, session: "ClientSession"
 ) -> None:
@@ -269,7 +269,7 @@ async def handle_set_task_status_request(
     await send_success(websocket)
 
 
-@request_handler
+@request_handler(GetTaskRequest)
 async def handle_get_task_request(
     websocket: WebSocket, request: GetTaskRequest, session: "ClientSession"
 ) -> None:
@@ -346,7 +346,7 @@ async def handle_get_task_request(
         raise
 
 
-@request_handler
+@request_handler(SendLogRequest)
 async def handle_send_log_request(
     websocket: WebSocket, request: SendLogRequest, session: "ClientSession"
 ) -> None:
@@ -370,7 +370,7 @@ async def handle_send_log_request(
     await websocket.send_text(log_sent_response.model_dump_json())
 
 
-@request_handler
+@request_handler(SubscribeLogsRequest)
 async def handle_subscribe_logs_request(
     websocket: WebSocket, request: SubscribeLogsRequest, session: "ClientSession"
 ) -> None:
