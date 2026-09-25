@@ -23,10 +23,10 @@ class Producer(KartonAsyncBase):
     """
     Producer part of Karton. Used for dispatching initial tasks into karton.
 
+    :param identity: Producer name
+    :type identity: str
     :param config: Karton configuration object (optional)
     :type config: :class:`karton.Config`
-    :param identity: Producer name (optional)
-    :type identity: str
 
     Usage example:
 
@@ -54,8 +54,8 @@ class Producer(KartonAsyncBase):
 
     def __init__(
         self,
+        identity: str,
         config: Optional[Config] = None,
-        identity: Optional[str] = None,
         backend: Optional[KartonAsyncBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
@@ -168,7 +168,7 @@ class Consumer(KartonAsyncServiceBase):
             if self.task_timeout:
                 try:
                     # asyncio.timeout is Py3.11+
-                    async with asyncio.timeout(self.task_timeout):  # type: ignore
+                    async with asyncio.timeout(self.task_timeout):
                         await self.process(task)
                 except asyncio.TimeoutError as e:
                     raise TaskTimeoutError from e

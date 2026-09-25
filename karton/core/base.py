@@ -16,7 +16,7 @@ from .utils import HardShutdownInterrupt, StrictClassMethod, graceful_killer
 
 
 class ConfigMixin:
-    identity: Optional[str]
+    identity: str
     version: Optional[str]
 
     def __init__(self, config: Optional[Config] = None, identity: Optional[str] = None):
@@ -124,7 +124,7 @@ class LoggingMixin:
         if level is None:
             level = self.config.get("logging", "level", logging.INFO)
 
-        if type(level) is str and cast(str, level).isdigit():
+        if isinstance(level, str)and level.isdigit():
             log_level: Union[str, int] = int(level)
         else:
             log_level = level

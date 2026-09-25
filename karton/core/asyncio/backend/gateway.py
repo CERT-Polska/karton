@@ -171,7 +171,7 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonAsyncBackendProtocol)
     async def upload_resource(
         self, resource: LocalResource, content: bytes | IO[bytes]
     ) -> None:
-        if type(content) is bytes:
+        if isinstance(content, bytes):
             content = BytesIO(content)
 
         async def streamer():
