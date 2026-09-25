@@ -18,12 +18,12 @@ from typing import (
 
 from . import query
 from .resource import RemoteResource, ResourceBase
+from .serialization import decode_task, encode_task
 from .utils import recursive_iter, recursive_iter_with_keys, recursive_map
 
 if TYPE_CHECKING:
     from .backend import KartonBackend  # noqa
 
-import orjson
 
 current_task: ContextVar[Optional["Task"]] = ContextVar("current_task")
 
@@ -318,19 +318,14 @@ class Task(object):
             "error": self.error,
         }
 
-    def serialize(self, indent: Optional[int] = None) -> str:
+    def serialize(self) -> bytes:
         """
-        Serialize task data into JSON string
-        :param indent: Indent to use while serializing
+        Serialize task data into bytes
         :return: Serialized task data
 
         :meta private:
         """
-        return json.dumps(
-            self.to_dict(),
-            indent=indent,
-            sort_keys=True,
-        )
+        return encode_task(self)
 
     def walk_payload_bags(self) -> Iterator[Tuple[Dict[str, Any], str, Any]]:
         """
@@ -424,52 +419,61 @@ class Task(object):
                     return resource_unserializer(value["__karton_resource__"])
             return value
 
-        if not isinstance(data, str):
-            data = data.decode("utf8")
+        def map_resources(value: Any) -> Any:
+            """
+            Walks payload bags and replaces serialized resources with actual
+            objects
+            """
+            if isinstance(value, dict):
+                value = unserialize_resources(value)
+                for key, inner_value in value.items():
+                    new_value = unserialize_resources(inner_value)
+                    if new_value != inner_value:
+                        value[key] = new_value
+            elif isinstance(value, list):
+                for i, inner_value in enumerate(value):
+                    new_value = unserialize_resources(inner_value)
+                    if new_value != inner_value:
+                        value[i] = new_value
+            return value
 
+        if not isinstance(data, bytes):
+            data = data.encode("utf-8")
+
+        task_data = decode_task(data)
         if parse_resources:
-            task_data = json.loads(data, object_hook=unserialize_resources)
-        else:
-            try:
-                task_data = orjson.loads(data)
-            except orjson.JSONDecodeError:
-                # Fallback, in case orjson raises exception during loading
-                # This may happen for large numbers (too large for float)
-                task_data = json.loads(data, object_hook=unserialize_resources)
+            task_data.payload = map_resources(task_data.payload)
+            task_data.payload_persistent = map_resources(task_data.payload_persistent)
 
         # Compatibility with Karton <5.2.0
-        headers_persistent_fallback = task_data["payload_persistent"].get(
-            "__headers_persistent", None
-        )
-        headers_persistent = task_data.get(
-            "headers_persistent", headers_persistent_fallback
+        headers_persistent = (
+            task_data.headers_persistent
+            or task_data.payload_persistent.get("__headers_persistent", None)
         )
 
         task = Task(
-            task_data["headers"],
+            task_data.headers,
             headers_persistent=headers_persistent,
-            uid=task_data["uid"],
-            root_uid=task_data["root_uid"],
-            parent_uid=task_data["parent_uid"],
-            # Compatibility with <= 3.x.x (get)
-            orig_uid=task_data.get("orig_uid", None),
-            payload=task_data["payload"],
-            payload_persistent=task_data["payload_persistent"],
-            # Compatibility with <= 3.x.x (get)
-            error=task_data.get("error"),
-            # Compatibility with <= 2.x.x (get)
+            uid=task_data.uid,
+            root_uid=task_data.root_uid,
+            parent_uid=task_data.parent_uid,
+            orig_uid=task_data.orig_uid,
+            payload=task_data.payload,
+            payload_persistent=task_data.payload_persistent,
+            error=task_data.error,
             priority=(
-                TaskPriority(task_data.get("priority"))
-                if "priority" in task_data
+                TaskPriority(task_data.priority)
+                if task_data.priority is not None
                 else TaskPriority.NORMAL
             ),
-            _status=TaskState(task_data["status"]),
-            _last_update=task_data.get("last_update", None),
+            _status=TaskState(task_data.status),
+            _last_update=task_data.last_update,
         )
         return task
 
     def __repr__(self) -> str:
-        return self.serialize()
+        # keeps old behavior
+        return json.dumps(self.to_dict(), sort_keys=True, indent=None)
 
     def add_payload(self, name: str, content: Any, persistent: bool = False) -> None:
         """
