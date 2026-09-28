@@ -29,7 +29,7 @@ from .base import KartonAsyncBackendProtocol
 logger = logging.getLogger(__name__)
 
 
-class KartonGatewayBackend(KartonGatewayBackendBase, KartonAsyncBackendProtocol):
+class KartonAsyncGatewayBackend(KartonGatewayBackendBase, KartonAsyncBackendProtocol):
     def __init__(
         self,
         config: Config,
