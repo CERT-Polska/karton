@@ -8,7 +8,6 @@ import aioboto3
 from aiobotocore.credentials import ContainerProvider, InstanceMetadataProvider
 from aiobotocore.session import ClientCreatorContext, get_session
 from aiobotocore.utils import InstanceMetadataFetcher
-from redis import WatchError
 from redis.asyncio import Redis
 from redis.asyncio.client import Pipeline
 from redis.exceptions import AuthenticationError
@@ -229,11 +228,17 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         task.last_update = time.time()
         await self.register_task(task, pipe=pipe)
 
-    async def register_bind(self, bind: KartonBind) -> Optional[KartonBind]:
+    async def register_bind(
+        self, bind: KartonBind, bind_backend: bool = True
+    ) -> Optional[KartonBind]:
         """
         Register bind for Karton service and return the old one
 
         :param bind: KartonBind object with bind definition
+        :param bind_backend: |
+            Bind the KartonBind with the backend for consume_routed_task comparison.
+            Set to False by Karton Gateway that reuses backend for multiple independent
+            Karton services.
         :return: Old KartonBind that was registered under this identity
         """
         async with self.redis.pipeline(transaction=True) as pipe:
@@ -241,52 +246,12 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             await pipe.hset(KARTON_BINDS_HSET, bind.identity, self.serialize_bind(bind))
             old_serialized_bind, _ = await pipe.execute()
 
-        self._current_bind = bind
+        if bind_backend:
+            self._current_bind = bind
         if old_serialized_bind:
             return self.unserialize_bind(bind.identity, old_serialized_bind)
         else:
             return None
-
-    async def restore_bind(self, bind: KartonBind) -> None:
-        """
-        Restore bind for Karton service after reconnection.
-
-        If the registered bind is different: it is not updated and
-        BindExpiredError is raised.
-
-        :param bind: KartonBind object with bind definition
-        """
-        our_serialized_bind = self.serialize_bind(bind)
-        async with self.redis.pipeline(transaction=True) as pipe:
-            while True:
-                try:
-                    await pipe.watch(KARTON_BINDS_HSET)
-                    current_serialized_bind = await pipe.hget(
-                        KARTON_BINDS_HSET, bind.identity
-                    )
-                    if current_serialized_bind != our_serialized_bind:
-                        await pipe.unwatch()
-                        current_bind = (
-                            self.unserialize_bind(
-                                bind.identity, current_serialized_bind
-                            )
-                            if current_serialized_bind
-                            else "<missing>"
-                        )
-                        raise BindExpiredError(
-                            "Binds changed, shutting down. "
-                            f"Old binds: {bind} "
-                            f"New binds: {current_bind}"
-                        )
-                    pipe.multi()
-                    await pipe.hset(
-                        KARTON_BINDS_HSET, bind.identity, our_serialized_bind
-                    )
-                    await pipe.execute()
-                    self._current_bind = bind
-                    return None
-                except WatchError:
-                    continue
 
     async def get_bind(self, identity: str) -> KartonBind:
         """
@@ -337,7 +302,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         )
 
     async def consume_routed_task(
-        self, identity: str, timeout: int = 5
+        self, identity: str, timeout: int = 5, bind_id: str | None = None
     ) -> Optional[Task]:
         """
         Get routed task for given consumer identity.
@@ -346,11 +311,20 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
 
         :param identity: Karton service identity
         :param timeout: Waiting for task timeout (default: 5)
+        :param bind_id: |
+            Bind identifier to be compared instead of the bind
+            stored in backend. Used internally by Karton Gateway.
         :return: Task object
         """
-        if self._current_bind is not None:
+        if bind_id is not None or self._current_bind is not None:
             current_bind = await self.get_bind(identity)
-            if current_bind != self._current_bind:
+            if bind_id is not None:
+                current_bind_id = self.compute_bind_id(current_bind)
+                if current_bind_id != bind_id:
+                    raise BindExpiredError(
+                        "Binds changed, shutting down. " f"New binds: {current_bind}"
+                    )
+            elif current_bind != self._current_bind:
                 raise BindExpiredError(
                     "Binds changed, shutting down. "
                     f"Old binds: {self._current_bind} "
@@ -668,34 +642,3 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
                 },
                 ExpiresIn=expires_in,
             )
-
-
-class KartonAsyncGatewayClientBackend(KartonAsyncBackend):
-    """
-    Backend instance that shares the Redis/S3 connectors
-    and holds bind state for the connected service.
-    """
-
-    def __init__(
-        self,
-        service_info: KartonServiceInfo,
-        gateway_backend: KartonAsyncBackend,
-    ):
-        if gateway_backend._redis is None or gateway_backend._s3_session is None:
-            raise RuntimeError("Gateway backend is not connected")
-        super().__init__(
-            config=gateway_backend.config,
-            service_info=service_info,
-            _redis=gateway_backend._redis,
-            _s3_session=gateway_backend._s3_session,
-            _s3_iam_auth=gateway_backend._s3_iam_auth,
-        )
-        self._current_bind = None
-
-    @property
-    def karton_bind(self) -> KartonBind | None:
-        return self._current_bind
-
-    async def close(self) -> None:
-        # Clients should not close this backend object
-        raise NotImplementedError

@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import os
@@ -154,6 +155,18 @@ class KartonBackendBase:
             },
             sort_keys=True,
         )
+
+    @classmethod
+    def compute_bind_id(cls, bind: KartonBind) -> str:
+        """
+        Compute an KartonBind identifier that can be used for checking
+        whether bind is still valid and wasn't overridden by the newer
+        version of service.
+
+        :param bind: KartonBind object with bind definition
+        :return: Identifier of the serialized bind (SHA256 hex-encoded digest)
+        """
+        return hashlib.sha256(cls.serialize_bind(bind).encode()).hexdigest()
 
     @staticmethod
     def unserialize_bind(identity: str, bind_data: str) -> KartonBind:

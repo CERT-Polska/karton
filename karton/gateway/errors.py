@@ -25,16 +25,8 @@ class OperationTimeoutError(KartonGatewayError):
     code: str = "timeout"
 
 
-class InvalidBindError(KartonGatewayError):
-    code: str = "invalid_bind"
-
-
 class GatewayBindExpiredError(KartonGatewayError):
     code: str = "expired_bind"
-
-
-class AlreadyBoundError(KartonGatewayError):
-    code: str = "already_bound"
 
 
 class InvalidTaskTokenError(KartonGatewayError):

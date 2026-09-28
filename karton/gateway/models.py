@@ -39,6 +39,7 @@ class HelloRequestMessage(BaseModel):
     instance_id: str
     service_version: str | None
     password: str | None
+    close_on_idle: bool = False
 
 
 class HelloRequest(BaseModel):
@@ -51,7 +52,6 @@ class BindRequestMessage(BaseModel):
     filters: list[dict[str, Any]]
     persistent: bool
     is_async: bool
-    reject_if_expired: bool = False
 
 
 class BindRequest(BaseModel):
@@ -61,6 +61,7 @@ class BindRequest(BaseModel):
 
 class BindResponseMessage(BaseModel):
     old_bind: KartonBind | None
+    bind_id: str
 
 
 class BindResponse(BaseModel):
@@ -137,8 +138,13 @@ class SetTaskStatusRequest(BaseModel):
     message: SetTaskStatusRequestMessage
 
 
+class GetTaskRequestMessage(BaseModel):
+    bind_id: str
+
+
 class GetTaskRequest(BaseModel):
     request: Literal["get_task"] = "get_task"
+    message: GetTaskRequestMessage
 
 
 class IncomingTask(BaseModel):

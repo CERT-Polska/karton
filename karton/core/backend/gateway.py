@@ -69,11 +69,12 @@ class KartonGatewayBackendBase:
         self.gateway_response_timeout = self.config.getint(
             "gateway", "response_timeout", 15
         )
-        self._karton_bind: KartonBind | None = None
+        self._bind_id: str | None = None
 
         async def _session_initiator(
             gateway_client: AsyncGatewayClient,
             connection: ClientConnection,
+            close_on_idle: bool,
         ):
             await gateway_client.recv(connection, expected_response="hello")
             await gateway_client.send(
@@ -85,27 +86,9 @@ class KartonGatewayBackendBase:
                     "library_version": self.service_info.karton_version,
                     "instance_id": self.service_info.instance_id,
                     "password": self.gateway_password,
+                    "close_on_idle": close_on_idle,
                 },
             )
-            if self._karton_bind is not None:
-                # If it's main connection and bind is already registered
-                # we need to re-register it for new session.
-                bind = self._karton_bind
-                await gateway_client.send(
-                    connection,
-                    request="bind",
-                    message={
-                        "info": bind.info,
-                        "filters": bind.filters,
-                        "persistent": bind.persistent,
-                        "is_async": bind.is_async,
-                        "reject_if_expired": True,
-                    },
-                )
-                await gateway_client.recv(
-                    connection,
-                    expected_response="bind",
-                )
             await gateway_client.recv(connection)
 
         self._session_initiator = _session_initiator
@@ -191,9 +174,8 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
                 "is_async": bind.is_async,
             },
             expected_response="bind",
-            use_bound_connection=True,
         )
-        self._karton_bind = bind
+        self._bind_id = response["bind_id"]
         if response["old_bind"] is None:
             return None
         old_bind = response["old_bind"]
@@ -250,12 +232,15 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
         )
 
     def consume_routed_task(self, identity: str, timeout: int = 5) -> Task | None:
+        if self._bind_id is None:
+            raise RuntimeError("Cannot consume task without registering bind")
         try:
             response = self._gateway_client.make_request(
                 request="get_task",
-                message={},
+                message={
+                    "bind_id": self._bind_id,
+                },
                 expected_response="task",
-                use_bound_connection=True,
             )
         except OperationTimeoutError:
             return None

@@ -69,9 +69,8 @@ class KartonAsyncGatewayBackend(KartonGatewayBackendBase, KartonAsyncBackendProt
                 "is_async": bind.is_async,
             },
             expected_response="bind",
-            use_bound_connection=True,
         )
-        self._karton_bind = bind
+        self._bind_id = response["bind_id"]
         if response["old_bind"] is None:
             return None
         old_bind = response["old_bind"]
@@ -128,12 +127,15 @@ class KartonAsyncGatewayBackend(KartonGatewayBackendBase, KartonAsyncBackendProt
         )
 
     async def consume_routed_task(self, identity: str, timeout: int = 5) -> Task | None:
+        if self._bind_id is None:
+            raise RuntimeError("Cannot consume task without registering bind")
         try:
             response = await self._gateway_client.make_request(
                 request="get_task",
-                message={},
+                message={
+                    "bind_id": self._bind_id,
+                },
                 expected_response="task",
-                use_bound_connection=True,
             )
         except OperationTimeoutError:
             return None

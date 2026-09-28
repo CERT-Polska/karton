@@ -9,7 +9,6 @@ from pydantic import ValidationError
 
 from karton.core.__version__ import __version__
 from karton.core.asyncio.backend import KartonServiceInfo
-from karton.core.asyncio.backend.direct import KartonAsyncGatewayClientBackend
 
 from .backend import gateway_backend
 from .config import gateway_config
@@ -27,7 +26,7 @@ from .shutdown import shutdown_latch
 HEARTBEAT_BASE_INTERVAL = 5.0
 HEARTBEAT_HARD_TIMEOUT = 15
 INIT_SESSION_TIMEOUT = 30.0
-IDLE_SECONDARY_TIMEOUT = 30.0
+IDLE_TIMEOUT = 30.0
 
 logger = logging.getLogger(__name__)
 
@@ -36,14 +35,10 @@ class ClientSession:
     def __init__(
         self,
         service_info: KartonServiceInfo,
-        service_backend: KartonAsyncGatewayClientBackend,
+        close_on_idle: bool,
     ):
         self.service_info = service_info
-        self.service_backend: KartonAsyncGatewayClientBackend = service_backend
-
-    @property
-    def is_bound(self) -> bool:
-        return self.service_backend.karton_bind is not None
+        self.close_on_idle = close_on_idle
 
     @property
     def identity(self) -> str:
@@ -97,13 +92,9 @@ class ClientSession:
             service_version=hello_request.message.service_version,
             instance_id=hello_request.message.instance_id,
         )
-        service_backend = KartonAsyncGatewayClientBackend(
-            service_info=service_info, gateway_backend=gateway_backend
-        )
-
         session = cls(
             service_info=service_info,
-            service_backend=service_backend,
+            close_on_idle=hello_request.message.close_on_idle,
         )
         await gateway_backend.register_service(
             service_info, connection_id, HEARTBEAT_HARD_TIMEOUT
@@ -119,19 +110,19 @@ class ClientSession:
 
     async def message_loop(self, websocket: WebSocket):
         while True:
-            if self.is_bound:
+            if not self.close_on_idle:
                 # Consumer loop connections are not closed on idle
                 # Active connection maintains heartbeat, which is crucial
                 # for not GC'ing the non-persistent queues too early
                 request_json = await websocket.receive_text()
             else:
                 try:
-                    async with asyncio.timeout(IDLE_SECONDARY_TIMEOUT):
+                    async with asyncio.timeout(IDLE_TIMEOUT):
                         request_json = await websocket.receive_text()
                 except TimeoutError:
                     logger.info(
                         "Connection was idle for %d seconds. Closing.",
-                        IDLE_SECONDARY_TIMEOUT,
+                        IDLE_TIMEOUT,
                     )
                     await websocket.close(reason="Connection was idle")
                     break
