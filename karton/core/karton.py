@@ -83,13 +83,24 @@ class Producer(KartonBase):
         # Register new task
         self.backend.declare_task(task)
 
-        # Upload local resources
-        for resource in task.iterate_resources():
-            if isinstance(resource, LocalResource):
-                resource.upload(self.backend)
+        try:
+            # Upload local resources
+            for resource in task.iterate_resources():
+                if isinstance(resource, LocalResource):
+                    resource.upload(self.backend)
 
-        # Add task to karton.tasks
-        self.backend.produce_unrouted_task(task)
+            # Add task to karton.tasks
+            self.backend.produce_unrouted_task(task)
+        except BaseException:
+            try:
+                self.backend.set_task_status(task, TaskState.FINISHED)
+            except Exception:
+                # This is our good will that shouldn't interfere with
+                # original exception handling, especially in case of
+                # BaseException which could be masked with Exception
+                pass
+            raise
+
         self.backend.increment_metrics(KartonMetrics.TASK_PRODUCED, self.identity)
         return True
 

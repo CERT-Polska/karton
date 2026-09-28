@@ -21,6 +21,7 @@ from .messages import send_success
 from .shutdown import shutdown_latch
 from .task import (
     TaskTokenInfo,
+    TaskTokenScope,
     generate_resource_download_urls,
     generate_resource_upload_urls,
     is_valid_task_status_transition,
@@ -142,20 +143,21 @@ async def handle_declare_task_request(
             token=parent_token,
             secret_key=gateway_config.secret_key,
             audience=session.identity,
+            scope=TaskTokenScope.consumed_task,
         )
         parent_task_uid = parent_task_info.task_uid
         allowed_parent_resources = parent_task_info.resources
 
-    allowed_buckets = [
-        gateway_backend.default_bucket_name
-    ] + gateway_config.allowed_extra_buckets
+    # For now it's global setting but in future it may be
+    # also configured per identity/username.
+    allowed_foreign_buckets = gateway_config.allowed_extra_buckets
     payload_bags = (task_params.payload, task_params.payload_persistent)
 
     # Now, we need to translate DeclaredResourceSpec to RemoteResource
-    task_payload_bags, resources = process_declared_task_resources(
-        payload_bags, allowed_parent_resources, allowed_buckets
+    task_payload_bags, validated_resources = process_declared_task_resources(
+        payload_bags, allowed_parent_resources, allowed_foreign_buckets
     )
-    resource_urls = await generate_resource_upload_urls(resources)
+    resource_urls = await generate_resource_upload_urls(validated_resources)
     task_payload, task_payload_persistent = task_payload_bags
 
     task = Task(
@@ -168,12 +170,15 @@ async def handle_declare_task_request(
     )
     task_token_info = TaskTokenInfo(
         task_uid=task.uid,
-        resources=[r.uid for r in resources],
+        # This type of token doesn't allow to
+        # reference any resources
+        resources=[],
     )
     task_token = make_task_token(
         task_token_info=task_token_info,
         secret_key=gateway_config.secret_key,
         audience=session.identity,
+        scope=TaskTokenScope.declared_task,
     )
 
     await gateway_backend.register_task(task)
@@ -204,6 +209,7 @@ async def handle_send_task_request(
         token=task_token,
         secret_key=gateway_config.secret_key,
         audience=session.identity,
+        scope=TaskTokenScope.declared_task,
     )
     task = await gateway_backend.get_task(task_info.task_uid)
     if task is None:
@@ -242,6 +248,7 @@ async def handle_set_task_status_request(
         token=task_token,
         secret_key=gateway_config.secret_key,
         audience=session.identity,
+        scope=None,  # Any scope is accepted here
     )
     task = await gateway_backend.get_task(task_info.task_uid)
     if task is None:
@@ -308,12 +315,14 @@ async def handle_get_task_request(
         download_urls = await generate_resource_download_urls(task, allowed_buckets)
         task_token_info = TaskTokenInfo(
             task_uid=task.uid,
-            resources=[r.uid for r in download_urls],
+            # Authorize the bearer to reference all the task resources
+            resources=[{"uid": r.uid, "bucket": r.bucket} for r in download_urls],
         )
         task_token = make_task_token(
             task_token_info=task_token_info,
             secret_key=gateway_config.secret_key,
             audience=session.identity,
+            scope=TaskTokenScope.consumed_task,
         )
         task_data = task.to_dict()
         incoming_task = IncomingTask(

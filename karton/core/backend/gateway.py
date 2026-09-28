@@ -211,8 +211,6 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
     def set_task_status(self, task: Task, status: TaskState) -> None:
         if task.status == status:
             return
-        task.status = status
-        task.last_update = time.time()
         message: dict[str, Any] = {"token": task.token, "status": status.value}
         if status is TaskState.CRASHED:
             message["error"] = task.error
@@ -221,6 +219,8 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
             message=message,
             expected_response="success",
         )
+        task.status = status
+        task.last_update = time.time()
 
     def produce_unrouted_task(self, task: Task) -> None:
         self._gateway_client.make_request(
@@ -246,13 +246,18 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
             return None
         except GatewayBindExpiredError as e:
             raise BindExpiredError(e.message) from e
-        download_urls = {spec["uid"]: spec["url"] for spec in response["download_urls"]}
+        download_urls = {
+            (spec["bucket"], spec["uid"]): spec["url"]
+            for spec in response["download_urls"]
+        }
 
         def deserialize_resource(resource_data: dict[str, Any]) -> RemoteResource:
             return RemoteResource.from_dict(
                 resource_data,
                 backend=self,
-                download_url=download_urls[resource_data["uid"]],
+                download_url=download_urls[
+                    (resource_data["bucket"], resource_data["uid"])
+                ],
             )
 
         task_data = response["task"]

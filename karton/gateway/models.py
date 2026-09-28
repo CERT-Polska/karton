@@ -88,8 +88,21 @@ class DeclaredResourceSpec(BaseModel):
     size: int
     metadata: dict[str, Any]
     sha256: str
-    bucket: str | None
+    bucket: str | None = None
     to_upload: bool = False
+
+
+class ValidatedDeclaredResourceSpec(DeclaredResourceSpec):
+    """
+    Validated and mapped resource schema. Declared UIDs for default bucket are
+    treated only as a reference and they are not used directly as an object name.
+
+    Direct UID specification is allowed only for "foreign" resources and Karton
+    service must be explicitly authorized to specify them.
+    """
+
+    bucket: str
+    server_uid: str
 
 
 class DeclareTaskRequestMessage(BaseModel):
@@ -105,6 +118,7 @@ class DeclareTaskRequest(BaseModel):
 class ResourceUrl(BaseModel):
     uid: str
     url: str
+    bucket: str
 
 
 class TaskDeclaredResponseMessage(BaseModel):
