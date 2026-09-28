@@ -9,7 +9,7 @@ from io import BytesIO
 from typing import IO, TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Union, cast
 
 if TYPE_CHECKING:
-    from .backend import KartonBackend
+    from .backend import KartonBackendProtocol
 
 
 class ResourceBase(object):
@@ -180,6 +180,26 @@ class LocalResourceBase(ResourceBase):
         )
         self.fd = fd
         self._close_fd = _close_fd
+        self._upload_url: Optional[str] = None
+
+    def bind_upload_url(self, url: str) -> None:
+        """
+        Binds upload URL to the LocalResource object. Used internally
+
+        :meta private:
+        """
+        self._upload_url = url
+
+    @property
+    def upload_url(self) -> str:
+        """
+        Upload URL for the LocalResource object. Used internally
+
+        :meta private:
+        """
+        if self._upload_url is None:
+            raise ValueError("Resource doesn't have upload URL")
+        return self._upload_url
 
     @property
     def content(self) -> bytes:
@@ -307,7 +327,7 @@ class LocalResource(LocalResourceBase):
     :param _close_fd: Close file descriptor after upload (default: False)
     """
 
-    def _upload(self, backend: "KartonBackend") -> None:
+    def _upload(self, backend: "KartonBackendProtocol") -> None:
         """Internal function for uploading resources
 
         :param backend: KartonBackend to use while uploading the resource
@@ -318,14 +338,9 @@ class LocalResource(LocalResourceBase):
         # Note: never transform resource into Remote
         # Multiple task dispatching with same local, in that case resource
         # can be deleted between tasks.
-        if self.bucket is None:
-            raise RuntimeError(
-                "Resource object can't be uploaded because its bucket is not set"
-            )
-
         if self._content:
             # Upload contents
-            backend.upload_object(self.bucket, self.uid, self._content)
+            backend.upload_resource(self, self._content)
         elif self.fd:
             if self.fd.tell() != 0:
                 raise RuntimeError(
@@ -334,15 +349,15 @@ class LocalResource(LocalResourceBase):
                     f"(fd.tell = {self.fd.tell()})"
                 )
             # Upload contents from fd
-            backend.upload_object(self.bucket, self.uid, self.fd)
+            backend.upload_resource(self, self.fd)
             # If file descriptor is managed by Resource, close it after upload
             if self._close_fd:
                 self.fd.close()
         elif self._path:
             # Upload file provided by path
-            backend.upload_object_from_file(self.bucket, self.uid, self._path)
+            backend.upload_resource_from_file(self, self._path)
 
-    def upload(self, backend: "KartonBackend") -> None:
+    def upload(self, backend: "KartonBackendProtocol") -> None:
         """Internal function for uploading resources
 
         :param backend: KartonBackend to use while uploading the resource
@@ -373,6 +388,7 @@ class RemoteResource(ResourceBase):
     :param backend: :py:meth:`KartonBackend` to bind to this resource
     :param sha256: Resource sha256 hash
     :param _flags: Resource flags
+    :param _download_url: Resource download URL
     """
 
     def __init__(
@@ -382,9 +398,10 @@ class RemoteResource(ResourceBase):
         metadata: Optional[Dict[str, Any]] = None,
         uid: Optional[str] = None,
         size: Optional[int] = None,
-        backend: Optional["KartonBackend"] = None,
+        backend: Optional["KartonBackendProtocol"] = None,
         sha256: Optional[str] = None,
         _flags: Optional[List[str]] = None,
+        _download_url: Optional[str] = None,
     ) -> None:
         super(RemoteResource, self).__init__(
             name,
@@ -396,6 +413,13 @@ class RemoteResource(ResourceBase):
             _flags=_flags,
         )
         self.backend = backend
+        self._download_url = _download_url
+
+    @property
+    def download_url(self) -> str:
+        if self._download_url is None:
+            raise ValueError("Resource doesn't have download URL")
+        return self._download_url
 
     def loaded(self) -> bool:
         """
@@ -407,13 +431,17 @@ class RemoteResource(ResourceBase):
 
     @classmethod
     def from_dict(
-        cls, dict: Dict[str, Any], backend: Optional["KartonBackend"]
+        cls,
+        dict: Dict[str, Any],
+        backend: Optional["KartonBackendProtocol"],
+        download_url: Optional[str] = None,
     ) -> "RemoteResource":
         """
         Internal deserialization method for remote resources
 
         :param dict: Serialized information about resource
         :param backend: KartonBackend object
+        :param download_url: Download URL from Karton Gateway
         :return: Deserialized :py:meth:`RemoteResource` object
 
         :meta private:
@@ -431,6 +459,7 @@ class RemoteResource(ResourceBase):
             size=dict.get("size"),  # Backwards compatibility (2.x.x)
             backend=backend,
             _flags=dict.get("flags"),  # Backwards compatibility (3.x.x)
+            _download_url=download_url,
         )
 
     @property
@@ -490,12 +519,7 @@ class RemoteResource(ResourceBase):
                     "the backend"
                 )
             )
-        if self.bucket is None:
-            raise RuntimeError(
-                "Resource object can't be downloaded because its bucket is not set"
-            )
-
-        self._content = self.backend.download_object(self.bucket, self.uid)
+        self._content = self.backend.download_resource(self)
         return self._content
 
     def download_to_file(self, path: str) -> None:
@@ -520,12 +544,7 @@ class RemoteResource(ResourceBase):
                     "the backend"
                 )
             )
-        if self.bucket is None:
-            raise RuntimeError(
-                "Resource object can't be downloaded because its bucket is not set"
-            )
-
-        self.backend.download_object_to_file(self.bucket, self.uid, path)
+        self.backend.download_resource_to_file(self, path)
 
     @contextlib.contextmanager
     def download_temporary_file(self, suffix=None) -> Iterator[IO[bytes]]:

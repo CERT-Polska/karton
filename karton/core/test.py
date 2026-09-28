@@ -66,32 +66,47 @@ class BackendMock:
         log.debug("Deleting object %s from bucket %s", object_uid, bucket)
         del self.buckets[bucket][object_uid]
 
-    def upload_object(
+    def upload_resource(
         self,
-        bucket: str,
-        object_uid: str,
+        resource: LocalResource,
         content: Union[bytes, BinaryIO],
         length: Optional[int] = None,
     ) -> None:
-        log.debug("Uploading object %s to bucket %s", object_uid, bucket)
+        if resource.bucket is None:
+            raise RuntimeError("Bucket should not be None")
+        log.debug("Uploading object %s to bucket %s", resource.uid, resource.bucket)
         if isinstance(content, bytes):
-            self.buckets[bucket][object_uid] = content
+            self.buckets[resource.bucket][resource.uid] = content
         else:
-            self.buckets[bucket][object_uid] = content.read()
+            self.buckets[resource.bucket][resource.uid] = content.read()
 
-    def download_object(self, bucket: str, object_uid: str) -> bytes:
-        log.debug("Downloading object %s from bucket %s", object_uid, bucket)
-        return self.buckets[bucket][object_uid]
+    def download_resource(self, resource: RemoteResource) -> bytes:
+        if resource.bucket is None:
+            raise RuntimeError("Bucket should not be None")
+        log.debug("Downloading object %s from bucket %s", resource.uid, resource.bucket)
+        return self.buckets[resource.bucket][resource.uid]
 
-    def upload_object_from_file(self, bucket: str, object_uid: str, path: str) -> None:
-        log.debug("Uploading object %s from file from bucket %s", object_uid, bucket)
+    def upload_resource_from_file(self, resource: LocalResource, path: str) -> None:
+        if resource.bucket is None:
+            raise RuntimeError("Bucket should not be None")
+        log.debug(
+            "Uploading object %s from file from bucket %s",
+            resource.uid,
+            resource.bucket,
+        )
         with open(path, "rb") as f:
-            self.buckets[bucket][object_uid] = f.read()
+            self.buckets[resource.bucket][resource.uid] = f.read()
 
-    def download_object_to_file(self, bucket: str, object_uid: str, path: str) -> None:
-        log.debug("Downloading object %s from bucket %s to file", object_uid, bucket)
+    def download_resource_to_file(self, resource: RemoteResource, path: str) -> None:
+        if resource.bucket is None:
+            raise RuntimeError("Bucket should not be None")
+        log.debug(
+            "Downloading object %s from bucket %s to file",
+            resource.uid,
+            resource.bucket,
+        )
         with open(path, "wb") as f:
-            f.write(self.buckets[bucket][object_uid])
+            f.write(self.buckets[resource.bucket][resource.uid])
 
 
 class KartonTestCase(unittest.TestCase):
