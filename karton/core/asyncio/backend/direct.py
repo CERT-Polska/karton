@@ -253,16 +253,17 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         else:
             return None
 
-    async def get_bind(self, identity: str) -> KartonBind:
+    async def get_bind(self, identity: str) -> KartonBind | None:
         """
         Get bind object for given identity
 
         :param identity: Karton service identity
-        :return: KartonBind object
+        :return: KartonBind object or None if not found
         """
-        return self.unserialize_bind(
-            identity, await self.redis.hget(KARTON_BINDS_HSET, identity)
-        )
+        bind_data = await self.redis.hget(KARTON_BINDS_HSET, identity)
+        if not bind_data:
+            return None
+        return self.unserialize_bind(identity, bind_data)
 
     async def produce_unrouted_task(self, task: Task) -> None:
         """
@@ -319,7 +320,10 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         if bind_id is not None or self._current_bind is not None:
             current_bind = await self.get_bind(identity)
             if bind_id is not None:
-                current_bind_id = self.compute_bind_id(current_bind)
+                if current_bind is None:
+                    current_bind_id = None
+                else:
+                    current_bind_id = self.compute_bind_id(current_bind)
                 if current_bind_id != bind_id:
                     raise BindExpiredError(
                         "Binds changed, shutting down. " f"New binds: {current_bind}"

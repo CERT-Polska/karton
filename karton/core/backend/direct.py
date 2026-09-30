@@ -323,16 +323,17 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         """
         return RemoteResource.from_dict(resource_spec, backend=self)
 
-    def get_bind(self, identity: str) -> KartonBind:
+    def get_bind(self, identity: str) -> KartonBind | None:
         """
         Get bind object for given identity
 
         :param identity: Karton service identity
-        :return: KartonBind object
+        :return: KartonBind object or None if not found
         """
-        return self.unserialize_bind(
-            identity, self.redis.hget(KARTON_BINDS_HSET, identity)
-        )
+        bind_data = self.redis.hget(KARTON_BINDS_HSET, identity)
+        if not bind_data:
+            return None
+        return self.unserialize_bind(identity, bind_data)
 
     def get_binds(self) -> List[KartonBind]:
         """
