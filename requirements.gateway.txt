@@ -1,6 +1,2 @@
 fastapi
-pydantic
-pyjwt
 uvicorn
-websockets
-cryptography
