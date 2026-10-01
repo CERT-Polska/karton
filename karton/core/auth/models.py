@@ -4,6 +4,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+DEFAULT_AUDIENCE = "karton-gateway"
+
 
 class CapabilityClaim(enum.Enum):
     produce_task = "produce_task"

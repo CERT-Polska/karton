@@ -6,6 +6,7 @@ import json
 import socket
 import sys
 from pathlib import Path
+from typing import Any
 
 import jwt
 from cryptography.hazmat.primitives import serialization
@@ -56,6 +57,10 @@ def get_claims_from_karton_class(
 
 
 def import_karton_class(dotted: str) -> type[KartonBase] | type[KartonAsyncBase]:
+    # Make modules in the current directory importable (console-script entry
+    # points don't add CWD to sys.path, unlike `python -m ...`).
+    if "" not in sys.path:
+        sys.path.insert(0, "")
     if ":" in dotted:
         module_name, _, class_name = dotted.partition(":")
         if not module_name or not class_name:
@@ -120,11 +125,18 @@ def cmd_keypair(args: argparse.Namespace) -> None:
     private_key_path = (
         Path(args.private_key) if args.private_key else DEFAULT_PRIVATE_KEY_PATH
     )
-    jwks_path = Path(args.jwks) if args.jwks else DEFAULT_JWKS_PATH
+    jwks_is_stdout = args.jwks == "-"
+    jwks_path = (
+        None if jwks_is_stdout
+        else Path(args.jwks) if args.jwks else DEFAULT_JWKS_PATH
+    )
 
     # Warn before overwriting an existing keypair, as this would invalidate
     # all previously issued tokens.
-    existing = [p for p in (private_key_path, jwks_path) if p.exists()]
+    existing = [
+        p for p in (private_key_path, jwks_path)
+        if p is not None and p.exists()
+    ]
     if existing and not args.force:
         print(
             "WARNING: regenerating a keypair will overwrite the existing "
@@ -147,17 +159,23 @@ def cmd_keypair(args: argparse.Namespace) -> None:
     # Explicit paths are assumed to live in an already-existing directory.
     if args.private_key is None:
         private_key_path.parent.mkdir(parents=True, exist_ok=True)
-    if args.jwks is None:
+    if jwks_path is not None and args.jwks is None:
         jwks_path.parent.mkdir(parents=True, exist_ok=True)
 
     private_key_path.write_bytes(private_pem)
     private_key_path.chmod(0o600)
 
-    jwks_path.write_text(json.dumps(jwks, indent=2) + "\n")
+    jwks_content = json.dumps(jwks, indent=2) + "\n"
+    if jwks_is_stdout:
+        sys.stdout.write(jwks_content)
+        jwks_destination = "stdout"
+    else:
+        jwks_path.write_text(jwks_content)
+        jwks_destination = str(jwks_path)
 
     print(
         f"Private key written to {private_key_path}\n"
-        f"Public JWKS written to {jwks_path}",
+        f"Public JWKS written to {jwks_destination}",
         file=sys.stderr,
     )
 
@@ -188,26 +206,52 @@ def cmd_issue(args: argparse.Namespace) -> None:
         private_key,
         claims,
         issuer=args.issuer or default_issuer(),
-        audience=args.audience,
         expire_after=args.expire_after,
     )
     print(token)
 
 
+def claims_from_args(args: argparse.Namespace) -> AuthClaims:
+    data: dict[str, Any] = {"identity": args.identity}
+    if args.binds is not None:
+        data["binds"] = [json.loads(b) for b in args.binds]
+    if args.capabilities is not None:
+        data["capabilities"] = args.capabilities
+    if args.foreign_buckets is not None:
+        data["foreign_buckets"] = args.foreign_buckets
+    return AuthClaims.model_validate(data)
+
+
 def cmd_claims(args: argparse.Namespace) -> None:
-    karton_class = import_karton_class(args.karton)
-    claims = get_claims_from_karton_class(karton_class)
+    if args.karton is not None:
+        karton_class = import_karton_class(args.karton)
+        claims = get_claims_from_karton_class(karton_class)
+    elif args.identity is not None:
+        claims = claims_from_args(args)
+    else:
+        raise ValueError(
+            "Provide a Karton module/class specifier or use --identity to "
+            "build AuthClaims from explicit arguments"
+        )
     print(claims.model_dump_json(indent=2))
 
 
 def cmd_validate(args: argparse.Namespace) -> None:
-    jwks_path = Path(args.jwks) if args.jwks else DEFAULT_JWKS_PATH
-    jwks = json.loads(jwks_path.read_text())
+    if args.jwks == "-":
+        jwks_raw = sys.stdin.read()
+    else:
+        jwks_path = Path(args.jwks) if args.jwks else DEFAULT_JWKS_PATH
+        jwks_raw = jwks_path.read_text()
+    jwks = json.loads(jwks_raw)
     jwk_set = jwt.PyJWKSet.from_dict(jwks)
 
-    claims = decode_auth_token(args.token, jwk_set, audience=args.audience)
+    token = args.token
+    if token is None:
+        token = sys.stdin.read().strip()
 
-    unverified = jwt.decode_complete(args.token, options={"verify_signature": False})
+    claims = decode_auth_token(token, jwk_set)
+
+    unverified = jwt.decode_complete(token, options={"verify_signature": False})
     header = unverified["header"]
     payload = unverified["payload"]
 
@@ -229,7 +273,7 @@ def main() -> None:
         prog="karton-auth",
         description="Karton authentication key and token management utility",
     )
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(dest="command")
 
     passphrase_parent = argparse.ArgumentParser(add_help=False)
     passphrase_parent.add_argument(
@@ -251,7 +295,8 @@ def main() -> None:
     keypair_parser.add_argument(
         "--jwks",
         default=None,
-        help="Output path for the public JWKS JSON (default: ./jwks.json)",
+        help="Output path for the public JWKS JSON (default: ./jwks.json). "
+        "Use '-' to write to stdout",
     )
     keypair_parser.add_argument(
         "--force",
@@ -275,9 +320,6 @@ def main() -> None:
         help="Token issuer ('iss' claim). Defaults to <user>@<hostname>",
     )
     issue_parser.add_argument(
-        "--audience", required=True, help="Token audience ('aud' claim)"
-    )
-    issue_parser.add_argument(
         "--expire-after",
         type=int,
         default=None,
@@ -292,11 +334,45 @@ def main() -> None:
     issue_parser.set_defaults(func=cmd_issue)
 
     claims_parser = subparsers.add_parser(
-        "claims", help="Generate AuthClaims from a Karton class"
+        "claims", help="Generate AuthClaims from a Karton class or explicit "
+        "arguments"
     )
     claims_parser.add_argument(
-        "karton", help="Karton module or 'module:ClassName' specifier. "
-        "If only a module is given, a single Karton class is auto-detected"
+        "karton",
+        nargs="?",
+        default=None,
+        help="Karton module or 'module:ClassName' specifier. "
+        "If only a module is given, a single Karton class is auto-detected. "
+        "Omit to build claims from explicit arguments instead",
+    )
+    claims_parser.add_argument(
+        "--identity",
+        default=None,
+        help="Karton service identity. Use this to build claims from explicit "
+        "arguments instead of introspecting a Karton class",
+    )
+    claims_parser.add_argument(
+        "--binds",
+        action="append",
+        default=None,
+        metavar="JSON",
+        help="Bind claim as JSON object "
+        "('{\"filters\": [...], \"persistent\": true}'). "
+        "Repeatable for multiple binds",
+    )
+    claims_parser.add_argument(
+        "--capabilities",
+        action="append",
+        default=None,
+        choices=[c.value for c in CapabilityClaim],
+        help="Capability claim (one of: %(choices)s). Repeatable",
+    )
+    claims_parser.add_argument(
+        "--foreign-buckets",
+        action="append",
+        default=None,
+        metavar="BUCKET",
+        help="Foreign bucket name. Repeatable for multiple buckets",
     )
     claims_parser.set_defaults(func=cmd_claims)
 
@@ -307,13 +383,19 @@ def main() -> None:
     validate_parser.add_argument(
         "--jwks",
         default=None,
-        help="Path to the public JWKS JSON (default: ./jwks.json)",
+        help="Path to the public JWKS JSON (default: ./jwks.json). "
+        "Use '-' to read from stdin",
     )
     validate_parser.add_argument(
-        "--audience", required=True, help="Expected token audience ('aud' claim)"
+        "token",
+        nargs="?",
+        default=None,
+        help="Token to validate. Read from stdin if not provided",
     )
-    validate_parser.add_argument("token", help="Token to validate")
     validate_parser.set_defaults(func=cmd_validate)
 
     args = parser.parse_args()
+    if not args.command:
+        parser.print_help()
+        return
     args.func(args)
