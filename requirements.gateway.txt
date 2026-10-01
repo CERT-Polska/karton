@@ -3,3 +3,4 @@ pydantic
 pyjwt
 uvicorn
 websockets
+cryptography
