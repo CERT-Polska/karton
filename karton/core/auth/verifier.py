@@ -1,12 +1,11 @@
 import jwt
 
-from .models import AuthClaims, BindClaim, CapabilityClaim
+from .models import DEFAULT_AUDIENCE, AuthClaims, BindClaim, CapabilityClaim
 
 
 def decode_auth_token(
     token: str,
     jwk_set: jwt.PyJWKSet,
-    audience: str,
 ):
     unverified = jwt.decode_complete(token, options={"verify_signature": False})
     header = unverified["header"]
@@ -19,7 +18,7 @@ def decode_auth_token(
         options={
             "require": ["aud", "iat", "claims"],
         },
-        audience=audience,
+        audience=DEFAULT_AUDIENCE,
     )
     claims = AuthClaims.model_validate(payload["claims"])
     return claims

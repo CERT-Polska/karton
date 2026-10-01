@@ -5,7 +5,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from .keys import kid_from_private_key, public_jwk
-from .models import AuthClaims
+from .models import DEFAULT_AUDIENCE, AuthClaims
 
 
 def generate_new_keypair(
@@ -29,7 +29,6 @@ def issue_auth_token(
     private_key: ec.EllipticCurvePrivateKey,
     claims: AuthClaims,
     issuer: str,
-    audience: str,
     expire_after: int | None = None,
 ):
     kid = kid_from_private_key(private_key)
@@ -37,7 +36,7 @@ def issue_auth_token(
     payload = {
         "sub": claims.identity,
         "iss": issuer,
-        "aud": audience,
+        "aud": DEFAULT_AUDIENCE,
         "iat": issued_at,
         "claims": claims.model_dump(mode="json"),
     }
