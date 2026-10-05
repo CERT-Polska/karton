@@ -4,6 +4,11 @@ from typing import Any, Literal, Union
 from pydantic import BaseModel, Field, RootModel
 
 DEFAULT_AUDIENCE = "karton-gateway"
+TOKEN_VERSION = 1
+# Set of token versions accepted by decode_auth_token. Keep the current
+# TOKEN_VERSION here; retain older versions during a grace period when
+# bumping TOKEN_VERSION with breaking ACL-semantic changes.
+SUPPORTED_TOKEN_VERSIONS: frozenset[int] = frozenset({TOKEN_VERSION})
 
 
 class AllowedRegisterBind(BaseModel):

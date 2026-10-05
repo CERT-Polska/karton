@@ -261,7 +261,8 @@ def cmd_validate(args: argparse.Namespace) -> None:
     print()
     print("Standard claims:")
     standard = {
-        k: payload[k] for k in ("sub", "iss", "aud", "iat", "exp") if k in payload
+        k: payload[k] for k in ("sub", "iss", "aud", "iat", "exp", "ver")
+        if k in payload
     }
     print(json.dumps(standard, indent=2, default=str))
     print()

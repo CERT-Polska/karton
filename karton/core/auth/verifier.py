@@ -3,7 +3,11 @@ import pathlib
 
 import jwt
 
-from .models import DEFAULT_AUDIENCE, AuthClaims
+from .models import DEFAULT_AUDIENCE, SUPPORTED_TOKEN_VERSIONS, AuthClaims
+
+
+class UnsupportedTokenVersionError(jwt.InvalidTokenError):
+    """Raised when a token's `ver` claim is not in SUPPORTED_TOKEN_VERSIONS."""
 
 
 def load_jwks(jwks_path: pathlib.Path) -> jwt.PyJWKSet:
@@ -25,9 +29,18 @@ def decode_auth_token(
         key=jwk,
         algorithms=["ES256"],
         options={
-            "require": ["aud", "iat", "jti", "claims"],
+            "require": ["aud", "iat", "jti", "ver", "claims"],
         },
         audience=DEFAULT_AUDIENCE,
     )
+    # We may want to change the ACL semantics in the future
+    # and keep some compatibility with older tokens.
+    # In that case: the mapping should be done here.
+    token_version = payload["ver"]
+    if token_version not in SUPPORTED_TOKEN_VERSIONS:
+        raise UnsupportedTokenVersionError(
+            f"Unsupported token version: {token_version}. "
+            f"Supported: {sorted(SUPPORTED_TOKEN_VERSIONS)}"
+        )
     claims = AuthClaims.model_validate(payload["claims"])
     return claims

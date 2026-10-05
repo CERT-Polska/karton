@@ -6,7 +6,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from .keys import kid_from_private_key, public_jwk
-from .models import DEFAULT_AUDIENCE, AuthClaims
+from .models import DEFAULT_AUDIENCE, TOKEN_VERSION, AuthClaims
 
 
 def generate_new_keypair(
@@ -40,6 +40,7 @@ def issue_auth_token(
         "aud": DEFAULT_AUDIENCE,
         "iat": issued_at,
         "jti": str(uuid.uuid4()),
+        "ver": TOKEN_VERSION,
         "claims": claims.model_dump(mode="json"),
     }
     if expire_after is not None:
