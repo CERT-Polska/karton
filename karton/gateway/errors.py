@@ -21,6 +21,10 @@ class BadCredentialsError(KartonGatewayError):
     code: str = "bad_credentials"
 
 
+class CredentialsExpiredError(KartonGatewayError):
+    code: str = "credentials_expired"
+
+
 class OperationTimeoutError(KartonGatewayError):
     code: str = "timeout"
 

@@ -2,13 +2,14 @@ import asyncio
 import logging
 import random
 from contextlib import asynccontextmanager
+from time import time
 
 from fastapi import WebSocket
 from pydantic import ValidationError
 
 from karton.core.__version__ import __version__
 from karton.core.asyncio.backend import KartonServiceInfo
-from karton.core.auth.models import AllowedOperation, AuthClaims
+from karton.core.auth.models import AllowedOperation, VerifiedGrant
 from karton.core.auth.verifier import decode_auth_token
 from karton.core.gateway_protocol import (
     HelloRequest,
@@ -22,6 +23,7 @@ from .config import gateway_config
 from .errors import (
     BadCredentialsError,
     BadRequestError,
+    CredentialsExpiredError,
     KartonGatewayError,
     OperationTimeoutError,
     UnauthorizedError,
@@ -38,19 +40,19 @@ IDLE_TIMEOUT = 30.0
 logger = logging.getLogger(__name__)
 
 
-def parse_auth_tokens(client_tokens: list[str]) -> list[AuthClaims]:
-    client_auth_claims = []
+def parse_auth_tokens(client_tokens: list[str]) -> list[VerifiedGrant]:
+    verified_grants = []
     jwks = gateway_config.jwks
     if not jwks:
         raise RuntimeError("Bug: JWKS should not be empty here")
     for client_token in client_tokens:
         try:
-            claims = decode_auth_token(client_token, jwks)
-            client_auth_claims.append(claims)
+            verified_grant = decode_auth_token(client_token, jwks)
+            verified_grants.append(verified_grant)
         except Exception:
             # TODO: Logging about invalid token
             pass
-    return client_auth_claims
+    return verified_grants
 
 
 class ClientSession:
@@ -59,12 +61,12 @@ class ClientSession:
         service_info: KartonServiceInfo,
         close_on_idle: bool,
         auth_required: bool,
-        auth_claims: list[AuthClaims],
+        auth_grants: list[VerifiedGrant],
     ):
         self.service_info = service_info
         self.close_on_idle = close_on_idle
         self.auth_required = auth_required
-        self.auth_claims = auth_claims
+        self.auth_grants = auth_grants
 
     @property
     def identity(self) -> str:
@@ -85,8 +87,17 @@ class ClientSession:
     def authorize(self, required: AllowedOperation) -> AllowedOperation:
         if not self.auth_required:
             return required
-        for claims in self.auth_claims:
-            for op in claims.allowed_operations:
+        now = time()
+        self.auth_grants = [
+            grant
+            for grant in self.auth_grants
+            if grant.expires_at is None or now < grant.expires_at
+        ]
+        if not self.auth_grants:
+            raise CredentialsExpiredError("Session credentials expired")
+
+        for grant in self.auth_grants:
+            for op in grant.claims.allowed_operations:
                 if op.covers(required):
                     return op
         raise UnauthorizedError(f"Operation '{required.operation}' is not authorized")
@@ -108,20 +119,20 @@ class ClientSession:
                 request_json = await websocket.receive_text()
                 hello_request = HelloRequest.model_validate_json(request_json)
                 if gateway_config.auth_required:
-                    valid_auth_claims = [
-                        claims
-                        for claims in parse_auth_tokens(
+                    valid_auth_grants = [
+                        grants
+                        for grants in parse_auth_tokens(
                             hello_request.message.auth_tokens
                         )
-                        if claims.identity == hello_request.message.identity
+                        if grants.claims.identity == hello_request.message.identity
                     ]
-                    if not valid_auth_claims:
+                    if not valid_auth_grants:
                         raise BadCredentialsError(
                             "Client has not provided valid authorization tokens "
                             "for declared identity"
                         )
                 else:
-                    valid_auth_claims = []
+                    valid_auth_grants = []
         except TimeoutError as exc:
             raise OperationTimeoutError(
                 "Client has not replied in required time"
@@ -139,7 +150,7 @@ class ClientSession:
             service_info=service_info,
             close_on_idle=hello_request.message.close_on_idle,
             auth_required=gateway_config.auth_required,
-            auth_claims=valid_auth_claims,
+            auth_grants=valid_auth_grants,
         )
         await gateway_backend.register_service(
             service_info, connection_id, HEARTBEAT_HARD_TIMEOUT

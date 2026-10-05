@@ -250,7 +250,7 @@ def cmd_validate(args: argparse.Namespace) -> None:
     if token is None:
         token = sys.stdin.read().strip()
 
-    claims = decode_auth_token(token, jwk_set)
+    grant = decode_auth_token(token, jwk_set)
 
     unverified = jwt.decode_complete(token, options={"verify_signature": False})
     header = unverified["header"]
@@ -261,13 +261,14 @@ def cmd_validate(args: argparse.Namespace) -> None:
     print()
     print("Standard claims:")
     standard = {
-        k: payload[k] for k in ("sub", "iss", "aud", "iat", "exp", "ver")
+        k: payload[k]
+        for k in ("sub", "iss", "aud", "iat", "exp", "ver")
         if k in payload
     }
     print(json.dumps(standard, indent=2, default=str))
     print()
     print("AuthClaims:")
-    print(claims.model_dump_json(indent=2))
+    print(grant.claims.model_dump_json(indent=2))
 
 
 def main() -> None:

@@ -3,7 +3,12 @@ import pathlib
 
 import jwt
 
-from .models import DEFAULT_AUDIENCE, SUPPORTED_TOKEN_VERSIONS, AuthClaims
+from .models import (
+    DEFAULT_AUDIENCE,
+    SUPPORTED_TOKEN_VERSIONS,
+    AuthClaims,
+    VerifiedGrant,
+)
 
 
 class UnsupportedTokenVersionError(jwt.InvalidTokenError):
@@ -19,7 +24,7 @@ def load_jwks(jwks_path: pathlib.Path) -> jwt.PyJWKSet:
 def decode_auth_token(
     token: str,
     jwk_set: jwt.PyJWKSet,
-) -> AuthClaims:
+) -> VerifiedGrant:
     unverified = jwt.decode_complete(token, options={"verify_signature": False})
     header = unverified["header"]
     kid = header.get("kid")
@@ -43,4 +48,8 @@ def decode_auth_token(
             f"Supported: {sorted(SUPPORTED_TOKEN_VERSIONS)}"
         )
     claims = AuthClaims.model_validate(payload["claims"])
-    return claims
+    return VerifiedGrant(
+        claims=claims,
+        expires_at=payload.get("exp"),
+        token_id=payload["jti"],
+    )

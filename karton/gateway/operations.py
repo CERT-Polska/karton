@@ -419,6 +419,8 @@ async def handle_subscribe_logs_request(
     async for log_record in gateway_backend.consume_log(
         logger_filter=request.message.logger_filter, level=request.message.level
     ):
+        # Re-check in case of expiration
+        session.authorize(AllowedConsumeLog())
         if shutdown_latch.shutdown_in_progress:
             raise ShutdownError("Operation terminated, shutdown is in progress")
         if not log_record:

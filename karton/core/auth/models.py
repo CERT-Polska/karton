@@ -1,4 +1,5 @@
 import json
+from dataclasses import dataclass
 from typing import Any, Literal, Union
 
 from pydantic import BaseModel, Field, RootModel
@@ -71,3 +72,10 @@ class Request(RootModel):
 class AuthClaims(BaseModel):
     identity: str
     allowed_operations: list[AllowedOperation]
+
+
+@dataclass(frozen=True)
+class VerifiedGrant:
+    claims: AuthClaims
+    expires_at: int | None
+    token_id: str
