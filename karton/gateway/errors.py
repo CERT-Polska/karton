@@ -41,6 +41,10 @@ class InvalidTaskError(KartonGatewayError):
     code: str = "invalid_task"
 
 
+class UnauthorizedError(KartonGatewayError):
+    code: str = "unauthorized"
+
+
 class ShutdownError(KartonGatewayError):
     code: str = "shutdown_in_progress"
 

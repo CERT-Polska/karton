@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import random
-import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import WebSocket
@@ -9,6 +8,8 @@ from pydantic import ValidationError
 
 from karton.core.__version__ import __version__
 from karton.core.asyncio.backend import KartonServiceInfo
+from karton.core.auth.models import AllowedOperation, AuthClaims
+from karton.core.auth.verifier import decode_auth_token
 from karton.core.gateway_protocol import (
     HelloRequest,
     HelloResponse,
@@ -23,6 +24,7 @@ from .errors import (
     BadRequestError,
     KartonGatewayError,
     OperationTimeoutError,
+    UnauthorizedError,
 )
 from .messages import close_websocket, send_error, send_message, send_success
 from .operations import call_request_handler
@@ -36,14 +38,33 @@ IDLE_TIMEOUT = 30.0
 logger = logging.getLogger(__name__)
 
 
+def parse_auth_tokens(client_tokens: list[str]) -> list[AuthClaims]:
+    client_auth_claims = []
+    jwks = gateway_config.jwks
+    if not jwks:
+        raise RuntimeError("Bug: JWKS should not be empty here")
+    for client_token in client_tokens:
+        try:
+            claims = decode_auth_token(client_token, jwks)
+            client_auth_claims.append(claims)
+        except Exception:
+            # TODO: Logging about invalid token
+            pass
+    return client_auth_claims
+
+
 class ClientSession:
     def __init__(
         self,
         service_info: KartonServiceInfo,
         close_on_idle: bool,
+        auth_required: bool,
+        auth_claims: list[AuthClaims],
     ):
         self.service_info = service_info
         self.close_on_idle = close_on_idle
+        self.auth_required = auth_required
+        self.auth_claims = auth_claims
 
     @property
     def identity(self) -> str:
@@ -61,6 +82,15 @@ class ClientSession:
             # for services that initiated connection from the start
             await asyncio.sleep(HEARTBEAT_BASE_INTERVAL + random.random())
 
+    def authorize(self, required: AllowedOperation) -> AllowedOperation:
+        if not self.auth_required:
+            return required
+        for claims in self.auth_claims:
+            for op in claims.allowed_operations:
+                if op.covers(required):
+                    return op
+        raise UnauthorizedError(f"Operation '{required.operation}' is not authorized")
+
     @classmethod
     @asynccontextmanager
     async def initiate_session(
@@ -77,13 +107,21 @@ class ClientSession:
             async with asyncio.timeout(timeout):
                 request_json = await websocket.receive_text()
                 hello_request = HelloRequest.model_validate_json(request_json)
-                if gateway_config.password is not None and (
-                    not hello_request.message.password
-                    or not secrets.compare_digest(
-                        hello_request.message.password, gateway_config.password
-                    )
-                ):
-                    raise BadCredentialsError("Client has provided wrong password")
+                if gateway_config.auth_required:
+                    valid_auth_claims = [
+                        claims
+                        for claims in parse_auth_tokens(
+                            hello_request.message.auth_tokens
+                        )
+                        if claims.identity == hello_request.message.identity
+                    ]
+                    if not valid_auth_claims:
+                        raise BadCredentialsError(
+                            "Client has not provided valid authorization tokens "
+                            "for declared identity"
+                        )
+                else:
+                    valid_auth_claims = []
         except TimeoutError as exc:
             raise OperationTimeoutError(
                 "Client has not replied in required time"
@@ -100,6 +138,8 @@ class ClientSession:
         session = cls(
             service_info=service_info,
             close_on_idle=hello_request.message.close_on_idle,
+            auth_required=gateway_config.auth_required,
+            auth_claims=valid_auth_claims,
         )
         await gateway_backend.register_service(
             service_info, connection_id, HEARTBEAT_HARD_TIMEOUT

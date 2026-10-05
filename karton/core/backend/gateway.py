@@ -1,4 +1,5 @@
 import contextlib
+import json
 import logging
 import time
 import urllib.parse
@@ -58,6 +59,15 @@ logger = logging.getLogger(__name__)
 type ResourceIdentifier = tuple[str | None, str]  # Tuple[bucket, uid]
 
 
+def _parse_configured_auth_tokens(value: str) -> list[str]:
+    value = value.strip()
+    if not value:
+        return []
+    if value.startswith("["):
+        return json.loads(value)
+    return [value]
+
+
 class KartonGatewayBackendBase:
     def __init__(
         self,
@@ -68,9 +78,11 @@ class KartonGatewayBackendBase:
         self.service_info = service_info
 
         self.gateway_url = self.config.get("gateway", "url")
-        self.gateway_password = self.config.get("gateway", "password")
         self.gateway_s3_hostname_override = self.config.get(
             "gateway", "s3_hostname_override"
+        )
+        self.gateway_auth_tokens: list[str] = _parse_configured_auth_tokens(
+            self.config.get("gateway", "auth_tokens", "")
         )
 
         self.gateway_retries = self.config.getint("gateway", "retries", 5)
@@ -125,7 +137,7 @@ class KartonGatewayBackendBase:
                 service_version=self.service_info.service_version,
                 library_version=self.service_info.karton_version,
                 instance_id=self.service_info.instance_id,
-                password=self.gateway_password,
+                auth_tokens=self.gateway_auth_tokens,
                 close_on_idle=close_on_idle,
             )
         )

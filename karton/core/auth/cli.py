@@ -6,14 +6,20 @@ import json
 import socket
 import sys
 from pathlib import Path
-from typing import Any
 
 import jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from karton.core.asyncio.base import KartonAsyncBase
-from karton.core.auth.models import AuthClaims, BindClaim, CapabilityClaim
+from karton.core.auth.models import (
+    AllowedConsumeLog,
+    AllowedConsumeTask,
+    AllowedOperation,
+    AllowedProduceTask,
+    AllowedRegisterBind,
+    AuthClaims,
+)
 from karton.core.auth.signer import generate_new_keypair, issue_auth_token
 from karton.core.auth.verifier import decode_auth_token
 from karton.core.base import KartonBase
@@ -34,25 +40,22 @@ def get_claims_from_karton_class(
     from karton.core.asyncio import Consumer as AsyncConsumer
     from karton.core.asyncio import Producer as AsyncProducer
 
-    claims = AuthClaims(identity=karton_class.identity)
+    claims = AuthClaims(identity=karton_class.identity, allowed_operations=[])
 
     if issubclass(karton_class, (Producer, AsyncProducer)):
-        claims.capabilities.append(CapabilityClaim.produce_task)
+        claims.allowed_operations.append(AllowedProduceTask())
 
     if issubclass(karton_class, (Consumer, AsyncConsumer)):
-        claims.capabilities.append(CapabilityClaim.consume_task)
-        if claims.binds is None:
-            claims.binds = []
-        claims.binds.append(
-            BindClaim(
+        claims.allowed_operations.append(AllowedConsumeTask())
+        claims.allowed_operations.append(
+            AllowedRegisterBind(
                 filters=karton_class.filters,
                 persistent=karton_class.persistent,
             )
         )
 
     if issubclass(karton_class, LogConsumer):
-        claims.capabilities.append(CapabilityClaim.consume_log)
-
+        claims.allowed_operations.append(AllowedConsumeLog())
     return claims
 
 
@@ -94,9 +97,7 @@ def import_karton_class(dotted: str) -> type[KartonBase] | type[KartonAsyncBase]
         seen.add(id(obj))
         karton_classes.append(obj)
     if len(karton_classes) == 0:
-        raise ValueError(
-            f"No Karton (sub)class found in module {dotted!r}"
-        )
+        raise ValueError(f"No Karton (sub)class found in module {dotted!r}")
     if len(karton_classes) > 1:
         names = ", ".join(c.__name__ for c in karton_classes)
         raise ValueError(
@@ -126,16 +127,14 @@ def cmd_keypair(args: argparse.Namespace) -> None:
         Path(args.private_key) if args.private_key else DEFAULT_PRIVATE_KEY_PATH
     )
     jwks_is_stdout = args.jwks == "-"
-    jwks_path = (
-        None if jwks_is_stdout
-        else Path(args.jwks) if args.jwks else DEFAULT_JWKS_PATH
-    )
+    jwks_path = None
+    if not jwks_is_stdout:
+        jwks_path = Path(args.jwks) if args.jwks else DEFAULT_JWKS_PATH
 
     # Warn before overwriting an existing keypair, as this would invalidate
     # all previously issued tokens.
     existing = [
-        p for p in (private_key_path, jwks_path)
-        if p is not None and p.exists()
+        p for p in (private_key_path, jwks_path) if p is not None and p.exists()
     ]
     if existing and not args.force:
         print(
@@ -145,9 +144,7 @@ def cmd_keypair(args: argparse.Namespace) -> None:
         )
         for p in existing:
             print(f"  - {p}", file=sys.stderr)
-        confirmation = input(
-            "Type 'yes' to continue and overwrite: "
-        ).strip()
+        confirmation = input("Type 'yes' to continue and overwrite: ").strip()
         if confirmation != "yes":
             print("Aborted.", file=sys.stderr)
             return
@@ -166,7 +163,7 @@ def cmd_keypair(args: argparse.Namespace) -> None:
     private_key_path.chmod(0o600)
 
     jwks_content = json.dumps(jwks, indent=2) + "\n"
-    if jwks_is_stdout:
+    if jwks_path is None:
         sys.stdout.write(jwks_content)
         jwks_destination = "stdout"
     else:
@@ -212,14 +209,18 @@ def cmd_issue(args: argparse.Namespace) -> None:
 
 
 def claims_from_args(args: argparse.Namespace) -> AuthClaims:
-    data: dict[str, Any] = {"identity": args.identity}
-    if args.binds is not None:
-        data["binds"] = [json.loads(b) for b in args.binds]
-    if args.capabilities is not None:
-        data["capabilities"] = args.capabilities
-    if args.foreign_buckets is not None:
-        data["foreign_buckets"] = args.foreign_buckets
-    return AuthClaims.model_validate(data)
+    operations: list[AllowedOperation] = []
+    foreign_buckets = args.foreign_buckets or []
+    if args.produce_task or foreign_buckets:
+        operations.append(AllowedProduceTask(foreign_buckets=foreign_buckets))
+    if args.consume_task:
+        operations.append(AllowedConsumeTask())
+    if args.register_bind is not None:
+        for bind in args.register_bind:
+            operations.append(AllowedRegisterBind.model_validate(json.loads(bind)))
+    if args.consume_log:
+        operations.append(AllowedConsumeLog())
+    return AuthClaims(identity=args.identity, allowed_operations=operations)
 
 
 def cmd_claims(args: argparse.Namespace) -> None:
@@ -283,14 +284,14 @@ def main() -> None:
     )
 
     keypair_parser = subparsers.add_parser(
-        "keypair", parents=[passphrase_parent],
+        "keypair",
+        parents=[passphrase_parent],
         help="Generate a new EC P-256 key-pair",
     )
     keypair_parser.add_argument(
         "--private-key",
         default=None,
-        help="Output path for the private key PEM "
-        "(default: ~/.karton/private.pem)",
+        help="Output path for the private key PEM " "(default: ~/.karton/private.pem)",
     )
     keypair_parser.add_argument(
         "--jwks",
@@ -306,7 +307,8 @@ def main() -> None:
     keypair_parser.set_defaults(func=cmd_keypair)
 
     issue_parser = subparsers.add_parser(
-        "issue", parents=[passphrase_parent],
+        "issue",
+        parents=[passphrase_parent],
         help="Issue a new token for the given AuthClaims",
     )
     issue_parser.add_argument(
@@ -334,8 +336,8 @@ def main() -> None:
     issue_parser.set_defaults(func=cmd_issue)
 
     claims_parser = subparsers.add_parser(
-        "claims", help="Generate AuthClaims from a Karton class or explicit "
-        "arguments"
+        "claims",
+        help="Generate AuthClaims from a Karton class or explicit " "arguments",
     )
     claims_parser.add_argument(
         "karton",
@@ -352,32 +354,42 @@ def main() -> None:
         "arguments instead of introspecting a Karton class",
     )
     claims_parser.add_argument(
-        "--binds",
+        "--produce-task",
+        action="store_true",
+        help="Allow the produce_task operation",
+    )
+    claims_parser.add_argument(
+        "--consume-task",
+        action="store_true",
+        help="Allow the consume_task operation",
+    )
+    claims_parser.add_argument(
+        "--consume-log",
+        action="store_true",
+        help="Allow the consume_log operation",
+    )
+    claims_parser.add_argument(
+        "--register-bind",
         action="append",
         default=None,
         metavar="JSON",
-        help="Bind claim as JSON object "
-        "('{\"filters\": [...], \"persistent\": true}'). "
+        help="AllowedRegisterBind claim as JSON object "
+        '(\'{"filters": [...], "persistent": true}\'). '
         "Repeatable for multiple binds",
-    )
-    claims_parser.add_argument(
-        "--capabilities",
-        action="append",
-        default=None,
-        choices=[c.value for c in CapabilityClaim],
-        help="Capability claim (one of: %(choices)s). Repeatable",
     )
     claims_parser.add_argument(
         "--foreign-buckets",
         action="append",
         default=None,
         metavar="BUCKET",
-        help="Foreign bucket name. Repeatable for multiple buckets",
+        help="Foreign bucket name (implies --produce-task). "
+        "Repeatable for multiple buckets",
     )
     claims_parser.set_defaults(func=cmd_claims)
 
     validate_parser = subparsers.add_parser(
-        "validate", parents=[passphrase_parent],
+        "validate",
+        parents=[passphrase_parent],
         help="Validate a token and print its details",
     )
     validate_parser.add_argument(

@@ -1,4 +1,5 @@
 import datetime
+import uuid
 
 import jwt
 from cryptography.hazmat.primitives import serialization
@@ -38,6 +39,7 @@ def issue_auth_token(
         "iss": issuer,
         "aud": DEFAULT_AUDIENCE,
         "iat": issued_at,
+        "jti": str(uuid.uuid4()),
         "claims": claims.model_dump(mode="json"),
     }
     if expire_after is not None:
