@@ -84,7 +84,7 @@ def make_task_token(
 
 def iter_resources(obj: Any) -> Iterator[dict[str, Any]]:
     if type(obj) is dict:
-        if obj.keys() == {"__karton_resource__"}:
+        if "__karton_resource__" in obj:
             yield obj["__karton_resource__"]
         else:
             for v in obj.values():
@@ -96,7 +96,7 @@ def iter_resources(obj: Any) -> Iterator[dict[str, Any]]:
 
 def map_resources(obj: Any, mapper: Callable[[dict[str, Any]], Any]) -> Any:
     if type(obj) is dict:
-        if obj.keys() == {"__karton_resource__"}:
+        if "__karton_resource__" in obj:
             return mapper(obj["__karton_resource__"])
         else:
             return {k: map_resources(v, mapper) for k, v in obj.items()}
