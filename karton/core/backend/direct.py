@@ -1060,7 +1060,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
                 "Resource object can't be uploaded because its bucket is not set"
             )
         with open(path, "rb") as f:
-            self.s3.put_object(Bucket=resource.bucket, Key=resource.uid, Body=f)
+            self.upload_resource(resource, f)
 
     def upload_object(
         self,

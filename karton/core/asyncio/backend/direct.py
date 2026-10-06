@@ -117,8 +117,8 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         if self._redis is not None:
             await self._redis.close()
             self._redis = None
-        if self._s3_session is not None:
-            self._s3_session = None
+        self._s3_session = None
+        self._s3_iam_auth = None
 
     async def iam_auth_s3(self):
         boto_session = get_session()
@@ -390,10 +390,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
                 "Resource object can't be uploaded because its bucket is not set"
             )
         with open(path, "rb") as f:
-            async with self.s3 as client:
-                await client.put_object(
-                    Bucket=resource.bucket, Key=resource.uid, Body=f
-                )
+            await self.upload_resource(resource, f)
 
     async def upload_object(
         self,
