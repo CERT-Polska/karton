@@ -6,6 +6,7 @@ from karton.core.backend import KartonBind
 from karton.core.task import TaskPriority, TaskState
 
 # Dict[Never, Never] would be better but is not supported by Pydantic
+# https://github.com/pydantic/pydantic/issues/9731
 EmptyDict = dict
 
 
@@ -222,8 +223,9 @@ class LogResponse(BaseModel):
     message: LogResponseMessage
 
 
-RequestType = (
-    BindRequest
+type RequestType = (
+    HelloRequest
+    | BindRequest
     | DeclareTaskRequest
     | SendTaskRequest
     | SetTaskStatusRequest
@@ -235,3 +237,19 @@ RequestType = (
 
 class Request(RootModel):
     root: RequestType = Field(discriminator="request")
+
+
+type ResponseType = (
+    ErrorResponse
+    | SuccessResponse
+    | HelloResponse
+    | BindResponse
+    | TaskDeclaredResponse
+    | TaskResponse
+    | LogSentResponse
+    | LogResponse
+)
+
+
+class Response(RootModel):
+    root: ResponseType = Field(discriminator="response")

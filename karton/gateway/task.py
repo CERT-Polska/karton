@@ -7,15 +7,15 @@ from typing import Any, Callable, Iterator, TypedDict
 import jwt
 from pydantic import ValidationError
 
-from karton.core.resource import ResourceBase
-from karton.core.task import Task, TaskState
-from karton.gateway.backend import gateway_backend
-from karton.gateway.errors import InvalidTaskError, InvalidTaskTokenError
-from karton.gateway.models import (
+from karton.core.gateway_protocol import (
     DeclaredResourceSpec,
     ResourceUrl,
     ValidatedDeclaredResourceSpec,
 )
+from karton.core.resource import ResourceBase
+from karton.core.task import Task, TaskState
+from karton.gateway.backend import gateway_backend
+from karton.gateway.errors import InvalidTaskError, InvalidTaskTokenError
 
 
 class TaskTokenScope(enum.Enum):

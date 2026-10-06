@@ -19,8 +19,10 @@ class ConfigMixin:
     identity: Optional[str]
     version: Optional[str]
 
-    def __init__(self, config: Optional[Config] = None, identity: Optional[str] = None):
-        self.config: Config = config or Config()
+    def __init__(
+        self, config: Optional[Config] = None, identity: Optional[str] = None
+    ) -> None:
+        self.config = config or Config()
         self.enable_publish_log: bool = self.config.getboolean(
             "logging", "enable_publish", True
         )
@@ -33,7 +35,7 @@ class ConfigMixin:
         if self.config.has_option("karton", "identity"):
             self.identity = self.config.get("karton", "identity")
 
-        self.debug: bool = self.config.getboolean("karton", "debug", False)
+        self.debug = self.config.getboolean("karton", "debug", False)
 
         if self.debug and self.identity:
             self.identity += "-" + os.urandom(4).hex() + "-dev"

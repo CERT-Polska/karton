@@ -1,12 +1,13 @@
 import sys
 import traceback
-from typing import TYPE_CHECKING, Protocol, Type, TypeVar, cast
+from typing import TYPE_CHECKING, Protocol, Type, cast
 
 from fastapi import WebSocket
 
 from karton.core.asyncio.backend import KartonBind, KartonMetrics
 from karton.core.exceptions import BindExpiredError as KartonBindExpiredError
 from karton.core.task import Task, TaskState
+from karton.gateway.errors import BadRequestError
 
 from .backend import gateway_backend
 from .config import gateway_config
@@ -33,7 +34,7 @@ from .task import (
 if TYPE_CHECKING:
     from .session import ClientSession
 
-from .models import (
+from karton.core.gateway_protocol import (
     BindRequest,
     BindResponse,
     BindResponseMessage,
@@ -56,10 +57,8 @@ from .models import (
     TaskResponseMessage,
 )
 
-T = TypeVar("T", bound=RequestType, contravariant=True)
 
-
-class RequestHandler(Protocol[T]):
+class RequestHandler[T: RequestType](Protocol):
     async def __call__(
         self, websocket: WebSocket, request: T, session: "ClientSession"
     ) -> None: ...
@@ -69,9 +68,9 @@ REQUEST_HANDLERS: dict[Type[RequestType], RequestHandler] = {}
 
 
 def request_handler(request_type: Type[RequestType]):
-    def request_handler_inner(
-        handler_fn: RequestHandler[T],
-    ) -> RequestHandler[T]:
+    def request_handler_inner[
+        T: RequestType
+    ](handler_fn: RequestHandler[T],) -> RequestHandler[T]:
         if request_type in REQUEST_HANDLERS:
             raise ValueError(
                 f"Handler for request type {request_type} is already defined"
@@ -85,6 +84,8 @@ def request_handler(request_type: Type[RequestType]):
 async def call_request_handler(
     websocket: WebSocket, request: Request, session: "ClientSession"
 ) -> None:
+    if type(request.root) not in REQUEST_HANDLERS:
+        raise BadRequestError("Invalid request: unhandled request type")
     await REQUEST_HANDLERS[type(request.root)](websocket, request.root, session)
 
 

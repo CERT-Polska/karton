@@ -1,7 +1,12 @@
 from fastapi import WebSocket
 
+from karton.core.gateway_protocol import (
+    ErrorResponse,
+    ErrorResponseMessage,
+    SuccessResponse,
+)
+
 from .errors import KartonGatewayError
-from .models import ErrorResponse, ErrorResponseMessage, SuccessResponse
 
 
 async def send_error(websocket: WebSocket, error: KartonGatewayError) -> None:

@@ -1,13 +1,29 @@
 import asyncio
 import contextlib
-import json
 import logging
 import random
 import threading
-from typing import Any, AsyncIterator, Coroutine, Iterator, Protocol, TypeVar, cast
+from asyncio import AbstractEventLoop
+from typing import (
+    Any,
+    AsyncIterator,
+    Coroutine,
+    Iterator,
+    Protocol,
+    Type,
+    TypeVar,
+    cast,
+)
 
 from websockets.asyncio.client import ClientConnection, connect
 from websockets.protocol import CLOSED
+
+from karton.core.gateway_protocol import (
+    ErrorResponse,
+    RequestType,
+    Response,
+    ResponseType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,14 +48,18 @@ class GatewayShutdownError(GatewayError):
     code = "shutdown_in_progress"
 
 
-def make_gateway_error(code: str, message: str) -> GatewayError:
+def make_gateway_error(error_response: ErrorResponse) -> GatewayError:
     for error_class in GatewayError.__subclasses__():
-        if error_class.code == code:
-            return error_class(message)
-    return GatewayError(code, message)
+        if error_class.code == error_response.message.code:
+            return error_class(error_response.message.error_message)
+    return GatewayError(
+        message=error_response.message.error_message,
+        code=error_response.message.code,
+    )
 
 
 class SessionInitiator(Protocol):
+
     async def __call__(
         self,
         gateway_client: "AsyncGatewayClient",
@@ -95,16 +115,16 @@ class AsyncGatewayClient:
     def __init__(
         self,
         url: str,
-        session_initiator: SessionInitiator,
+        session_initiator_callback: SessionInitiator,
         retries: int,
         retry_base_timeout: int,
         retry_jitter: int,
         connect_timeout: int,
         response_timeout: int,
         connection_pool_soft_limit: int,
-    ):
+    ) -> None:
         self.url = url
-        self.session_initiator = session_initiator
+        self.session_initiator_callback = session_initiator_callback
         self.retries = retries
         self.retry_base_timeout = retry_base_timeout
         self.retry_jitter = retry_jitter
@@ -130,7 +150,7 @@ class AsyncGatewayClient:
             connection: ClientConnection | None = None
             try:
                 connection = await connect(self.url, open_timeout=self.connect_timeout)
-                await self.session_initiator(
+                await self.session_initiator_callback(
                     self, connection, close_on_idle=close_on_idle
                 )
                 return connection
@@ -153,7 +173,7 @@ class AsyncGatewayClient:
             )
             await asyncio.sleep(delay)
 
-    async def close(self):
+    async def close(self) -> None:
         self._closed = True
         if (
             self._main_connection is not None
@@ -200,7 +220,7 @@ class AsyncGatewayClient:
             # server close them when idle.
             return self._unused_connections.pop()
 
-    async def _return_connection(self, connection: ClientConnection):
+    async def _return_connection(self, connection: ClientConnection) -> None:
         """
         Returns connection to the pool
         """
@@ -238,45 +258,32 @@ class AsyncGatewayClient:
         finally:
             await self._return_connection(connection)
 
-    async def recv(
+    async def recv[
+        ResponseT: ResponseType
+    ](
         self,
         connection: ClientConnection,
-        expected_response: str = "success",
-    ) -> dict[str, Any]:
+        expected_response: Type[ResponseT],
+    ) -> ResponseT:
         async with asyncio.timeout(self.response_timeout):
             data = await connection.recv()
-        message = json.loads(data)
-        if "response" not in message:
-            raise RuntimeError("Incorrect gateway response, missing 'response' key")
-        if message["response"] == "error":
-            error = message["message"]
-            code = error["code"]
-            error_message = error["error_message"]
-            raise make_gateway_error(code, error_message)
-        if message["response"] != expected_response:
+        message = Response.model_validate_json(data)
+        if isinstance(message, ErrorResponse):
+            raise make_gateway_error(message)
+        if not isinstance(message, expected_response):
             raise RuntimeError(
-                f"Got unexpected gateway response: {message['response']}, "
+                f"Got unexpected gateway response: {type(message)}, "
                 f"expected {expected_response}"
             )
-        return message["message"]
+        return message
 
-    async def send(
-        self, connection: ClientConnection, request: str, message: dict[str, Any]
-    ) -> None:
-        data = json.dumps(
-            {
-                "request": request,
-                "message": message,
-            }
-        )
+    async def send(self, connection: ClientConnection, request: RequestType) -> None:
+        data = request.model_dump_json()
         await connection.send(data)
 
-    async def make_request(
-        self,
-        request: str,
-        message: dict[str, Any],
-        expected_response: str,
-    ) -> dict[str, Any]:
+    async def make_request[
+        ResponseT: ResponseType
+    ](self, request: RequestType, expected_response: Type[ResponseT],) -> ResponseT:
         retry_state = RetryState(
             max_retries=self.retries,
             base_timeout=self.retry_base_timeout,
@@ -286,7 +293,7 @@ class AsyncGatewayClient:
             request_sent = False
             async with self._connection(retry_state) as connection:
                 try:
-                    await self.send(connection, request, message)
+                    await self.send(connection, request)
                     request_sent = True
                     return await self.recv(connection, expected_response)
                 except (ConnectionError, TimeoutError, GatewayShutdownError) as e:
@@ -312,12 +319,15 @@ class AsyncGatewayClient:
             )
             await asyncio.sleep(delay)
 
-    async def make_streaming_request(
+    async def make_streaming_request[
+        ResponseT: ResponseType
+    ](
         self,
-        request: str,
-        message: dict[str, Any],
-        expected_response: str,
-    ) -> AsyncIterator[dict[str, Any]]:
+        request: RequestType,
+        expected_response: Type[ResponseT],
+    ) -> AsyncIterator[
+        ResponseT
+    ]:
         retry_state = RetryState(
             max_retries=self.retries,
             base_timeout=self.retry_base_timeout,
@@ -326,7 +336,7 @@ class AsyncGatewayClient:
         while True:
             async with self._connection(retry_state) as connection:
                 try:
-                    await self.send(connection, request, message)
+                    await self.send(connection, request)
                     while True:
                         yield await self.recv(connection, expected_response)
                 except (ConnectionError, TimeoutError, GatewayShutdownError):
@@ -351,7 +361,7 @@ _thread: threading.Thread | None = None
 _T = TypeVar("_T")
 
 
-def _start_event_loop():
+def _start_event_loop() -> None:
     global _loop
     _loop = asyncio.new_event_loop()
     _loop_ready.set()
@@ -359,8 +369,10 @@ def _start_event_loop():
     _loop.run_forever()
 
 
-def _get_threaded_event_loop():
+def _get_threaded_event_loop() -> AbstractEventLoop:
     global _thread
+    if _loop is None:
+        raise RuntimeError("Loop was not started")
     if _thread is None:
         _thread = threading.Thread(target=_start_event_loop, daemon=True)
         _thread.start()
@@ -387,17 +399,17 @@ class SyncGatewayClient:
     def __init__(
         self,
         url: str,
-        session_initiator: SessionInitiator,
+        session_initiator_callback: SessionInitiator,
         retries: int = 5,
         retry_base_timeout=2,
         retry_jitter=1,
         connect_timeout=3,
         response_timeout=5,
         connection_pool_soft_limit=1,
-    ):
+    ) -> None:
         self._async_client = AsyncGatewayClient(
             url=url,
-            session_initiator=session_initiator,
+            session_initiator_callback=session_initiator_callback,
             retries=retries,
             retry_base_timeout=retry_base_timeout,
             retry_jitter=retry_jitter,
@@ -409,30 +421,28 @@ class SyncGatewayClient:
     def close(self) -> None:
         return run_async(self._async_client.close())
 
-    def make_request(
-        self,
-        request: str,
-        message: dict[str, Any],
-        expected_response: str,
-    ) -> dict[str, Any]:
+    def make_request[
+        ResponseT: ResponseType
+    ](self, request: RequestType, expected_response: Type[ResponseT],) -> ResponseT:
         return run_async(
             self._async_client.make_request(
                 request,
-                message,
                 expected_response,
             )
         )
 
-    def make_streaming_request(
+    def make_streaming_request[
+        ResponseT: ResponseType
+    ](
         self,
-        request: str,
-        message: dict[str, Any],
-        expected_response: str,
-    ) -> Iterator[dict[str, Any]]:
+        request: RequestType,
+        expected_response: Type[ResponseT],
+    ) -> Iterator[
+        ResponseT
+    ]:
         return iter_async(
             self._async_client.make_streaming_request(
                 request,
-                message,
                 expected_response,
             )
         )

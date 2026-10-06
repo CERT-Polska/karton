@@ -9,6 +9,12 @@ from pydantic import ValidationError
 
 from karton.core.__version__ import __version__
 from karton.core.asyncio.backend import KartonServiceInfo
+from karton.core.gateway_protocol import (
+    HelloRequest,
+    HelloResponse,
+    HelloResponseMessage,
+    Request,
+)
 
 from .backend import gateway_backend
 from .config import gateway_config
@@ -19,7 +25,6 @@ from .errors import (
     OperationTimeoutError,
 )
 from .messages import send_error, send_success
-from .models import HelloRequest, HelloResponse, HelloResponseMessage, Request
 from .operations import call_request_handler
 from .shutdown import shutdown_latch
 

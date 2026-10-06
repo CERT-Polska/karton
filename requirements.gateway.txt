@@ -1,5 +1,3 @@
 fastapi
-pydantic
 pyjwt
 uvicorn
-websockets
