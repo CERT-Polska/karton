@@ -1,11 +1,14 @@
 import argparse
 import logging
 import os.path
+import uuid
 from configparser import ConfigParser
 from typing import Any, Dict, List
 
 import boto3
 from redis import StrictRedis
+
+from karton.core.backend import KartonServiceInfo
 
 from .__version__ import __version__
 from .backend import KartonBackend
@@ -13,6 +16,12 @@ from .config import Config
 from .karton import Consumer, LogConsumer
 
 log = logging.getLogger(__name__)
+
+cli_service_info = KartonServiceInfo(
+    identity="karton.cli",
+    service_version=__version__,
+    instance_id=str(uuid.uuid4()),
+)
 
 
 class CliLogger(LogConsumer):
@@ -145,7 +154,7 @@ def configuration_wizard(config_filename: str) -> None:
 
 
 def print_bind_list(config: Config, output_format: str) -> None:
-    backend = KartonBackend(config=config)
+    backend = KartonBackend(config=config, service_info=cli_service_info)
 
     if output_format == "table":
         # Print a human-readable table-like version
@@ -164,7 +173,7 @@ def print_bind_list(config: Config, output_format: str) -> None:
 
 
 def delete_bind(config: Config, karton_name: str) -> None:
-    backend = KartonBackend(config=config)
+    backend = KartonBackend(config=config, service_info=cli_service_info)
     binds = {k.identity: k for k in backend.get_binds()}
     consumers = backend.get_online_consumers()
 

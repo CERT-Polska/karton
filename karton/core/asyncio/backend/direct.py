@@ -35,13 +35,12 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
     def __init__(
         self,
         config: Config,
-        identity: Optional[str] = None,
-        service_info: Optional[KartonServiceInfo] = None,
+        service_info: KartonServiceInfo,
         _redis: Optional[Redis] = None,
         _s3_session: Optional[aioboto3.Session] = None,
         _s3_iam_auth=False,
     ) -> None:
-        super().__init__(config, identity, service_info)
+        super().__init__(config, service_info)
         self._redis: Optional[Redis] = _redis
         self._s3_session: Optional[aioboto3.Session] = _s3_session
         self._s3_iam_auth = _s3_iam_auth
@@ -139,20 +138,16 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
     async def make_redis(
         cls,
         config,
-        identity: Optional[str] = None,
-        service_info: Optional[KartonServiceInfo] = None,
+        service_info: KartonServiceInfo,
     ) -> Redis:
         """
         Create and test a Redis connection.
 
         :param config: The karton configuration
-        :param identity: Karton service identity
-        :param service_info: Additional service identity metadata
+        :param service_info: Service identity metadata
         :return: Redis connection
         """
-        redis_args = cls.get_redis_configuration(
-            config, identity=identity, service_info=service_info
-        )
+        redis_args = cls.get_redis_configuration(config, service_info)
         try:
             if "url" in redis_args:
                 rs = Redis.from_url(**redis_args)

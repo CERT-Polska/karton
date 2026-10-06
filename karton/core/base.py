@@ -213,8 +213,7 @@ class KartonBackendFactory(Protocol):
     def __call__(
         self,
         config: Config,
-        identity: Optional[str],
-        service_info: Optional[KartonServiceInfo],
+        service_info: KartonServiceInfo,
     ) -> KartonBackendProtocol: ...
 
 
@@ -242,7 +241,7 @@ class KartonBase(abc.ABC, ConfigMixin, LoggingMixin):
         ConfigMixin.__init__(self, config, identity)
 
         self.backend = backend or self._backend_factory(
-            self.config, identity=self.identity, service_info=self.service_info
+            self.config, service_info=self.service_info
         )
 
         log_handler = KartonLogHandler(backend=self.backend, channel=self.identity)

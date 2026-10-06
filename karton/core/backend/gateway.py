@@ -51,13 +51,7 @@ from karton.core.resource import (
 from karton.core.task import Task, TaskPriority, TaskState, root_uid_from_task_uid
 from karton.core.utils import recursive_map
 
-from .base import (
-    KartonBackendProtocol,
-    KartonBind,
-    KartonMetrics,
-    KartonServiceInfo,
-    resolve_service_info,
-)
+from .base import KartonBackendProtocol, KartonBind, KartonMetrics, KartonServiceInfo
 
 logger = logging.getLogger(__name__)
 
@@ -66,16 +60,10 @@ class KartonGatewayBackendBase:
     def __init__(
         self,
         config: Config,
-        identity: str | None = None,
-        service_info: KartonServiceInfo | None = None,
+        service_info: KartonServiceInfo,
     ):
         self.config = config
-        service_info = resolve_service_info(identity, service_info)
-        if service_info is None:
-            raise RuntimeError(
-                "Service identity can't be None while using Karton Gateway"
-            )
-        self.service_info: KartonServiceInfo = service_info
+        self.service_info = service_info
 
         self.gateway_url = self.config.get("gateway", "url")
         self.gateway_password = self.config.get("gateway", "password")
@@ -180,10 +168,9 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
     def __init__(
         self,
         config: Config,
-        identity: str | None = None,
-        service_info: KartonServiceInfo | None = None,
+        service_info: KartonServiceInfo,
     ) -> None:
-        super().__init__(config, identity, service_info)
+        super().__init__(config, service_info)
 
         self._gateway_client = SyncGatewayClient(
             url=self.gateway_url,

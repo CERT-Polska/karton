@@ -56,10 +56,9 @@ class KartonAsyncGatewayBackend(KartonGatewayBackendBase, KartonAsyncBackendProt
     def __init__(
         self,
         config: Config,
-        identity: str | None = None,
-        service_info: KartonServiceInfo | None = None,
+        service_info: KartonServiceInfo,
     ) -> None:
-        super().__init__(config, identity, service_info)
+        super().__init__(config, service_info)
         self.connection_pool_soft_limit = self.config.getint(
             "gateway", "connection_pool_soft_limit", 4
         )

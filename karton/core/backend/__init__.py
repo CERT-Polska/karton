@@ -1,5 +1,3 @@
-from typing import Optional
-
 from karton.core.config import Config
 
 from .base import KartonBackendProtocol, KartonBind, KartonMetrics, KartonServiceInfo
@@ -9,15 +7,12 @@ from .gateway import KartonGatewayBackend
 
 def get_backend(
     config: Config,
-    identity: Optional[str] = None,
-    service_info: Optional[KartonServiceInfo] = None,
+    service_info: KartonServiceInfo,
 ) -> KartonBackendProtocol:
     if config.has_section("gateway"):
-        return KartonGatewayBackend(
-            config, identity=identity, service_info=service_info
-        )
+        return KartonGatewayBackend(config, service_info=service_info)
     else:
-        return KartonBackend(config, identity=identity, service_info=service_info)
+        return KartonBackend(config, service_info=service_info)
 
 
 __all__ = [

@@ -27,9 +27,9 @@ from karton.core.utils import chunks, chunks_iter
 from .base import (
     KartonBackendProtocol,
     KartonBind,
+    KartonExternalServiceInfo,
     KartonMetrics,
     KartonServiceInfo,
-    resolve_service_info,
     unserialize_bind,
 )
 
@@ -54,19 +54,16 @@ class KartonBackendBase:
     def __init__(
         self,
         config: Config,
-        identity: Optional[str] = None,
-        service_info: Optional[KartonServiceInfo] = None,
+        service_info: KartonServiceInfo,
     ):
         self.config = config
-        self.service_info = resolve_service_info(identity, service_info)
+        self.service_info = service_info
         # Bind is stored for expiration check done by consume_routed_task
         # Explicit expiration check is not required when using Karton Gateway
         self._current_bind: Optional[KartonBind] = None
 
     @property
     def identity(self) -> str | None:
-        if self.service_info is None:
-            return None
         return self.service_info.identity
 
     @property
@@ -79,13 +76,9 @@ class KartonBackendBase:
     @staticmethod
     def get_redis_configuration(
         config: Config,
-        identity: Optional[str] = None,
-        service_info: Optional[KartonServiceInfo] = None,
+        service_info: KartonServiceInfo,
     ) -> Dict[str, Any]:
-        if service_info is not None:
-            client_name: Optional[str] = service_info.make_client_name()
-        else:
-            client_name = identity
+        client_name = service_info.make_client_name()
 
         redis_url = config.get("redis", "url")
         if redis_url is not None:
@@ -215,13 +208,10 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
     def __init__(
         self,
         config: Config,
-        identity: Optional[str] = None,
-        service_info: Optional[KartonServiceInfo] = None,
+        service_info: KartonServiceInfo,
     ) -> None:
-        super().__init__(config, identity, service_info)
-        self.redis = self.make_redis(
-            config, identity=identity, service_info=service_info
-        )
+        super().__init__(config, service_info)
+        self.redis = self.make_redis(config, service_info=service_info)
 
         endpoint = config.get("s3", "address") or os.getenv("AWS_ENDPOINT_URL")
         access_key = config.get("s3", "access_key") or os.getenv("AWS_ACCESS_KEY_ID")
@@ -279,20 +269,16 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
     def make_redis(
         cls,
         config,
-        identity: Optional[str] = None,
-        service_info: Optional[KartonServiceInfo] = None,
+        service_info: KartonServiceInfo,
     ) -> StrictRedis:
         """
         Create and test a Redis connection.
 
         :param config: The karton configuration
-        :param identity: Karton service identity
-        :param service_info: Additional service identity metadata
+        :param service_info: Service identity metadata
         :return: Redis connection
         """
-        redis_args = cls.get_redis_configuration(
-            config, identity=identity, service_info=service_info
-        )
+        redis_args = cls.get_redis_configuration(config, service_info=service_info)
         try:
             if "url" in redis_args:
                 redis = StrictRedis.from_url(**redis_args)
@@ -402,7 +388,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             bound_identities[name].append(client)
         return bound_identities
 
-    def _get_online_gateway_services(self) -> Iterator[KartonServiceInfo]:
+    def _get_online_gateway_services(self) -> Iterator[KartonExternalServiceInfo]:
         for service_keys in chunks_iter(
             self.redis.scan_iter(
                 match=f"{KARTON_SERVICES_NAMESPACE}:*",
@@ -416,18 +402,18 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
                 if not client_name:
                     continue
                 try:
-                    yield KartonServiceInfo.parse_client_name(client_name)
+                    yield KartonExternalServiceInfo.parse_client_name(client_name)
                 except Exception:
                     logger.exception(
                         "Fatal error while parsing client name: %s", client_name
                     )
                     continue
 
-    def _get_online_direct_services(self) -> Iterator[KartonServiceInfo]:
+    def _get_online_direct_services(self) -> Iterator[KartonExternalServiceInfo]:
         for client in self.redis.client_list():
             name = client["name"]
             try:
-                service_info = KartonServiceInfo.parse_client_name(
+                service_info = KartonExternalServiceInfo.parse_client_name(
                     name, redis_client_info=client
                 )
                 yield service_info
@@ -435,11 +421,11 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
                 logger.exception("Fatal error while parsing client name: %s", name)
                 continue
 
-    def _get_online_services(self) -> Iterator[KartonServiceInfo]:
+    def _get_online_services(self) -> Iterator[KartonExternalServiceInfo]:
         # Services having instance_id should be returned only once per instance_id
         # Services without instance_id are counted by amount of Redis connections
         # so they should be returned as many times as they appear in the output
-        services: defaultdict[KartonServiceInfo, int] = defaultdict(int)
+        services: defaultdict[KartonExternalServiceInfo, int] = defaultdict(int)
         for service in self._get_online_direct_services():
             services[service] += 1
         for service in self._get_online_gateway_services():
@@ -452,7 +438,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             else:
                 yield service
 
-    def get_online_services(self, _legacy=True) -> List[KartonServiceInfo]:
+    def get_online_services(self, _legacy=True) -> List[KartonExternalServiceInfo]:
         """
         Gets all online services providing extended service information.
 
@@ -480,7 +466,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         # That loop removes instance_id and filters out services without
         # karton_version
         return [
-            KartonServiceInfo(
+            KartonExternalServiceInfo(
                 identity=service.identity,
                 karton_version=service.karton_version,
                 service_version=service.service_version,
@@ -491,14 +477,16 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             if service.karton_version is not None
         ]
 
-    def get_online_identities(self) -> Dict[str, List[KartonServiceInfo]]:
+    def get_online_identities(self) -> Dict[str, List[KartonExternalServiceInfo]]:
         """
         Returns a dictionary for all online identities with list of
         KartonServiceInfo of each instance
 
         :return: Dictionary {identity: [list of KartonServiceInfo objects]}
         """
-        identities: defaultdict[str, List[KartonServiceInfo]] = defaultdict(list)
+        identities: defaultdict[str, List[KartonExternalServiceInfo]] = defaultdict(
+            list
+        )
         for service in self._get_online_services():
             identities[service.identity].append(service)
         return dict(identities)

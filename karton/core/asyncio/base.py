@@ -21,8 +21,7 @@ class KartonAsyncBackendFactory(Protocol):
     def __call__(
         self,
         config: Config,
-        identity: Optional[str],
-        service_info: Optional[KartonServiceInfo],
+        service_info: KartonServiceInfo,
     ) -> KartonAsyncBackendProtocol: ...
 
 
@@ -57,7 +56,7 @@ class KartonAsyncBase(abc.ABC, ConfigMixin, LoggingMixin):
             instance_id=self.instance_id,
         )
         self.backend = backend or self._backend_factory(
-            self.config, identity=self.identity, service_info=self.service_info
+            self.config, service_info=self.service_info
         )
 
         log_handler = KartonAsyncLogHandler(backend=self.backend, channel=self.identity)

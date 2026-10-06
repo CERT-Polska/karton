@@ -1,6 +1,6 @@
 import dataclasses
 import enum
-import urllib
+import urllib.parse
 from typing import IO, Any, Iterator, Protocol
 
 from karton.core.__version__ import __version__
@@ -29,9 +29,9 @@ class KartonMetrics(enum.Enum):
 
 
 @dataclasses.dataclass(frozen=True, order=True)
-class KartonServiceInfo:
+class KartonExternalServiceInfo:
     """
-    Extended Karton service information.
+    Karton service information parsed from Redis/Gateway.
 
     Instances of this dataclass are meant to be aggregated to count service replicas
     in Karton Dashboard. They're considered equal if identity and versions strings
@@ -51,26 +51,10 @@ class KartonServiceInfo:
         default=None, hash=False, compare=False, metadata={"serializable": False}
     )
 
-    def make_client_name(self) -> str:
-        included_keys = [
-            field.name
-            for field in dataclasses.fields(self)
-            if field.metadata.get("serializable", True)
-        ]
-        params = {
-            k: v
-            for k, v in dataclasses.asdict(self).items()
-            if k in included_keys and v is not None
-        }
-        if params:
-            return f"{self.identity}?{urllib.parse.urlencode(params)}"
-        else:
-            return self.identity
-
     @classmethod
     def parse_client_name(
         cls, client_name: str, redis_client_info: dict[str, str] | None = None
-    ) -> "KartonServiceInfo":
+    ) -> "KartonExternalServiceInfo":
         included_keys = [
             field.name
             for field in dataclasses.fields(cls)
@@ -89,43 +73,50 @@ class KartonServiceInfo:
         else:
             identity = client_name
             params = {}
-        return KartonServiceInfo(
+        return KartonExternalServiceInfo(
             identity, redis_client_info=redis_client_info, **params
         )
 
 
-def resolve_service_info(
-    identity: str | None, service_info: KartonServiceInfo | None
-) -> KartonServiceInfo | None:
+@dataclasses.dataclass(frozen=True, order=True)
+class KartonServiceInfo:
     """
-    Resolves KartonServiceInfo object from backend parameters that identify the service.
-    This is mostly for compatibility reasons, in previous versions services could be
-    nameless or without extended version information. Karton Gateway requires complete
-    service info to be provided.
-
-    If only identity is provided: KartonServiceInfo containing only an identity and
-    karton_version information is created.
-
-    If service_info is provided: object is passed through and validated if identity is
-    correct and doesn't contain disallowed characters.
-
-    If none are provided: None is returned.
+    Extended Karton service information.
     """
-    if service_info is None:
-        if identity is None:
-            return None
-        service_info = KartonServiceInfo(
-            identity=identity,
-            karton_version=__version__,
-        )
-    disallowed_chars = [" ", "?"]
-    if any(
-        disallowed_char in service_info.identity for disallowed_char in disallowed_chars
-    ):
-        raise InvalidIdentityError(
-            f"Karton identity must not contain {disallowed_chars}"
-        )
-    return service_info
+
+    identity: str
+    instance_id: str
+    karton_version: str = __version__
+    service_version: str | None = None
+
+    def __post_init__(self):
+        disallowed_chars = [" ", "?"]
+        if not self.identity:
+            raise InvalidIdentityError(
+                "Karton identity should be set to non-empty string"
+            )
+        if any(
+            disallowed_char in self.identity for disallowed_char in disallowed_chars
+        ):
+            raise InvalidIdentityError(
+                f"Karton identity must not contain {disallowed_chars}"
+            )
+
+    def make_client_name(self) -> str:
+        included_keys = [
+            field.name
+            for field in dataclasses.fields(self)
+            if field.metadata.get("serializable", True)
+        ]
+        params = {
+            k: v
+            for k, v in dataclasses.asdict(self).items()
+            if k in included_keys and v is not None
+        }
+        if params:
+            return f"{self.identity}?{urllib.parse.urlencode(params)}"
+        else:
+            return self.identity
 
 
 def unserialize_bind(identity: str, bind: dict[str, Any]) -> KartonBind:
