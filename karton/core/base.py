@@ -16,7 +16,15 @@ from .utils import HardShutdownInterrupt, StrictClassMethod, graceful_killer
 
 
 class ConfigMixin:
-    identity: Optional[str]
+    """
+    Mixin responsible for setting configuration-dependent information
+    about Karton service. Reads common fields from configuration sources
+    and provides extendable argument parser.
+
+    Mixin is shared between KartonBase and KartonAsyncBase.
+    """
+
+    identity: str
     version: Optional[str]
 
     def __init__(
@@ -32,13 +40,22 @@ class ConfigMixin:
             self.identity = identity
 
         # If passed via configuration: override
-        if self.config.has_option("karton", "identity"):
-            self.identity = self.config.get("karton", "identity")
+        identity_from_config = self.config.get("karton", "identity")
+        if identity_from_config is not None:
+            self.identity = identity_from_config
 
         self.debug = self.config.getboolean("karton", "debug", False)
 
         if self.debug and self.identity:
             self.identity += "-" + os.urandom(4).hex() + "-dev"
+
+        self.instance_id = str(uuid.uuid4())
+        self.service_info = KartonServiceInfo(
+            identity=self.identity,
+            karton_version=__version__,
+            service_version=self.version,
+            instance_id=self.instance_id,
+        )
 
     @classmethod
     def args_description(cls) -> str:
@@ -104,8 +121,15 @@ class ConfigMixin:
 
 
 class LoggingMixin:
+    """
+    Mixin responsible for setting common logger configuration
+    connected to the Karton logging handler.
+
+    Mixin is shared between KartonBase and KartonAsyncBase.
+    """
+
     config: Config
-    identity: Optional[str]
+    identity: str
     debug: bool
     enable_publish_log: bool
 
@@ -217,13 +241,6 @@ class KartonBase(abc.ABC, ConfigMixin, LoggingMixin):
     ) -> None:
         ConfigMixin.__init__(self, config, identity)
 
-        self.instance_id = str(uuid.uuid4())
-        self.service_info = KartonServiceInfo(
-            identity=self.identity,
-            karton_version=__version__,
-            service_version=self.version,
-            instance_id=self.instance_id,
-        )
         self.backend = backend or self._backend_factory(
             self.config, identity=self.identity, service_info=self.service_info
         )
@@ -244,7 +261,7 @@ class KartonBase(abc.ABC, ConfigMixin, LoggingMixin):
 
 class KartonServiceBase(KartonBase):
     """
-    Karton base class for looping services.
+    Karton base class for looping services (Consumer, LogConsumer, System).
 
     You can set an informative version information by setting the ``version`` class
     attribute

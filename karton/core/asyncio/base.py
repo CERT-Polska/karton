@@ -28,7 +28,7 @@ class KartonAsyncBackendFactory(Protocol):
 
 class KartonAsyncBase(abc.ABC, ConfigMixin, LoggingMixin):
     """
-    Base class for all Karton services
+    Karton base class for looping services (Consumer, LogConsumer, System).
 
     You can set an informative version information by setting the ``version`` class
     attribute.
