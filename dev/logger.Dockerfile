@@ -1,4 +1,4 @@
-FROM python:3.11
+FROM python:3.12-slim
 
 COPY requirements.txt /karton/
 COPY pyproject.toml /karton/
