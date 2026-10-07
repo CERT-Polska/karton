@@ -184,7 +184,9 @@ class LocalResourceBase(ResourceBase):
 
     def bind_upload_url(self, url: str) -> None:
         """
-        Binds upload URL to the LocalResource object. Used internally
+        Binds upload URL to the LocalResource object.
+
+        Internal function for use by Gateway backend.
 
         :meta private:
         """
@@ -193,7 +195,9 @@ class LocalResourceBase(ResourceBase):
     @property
     def upload_url(self) -> str:
         """
-        Upload URL for the LocalResource object. Used internally
+        Upload URL for the LocalResource object.
+
+        Internal property for use by Gateway backend.
 
         :meta private:
         """
@@ -478,23 +482,6 @@ class RemoteResource(ResourceBase):
         Unloads resource object from memory
         """
         self._content = None
-
-    def remove(self) -> None:
-        """
-        Internal remote resource remove method
-
-        :meta private:
-        """
-        if self.backend is None:
-            raise RuntimeError(
-                "Resource object can't be removed because it's not bound to the backend"
-            )
-        if self.bucket is None:
-            raise RuntimeError(
-                "Resource object can't be removed because its bucket is not set"
-            )
-
-        self.backend.remove_object(self.bucket, self.uid)
 
     def download(self) -> bytes:
         """

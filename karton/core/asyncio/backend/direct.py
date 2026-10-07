@@ -312,7 +312,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         :param timeout: Waiting for task timeout (default: 5)
         :param bind_id: |
             Bind identifier to be compared instead of the bind
-            stored in backend. Used internally by Karton Gateway.
+            stored in backend. Internal flag for use by Karton Gateway.
         :return: Task object or None if timeout has been reached
         """
         if bind_id is None and self._current_bind is None:
@@ -391,36 +391,6 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         with open(path, "rb") as f:
             await self.upload_resource(resource, f)
 
-    async def upload_object(
-        self,
-        bucket: str,
-        object_uid: str,
-        content: Union[bytes, IO[bytes]],
-    ) -> None:
-        """
-        Upload resource object to underlying object storage (S3)
-
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
-        :param content: Object content as bytes or file-like stream
-        """
-        async with self.s3 as client:
-            await client.put_object(Bucket=bucket, Key=object_uid, Body=content)
-
-    async def upload_object_from_file(
-        self, bucket: str, object_uid: str, path: str
-    ) -> None:
-        """
-        Upload resource object file to underlying object storage
-
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
-        :param path: Path to the object content
-        """
-        async with self.s3 as client:
-            with open(path, "rb") as f:
-                await client.put_object(Bucket=bucket, Key=object_uid, Body=f)
-
     async def download_resource(self, resource: RemoteResource) -> bytes:
         """
         Download resource object from object storage.
@@ -453,31 +423,6 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             await client.download_file(
                 Bucket=resource.bucket, Key=resource.uid, Filename=path
             )
-
-    async def download_object(self, bucket: str, object_uid: str) -> bytes:
-        """
-        Download resource object from object storage.
-
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
-        :return: Content bytes
-        """
-        async with self.s3 as client:
-            obj = await client.get_object(Bucket=bucket, Key=object_uid)
-            return await obj["Body"].read()
-
-    async def download_object_to_file(
-        self, bucket: str, object_uid: str, path: str
-    ) -> None:
-        """
-        Download resource object from object storage to file
-
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
-        :param path: Target file path
-        """
-        async with self.s3 as client:
-            await client.download_file(Bucket=bucket, Key=object_uid, Filename=path)
 
     async def produce_log(
         self,
@@ -534,6 +479,13 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
                     # other action was requested and needs to be handled
                     yield None
 
+    @staticmethod
+    def redis_heartbeat_key(service_info: KartonServiceInfo, connection_id: str) -> str:
+        return (
+            f"{KARTON_SERVICES_NAMESPACE}:{service_info.identity}:"
+            f"{service_info.instance_id}:{connection_id}"
+        )
+
     async def register_service(
         self, service_info: KartonServiceInfo, connection_id: str, expires_after: int
     ) -> None:
@@ -545,7 +497,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         are alive. Karton Gateway uses heartbeat-based approach to track them
         and this function registers a heartbeat-tracking key in Redis.
 
-        Used internally by Karton Gateway.
+        Internal method for use by Karton Gateway.
 
         :param service_info: Service info of the connected service
         :param connection_id: Connection identifier
@@ -554,8 +506,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         if service_info.instance_id is None:
             raise ValueError("instance_id in service_info can't be None")
         await self.redis.set(
-            f"{KARTON_SERVICES_NAMESPACE}:{service_info.identity}:"
-            f"{service_info.instance_id}:{connection_id}",
+            self.redis_heartbeat_key(service_info, connection_id),
             service_info.make_client_name(),
             ex=expires_after,
         )
@@ -568,7 +519,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
 
         See also: register_service
 
-        Used internally by Karton Gateway.
+        Internal method for use by Karton Gateway.
 
         :param service_info: Service info of the connected service
         :param connection_id: Connection identifier
@@ -576,11 +527,14 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         """
         if service_info.instance_id is None:
             raise ValueError("instance_id in service_info can't be None")
-        await self.redis.expire(
-            f"{KARTON_SERVICES_NAMESPACE}:{service_info.identity}:"
-            f"{service_info.instance_id}:{connection_id}",
+        success = await self.redis.expire(
+            self.redis_heartbeat_key(service_info, connection_id),
             expires_after,
         )
+        if not success:
+            raise RuntimeError(
+                "Heartbeat prematurely expired because it wasn't refreshed in time."
+            )
 
     async def unregister_service(
         self, service_info: KartonServiceInfo, connection_id: str
@@ -591,7 +545,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
 
         See also: register_service
 
-        Used internally by Karton Gateway.
+        Internal method for use by Karton Gateway.
 
         :param service_info: Service info of the connected service
         :param connection_id: Connection identifier
@@ -599,8 +553,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         if service_info.instance_id is None:
             raise ValueError("instance_id in service_info can't be None")
         await self.redis.delete(
-            f"{KARTON_SERVICES_NAMESPACE}:{service_info.identity}:"
-            f"{service_info.instance_id}:{connection_id}",
+            self.redis_heartbeat_key(service_info, connection_id),
         )
 
     async def get_presigned_object_download_url(

@@ -258,40 +258,6 @@ class KartonAsyncGatewayBackend(KartonGatewayBackendBase, KartonAsyncBackendProt
                 async for chunk in response.aiter_bytes():
                     f.write(chunk)
 
-    def upload_object(
-        self,
-        bucket: str,
-        object_uid: str,
-        content: bytes | IO[bytes],
-    ) -> None:
-        raise NotImplementedError(
-            "Gateway backend doesn't allow to download arbitrary S3 objects"
-            "KartonGatewayBackend.upload_resource should be used instead."
-        )
-
-    def upload_object_from_file(self, bucket: str, object_uid: str, path: str) -> None:
-        raise NotImplementedError(
-            "Gateway backend doesn't allow to download arbitrary S3 objects"
-            "KartonGatewayBackend.upload_resource_from_file should be used instead."
-        )
-
-    def download_object(self, bucket: str, object_uid: str) -> bytes:
-        raise NotImplementedError(
-            "Gateway backend doesn't allow to download arbitrary S3 objects"
-            "KartonGatewayBackend.download_resource should be used instead."
-        )
-
-    def download_object_to_file(self, bucket: str, object_uid: str, path: str) -> None:
-        raise NotImplementedError(
-            "Gateway backend doesn't allow to download arbitrary S3 objects"
-            "KartonGatewayBackend.download_resource_to_file should be used instead."
-        )
-
-    def remove_object(self, bucket: str, object_uid: str) -> None:
-        raise NotImplementedError(
-            "Gateway backend doesn't allow to remove arbitrary S3 objects"
-        )
-
     async def produce_log(
         self, log_record: dict[str, Any], logger_name: str, level: str
     ) -> bool:

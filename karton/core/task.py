@@ -193,7 +193,9 @@ class Task(object):
 
     def bind_token(self, token: str) -> None:
         """
-        Binds task with gateway token. Used internally.
+        Binds task with gateway token.
+
+        Internal function for use by Gateway backend.
 
         :meta private:
         """
@@ -203,7 +205,7 @@ class Task(object):
         """
         Fork task to transfer single task to many queues (but use different UID).
 
-        Used internally by karton-system
+        Internal function for use by karton-system
 
         :return: Forked copy of the original task
 

@@ -117,7 +117,9 @@ class KartonBackendBase:
     def get_queue_names(identity: str) -> List[str]:
         """
         Return all Redis routed task queue names for given identity,
-        ordered by priority (descending). Used internally by Consumer.
+        ordered by priority (descending).
+
+        Internal function for use by Consumer.
 
         :param identity: Karton service identity
         :return: List of queue names
@@ -623,7 +625,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         Processes tasks made by <5.4.0 (unrouted from <5.4.0 producers or existing
         before upgrade)
 
-        Used internally by iter_task_tree.
+        Internal function for use by iter_task_tree.
         """
         # Iterate over all karton tasks that do not match the new task id format
         legacy_task_keys = self.redis.scan_iter(
@@ -734,7 +736,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         Remove task from Redis
 
         .. warning::
-            Used internally by karton.system.
+            Internal function for use by karton.system.
             If you want to cancel task: mark it as finished and let it be deleted
             by karton.system.
 
@@ -747,7 +749,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         Remove multiple tasks from Redis
 
         .. warning::
-            Used internally by karton.system.
+            Internal function for use by karton.system.
             If you want to cancel task: mark it as finished and let it be deleted
             by karton.system.
 
