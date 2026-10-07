@@ -375,18 +375,23 @@ class LogConsumer(KartonServiceBase):
     """
     Base class for log consumer subsystems.
 
-    You can consume logs from specific logger
-    by setting a :py:meth:`logger_filter` class attribute.
-
-    You can also select logs of specific level via
-    :py:meth:`level` class attribute.
+    Consume logs from specific loggers and/or levels by setting the
+    :attr:`logger_filter` and :attr:`level` class attributes.
 
     :param config: Karton config to use for service configuration
     :param identity: Karton service identity
     :param backend: Karton backend to use
     """
 
+    #: Filter logs by logger name. ``None`` (default) matches all loggers.
+    #: Supports Redis Pub/Sub glob patterns, e.g. ``"karton.*"`` matches all
+    #: ``karton.*`` services. Otherwise an exact logger name (e.g.
+    #: ``"karton.classifier"``).
     logger_filter: Optional[str] = None
+
+    #: Filter logs by uppercase log level name (e.g. ``"INFO"``). ``None``
+    #: (default) matches all levels. Case-insensitive. Exact match, not a
+    #: threshold - ``"INFO"`` does not include ``"WARNING"`` or higher.
     level: Optional[str] = None
 
     def __init__(

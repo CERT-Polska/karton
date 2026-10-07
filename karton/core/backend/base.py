@@ -259,9 +259,25 @@ class KartonBackendProtocol(Protocol):
         """
         Push new log record to the logs channel.
 
-        :param log_record: Dict with log record
-        :param logger_name: Logger name
-        :param level: Log level
+        :param log_record: Dictionary representation of a
+            :class:`logging.LogRecord`, carrying its standard attributes (see
+            `LogRecord attributes
+            <https://docs.python.org/3/library/logging.html#logrecord-attributes>`_)
+            along with the following Karton-specific fields:
+
+            - ``type`` - always ``"log"``
+            - ``message`` - the formatted log message
+            - ``hostname`` - hostname of the producing machine
+            - ``task_id`` - UID of the currently processed task, or
+              ``"(no task)"`` if none
+            - ``task`` - serialized current task, present only when a task is
+              in context
+            - ``excText``, ``excValue``, ``excTraceback``, ``excType`` -
+              exception details, present only when the record carries exception
+              information
+        :param logger_name: Name of the logger to publish under, typically a
+            Karton service identity (e.g. ``"karton.classifier"``).
+        :param level: Uppercase log level name (e.g. ``"DEBUG"``, ``"INFO"``).
         :return: True if any active log consumer received log record
         """
 
@@ -278,8 +294,18 @@ class KartonBackendProtocol(Protocol):
         If you want to subscribe only to a specific logger name
         and/or log level, pass them via logger_filter and level arguments.
 
-        :param timeout: Waiting for log record timeout (default: 5)
-        :param logger_filter: Filter for name of consumed logger
-        :param level: Log level
-        :return: Dict with log record
+        :param timeout: Waiting for log record timeout in seconds (default: 5)
+        :param logger_filter: Filter logs by logger name. ``None`` (default)
+            matches all loggers. Supports Redis Pub/Sub glob patterns, e.g.
+            ``"karton.*"`` matches all ``karton.*`` services. Otherwise an exact
+            logger name (e.g. ``"karton.classifier"``).
+        :param level: Uppercase log level name (e.g. ``"DEBUG"``, ``"INFO"``).
+            ``None`` (default) matches all levels. Case-insensitive.
+        :return: Dict with log record (see :meth:`produce_log` for the field
+            format)
+
+        .. note::
+            The ``level`` filter is an exact match, not a threshold. Unlike
+            Python's :meth:`logging.Logger.setLevel`, ``level="INFO"`` matches
+            only logs recorded at the ``INFO`` level, not ``WARNING`` or higher.
         """
