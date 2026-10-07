@@ -1,6 +1,28 @@
+import logging
+
+import gunicorn
+from gunicorn.asgi.websocket import WebSocketProtocol
 from gunicorn.workers.gasgi import ASGIWorker
 
 from .shutdown import shutdown_latch
+
+logger = logging.getLogger(__name__)
+
+
+# BUGFIX: remove this after https://github.com/benoitc/gunicorn/pull/3766
+# is merged and gunicorn is pinned to fixed version.
+# gunicorn's native ASGI worker doesn't deliver websocket.disconnect
+# on clean client close (the app gets CancelledError instead).
+if tuple(int(p) for p in gunicorn.__version__.split(".")) <= (26, 2, 2):
+    _original_handle_close = WebSocketProtocol._handle_close
+
+    async def _handle_close(self, payload):
+        await _original_handle_close(self, payload)
+        await self._receive_queue.put(
+            {"type": "websocket.disconnect", "code": self.close_code or 1006}
+        )
+
+    WebSocketProtocol._handle_close = _handle_close  # type: ignore[method-assign]
 
 
 class GatewayASGIWorker(ASGIWorker):
