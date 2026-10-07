@@ -48,16 +48,17 @@ def parse_task_token(
             audience=[audience],
             options={"require": ["exp", "iss", "sub", "scope", "resources"]},
         )
-        if not token_data["sub"].startswith("karton.task:"):
+        sub_parts = token_data["sub"].split(":")
+        if sub_parts[0] != "karton.task" or len(sub_parts) != 2:
             raise jwt.exceptions.InvalidSubjectError(
                 "Subject of this token is not a karton.task"
             )
+        task_uid = sub_parts[1]
         if scope is not None and scope is not TaskTokenScope(token_data["scope"]):
             raise InvalidTaskTokenError(
                 f"Invalid task token: expected scope '{scope.value}', "
                 f"got '{token_data['scope']}'"
             )
-        task_uid = token_data["sub"][len("karton.task:") :]
         return TaskTokenInfo(task_uid=task_uid, resources=token_data["resources"])
     except jwt.InvalidTokenError as e:
         raise InvalidTaskTokenError(f"Invalid task token: {type(e)} - {str(e)}")
