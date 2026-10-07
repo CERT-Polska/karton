@@ -365,7 +365,7 @@ class Consumer(KartonServiceBase):
                 try:
                     task = self.backend.consume_routed_task(self.identity)
                 except BindExpiredError as e:
-                    self.log.info("%s", e)
+                    self.log.info("%r", e)
                     break
                 if task:
                     self.internal_process(task)
