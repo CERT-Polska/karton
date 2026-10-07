@@ -315,23 +315,24 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             stored in backend. Used internally by Karton Gateway.
         :return: Task object or None if timeout has been reached
         """
-        if bind_id is not None or self._current_bind is not None:
-            current_bind = await self.get_bind(identity)
-            if bind_id is not None:
-                if current_bind is None:
-                    current_bind_id = None
-                else:
-                    current_bind_id = self.compute_bind_id(current_bind)
-                if current_bind_id != bind_id:
-                    raise BindExpiredError(
-                        f"Binds changed, shutting down. New binds: {current_bind}"
-                    )
-            elif current_bind != self._current_bind:
+        if bind_id is None and self._current_bind is None:
+            raise RuntimeError("Bug: Tried to consume task without registering bind")
+
+        current_bind = await self.get_bind(identity)
+        if bind_id is not None:
+            current_bind_id = None
+            if current_bind is not None:
+                current_bind_id = self.compute_bind_id(current_bind)
+            if current_bind_id != bind_id:
                 raise BindExpiredError(
-                    "Binds changed, shutting down. "
-                    f"Old binds: {self._current_bind} "
-                    f"New binds: {current_bind}"
+                    f"Binds changed, shutting down. New binds: {current_bind}"
                 )
+        elif current_bind != self._current_bind:
+            raise BindExpiredError(
+                "Binds changed, shutting down. "
+                f"Old binds: {self._current_bind} "
+                f"New binds: {current_bind}"
+            )
         item = await self.consume_queues(
             self.get_queue_names(identity),
             timeout=timeout,
