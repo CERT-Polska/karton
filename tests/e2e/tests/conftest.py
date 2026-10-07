@@ -1,5 +1,3 @@
-import uuid
-
 import pytest
 from karton.core.backend import KartonBackend, KartonServiceInfo
 from karton.core import Producer, Config
@@ -7,7 +5,7 @@ from karton.core import Producer, Config
 
 @pytest.fixture
 def backend():
-    service_info = KartonServiceInfo(identity="karton.test-backend", instance_id=str(uuid.uuid4()))
+    service_info = KartonServiceInfo.create(identity="karton.test-backend")
     return KartonBackend(Config(), service_info=service_info)
 
 

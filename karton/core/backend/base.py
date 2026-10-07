@@ -1,7 +1,8 @@
 import dataclasses
 import enum
 import urllib.parse
-from typing import IO, Any, Iterator, Protocol
+import uuid
+from typing import IO, Any, Iterator, Protocol, Self
 
 from karton.core.__version__ import __version__
 from karton.core.exceptions import InvalidIdentityError
@@ -89,7 +90,23 @@ class KartonServiceInfo:
     karton_version: str = __version__
     service_version: str | None = None
 
-    def __post_init__(self):
+    @classmethod
+    def create(cls, identity: str, service_version: str | None = None) -> Self:
+        """
+        Creates a KartonServiceInfo object that represent single instance
+        of Karton service.
+
+        The main use case of this method is to easily instantiate the
+        service_info parameters with random instance_id when KartonBackend
+        is used directly.
+        """
+        return cls(
+            identity=identity,
+            instance_id=str(uuid.uuid4()),
+            service_version=service_version,
+        )
+
+    def __post_init__(self) -> None:
         disallowed_chars = [" ", "?"]
         if not self.identity:
             raise InvalidIdentityError(
