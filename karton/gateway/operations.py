@@ -151,12 +151,12 @@ async def handle_declare_task_request(
 
     # For now it's global setting but in future it may be
     # also configured per identity/username.
-    allowed_foreign_buckets = gateway_config.allowed_extra_buckets
+    allowed_extra_buckets = gateway_config.allowed_extra_buckets
     payload_bags = (task_params.payload, task_params.payload_persistent)
 
     # Now, we need to translate DeclaredResourceSpec to RemoteResource
     task_payload_bags, validated_resources = process_declared_task_resources(
-        payload_bags, allowed_parent_resources, allowed_foreign_buckets
+        payload_bags, allowed_parent_resources, allowed_extra_buckets
     )
     resource_urls = await generate_resource_upload_urls(validated_resources)
     task_payload, task_payload_persistent = task_payload_bags
