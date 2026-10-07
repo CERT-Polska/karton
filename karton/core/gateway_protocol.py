@@ -35,7 +35,7 @@ class HelloResponse(BaseModel):
 
 
 class HelloRequestMessage(BaseModel):
-    identity: str
+    identity: str = Field(..., min_length=1)
     library_version: str
     instance_id: str
     service_version: str | None
