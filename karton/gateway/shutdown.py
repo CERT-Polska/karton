@@ -1,19 +1,21 @@
 import asyncio
 
-from uvicorn.server import Server
-from uvicorn.server import logger as uvicorn_logger
-
 from karton.gateway.errors import ShutdownError
 
 
 class ShutdownLatch:
     """
-    Uvicorn terminates all websocket connections when
-    shutting down. It's ok, but we would like to finish
-    ongoing requests processing and send a response before that.
+    During graceful shutdown we want to let in-flight requests finish
+    and respond before the connection is closed, while rejecting new
+    requests on already-open idle connections so clients get a clean
+    ``ShutdownError`` and can safely reconnect to a healthy instance.
 
-    In graceful condition, client will be notified about disconnection
-    when trying to send the next request, so it can safely reconnect.
+    Gunicorn's native ASGI worker passively waits for connections to
+    close (up to ``--graceful-timeout``), so the in-flight draining is
+    handled by the worker itself. The latch additionally provides an
+    application-level signal (``shutdown_in_progress``) that is checked
+    on the request path to reject new work early, and from the log
+    subscription loop to break out of a long-running stream.
     """
 
     def __init__(self):
@@ -47,19 +49,3 @@ class ShutdownLatch:
 
 
 shutdown_latch = ShutdownLatch()
-
-original_shutdown = Server.shutdown
-
-
-async def uvicorn_shutdown(self: Server, sockets=None):
-    uvicorn_logger.info("Shutdown requested, finalizing ongoing gateway requests")
-    # Stop accepting new connections.
-    for server in self.servers:
-        server.close()
-    for sock in sockets or []:
-        sock.close()  # pragma: full coverage
-    await shutdown_latch.request_shutdown()
-    await original_shutdown(self, sockets)
-
-
-Server.shutdown = uvicorn_shutdown  # type: ignore

@@ -2,7 +2,6 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from websockets.exceptions import ConnectionClosed
 
 from .backend import gateway_backend
 from .errors import InternalError, KartonGatewayError, ShutdownError
@@ -56,9 +55,7 @@ async def gateway_endpoint(websocket: WebSocket):
             await websocket.close(code=1001, reason="Server shutting down")
         else:
             await websocket.close()
-    except (WebSocketDisconnect, ConnectionClosed):
-        # Client disconnected gracefully
-        # ConnectionClosed is uvicorn-specific
+    except WebSocketDisconnect:
         logger.info("Client disconnected gracefully")
     except Exception:
         logger.exception("Internal server error")

@@ -17,7 +17,7 @@ are exchanged via S3 presigned URLs issued by the Karton Gateway, so no direct S
 Karton Gateway is considered the primary backend going forward. The Redis-based interface (called "Direct backend")
 still works but is considered legacy, and users are encouraged to migrate to the Gateway-based setup.
 
-The Karton Gateway Server is a separate service shipped within this package and runs as a FastAPI/uvicorn
+The Karton Gateway Server is a separate service shipped within this package and runs as a FastAPI/gunicorn
 application. Install it together with the extra dependencies::
 
     pip install karton-core[gateway]
@@ -28,7 +28,7 @@ Python and dependencies
 
 * Python 3.12 or newer is now required.
 * New runtime dependencies were added: ``httpx2``, ``pydantic`` and ``websockets`` to support the Gateway
-  backend implementation. The Gateway Server additionally requires ``fastapi``, ``pyjwt`` and ``uvicorn``
+  backend implementation. The Gateway Server additionally requires ``fastapi``, ``pyjwt`` and ``gunicorn``
   (provided by the ``gateway`` extra).
 
 Configuration

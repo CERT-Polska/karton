@@ -11,5 +11,5 @@ COPY karton ./karton
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install .[gateway]
 
-ENTRYPOINT ["uvicorn"]
-CMD ["karton.gateway:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["gunicorn"]
+CMD ["-k", "karton.gateway.worker:GatewayASGIWorker", "-w", "1", "-b", "0.0.0.0:8000", "karton.gateway:app"]
