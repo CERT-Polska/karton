@@ -271,7 +271,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
     @classmethod
     def make_redis(
         cls,
-        config,
+        config: Config,
         service_info: KartonServiceInfo,
     ) -> StrictRedis:
         """
@@ -356,7 +356,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
     def unregister_bind(self, identity: str) -> None:
         """
         Removes bind for identity
-        :param bind: Identity to be unregistered
+        :param identity: Identity to be unregistered
         """
         self.redis.hdel(KARTON_BINDS_HSET, identity)
 
