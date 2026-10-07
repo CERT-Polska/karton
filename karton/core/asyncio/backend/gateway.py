@@ -127,8 +127,6 @@ class KartonAsyncGatewayBackend(KartonGatewayBackendBase, KartonAsyncBackendProt
             )
 
     async def set_task_status(self, task: Task, status: TaskState) -> None:
-        if task.status == status:
-            return
         await self._gateway_client.make_request(
             request=SetTaskStatusRequest(
                 message=SetTaskStatusRequestMessage(

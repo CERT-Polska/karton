@@ -725,8 +725,6 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         :param status: New task status (TaskState)
         :param pipe: Optional pipeline object if operation is a part of pipeline
         """
-        if task.status == status:
-            return
         task.status = status
         task.last_update = time.time()
         self.register_task(task, pipe=pipe)

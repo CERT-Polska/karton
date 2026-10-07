@@ -232,8 +232,6 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
             )
 
     def set_task_status(self, task: Task, status: TaskState) -> None:
-        if task.status == status:
-            return
         self._gateway_client.make_request(
             request=SetTaskStatusRequest(
                 message=SetTaskStatusRequestMessage(
