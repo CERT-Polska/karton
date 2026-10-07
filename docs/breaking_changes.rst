@@ -76,9 +76,8 @@ Backend and service identity
 
       from karton.core.backend import get_backend, KartonServiceInfo
 
-      service_info = KartonServiceInfo(
+      service_info = KartonServiceInfo.create(
           identity="karton.my-service",
-          instance_id=...,
       )
       # Preferred: let the factory pick the right backend for the configuration
       backend = get_backend(config, service_info=service_info)
@@ -102,9 +101,8 @@ Backend and service identity
       - backend = KartonBackend(config, identity="karton.my-service")
       + backend = get_backend(
       +     config,
-      +     service_info=KartonServiceInfo(
+      +     service_info=KartonServiceInfo.create(
       +         identity="karton.my-service",
-      +         instance_id=...,
       +     ),
       + )
 
@@ -116,7 +114,8 @@ Backend and service identity
 * ``KartonServiceInfo`` gained a **required** ``instance_id`` field (a unique identifier per running
   service instance) used to deduplicate connections from the same replica, and now validates the
   ``identity`` (raises :class:`karton.core.exceptions.InvalidIdentityError` on empty strings or
-  characters from ``{" ", "?"}``).
+  characters from ``{" ", "?"}``). Use the :meth:`KartonServiceInfo.create` classmethod to
+  construct one with a randomly generated ``instance_id`` instead of passing it manually.
 
 * The ``with_service_info`` class attribute on ``KartonBase``/``KartonAsyncBase`` has been removed.
   Service information is always populated, so enabling it explicitly is no longer necessary. The
