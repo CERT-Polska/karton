@@ -1,4 +1,3 @@
-import json
 from typing import List
 
 from pydantic import BaseModel, Field
@@ -15,8 +14,8 @@ class GatewayServerConfig(BaseModel):
 def get_gateway_config(config: Config) -> GatewayServerConfig:
     secret_key = config.get("gateway-server", "secret_key")
     password = config.get("gateway-server", "password")
-    allowed_extra_buckets = json.loads(
-        config.get("gateway-server", "allowed_buckets", "[]")
+    allowed_extra_buckets = config.get("gateway-server", "allowed_buckets", "").split(
+        ","
     )
     return GatewayServerConfig(
         secret_key=secret_key,
