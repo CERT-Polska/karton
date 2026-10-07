@@ -314,9 +314,9 @@ class Consumer(KartonAsyncServiceBase):
                 try:
                     task = await self.backend.consume_routed_task(self.identity)
                 except BindExpiredError as e:
-                    self.log.info("%r", e)
                     if self.concurrency_semaphore is not None:
                         self.concurrency_semaphore.release()
+                    self.log.info("%r", e)
                     break
                 if task:
                     coro_task = asyncio.create_task(self.internal_process(task))
