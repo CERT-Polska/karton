@@ -1,12 +1,10 @@
 import abc
 import asyncio
 import signal
-import uuid
 from asyncio import CancelledError
 from typing import Optional, Protocol
 
 from karton.core import Task
-from karton.core.__version__ import __version__
 from karton.core.backend import KartonServiceInfo
 from karton.core.base import ConfigMixin, LoggingMixin
 from karton.core.config import Config
@@ -48,13 +46,6 @@ class KartonAsyncBase(abc.ABC, ConfigMixin, LoggingMixin):
     ) -> None:
         ConfigMixin.__init__(self, config, identity)
 
-        self.instance_id = str(uuid.uuid4())
-        self.service_info = KartonServiceInfo(
-            identity=self.identity,
-            karton_version=__version__,
-            service_version=self.version,
-            instance_id=self.instance_id,
-        )
         self.backend = backend or self._backend_factory(
             self.config, service_info=self.service_info
         )

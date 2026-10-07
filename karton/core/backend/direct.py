@@ -55,7 +55,7 @@ class KartonBackendBase:
         self,
         config: Config,
         service_info: KartonServiceInfo,
-    ):
+    ) -> None:
         self.config = config
         self.service_info = service_info
         # Bind is stored for expiration check done by consume_routed_task
@@ -247,7 +247,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             aws_secret_access_key=secret_key,
         )
 
-    def iam_auth_s3(self, endpoint: str):
+    def iam_auth_s3(self, endpoint: str) -> boto3.Session | None:
         boto_session = get_session()
         iam_providers = [
             ContainerProvider(),
@@ -264,6 +264,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
                     "s3",
                     endpoint_url=endpoint,
                 )
+        return None
 
     @classmethod
     def make_redis(
@@ -868,7 +869,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
 
         :param identity: Karton service identity
         :param timeout: Waiting for task timeout (default: 5)
-        :return: Task object
+        :return: Task object or None if timeout has been reached
         """
         if self._current_bind is not None:
             current_bind = self.get_bind(identity)

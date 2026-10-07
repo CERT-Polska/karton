@@ -24,7 +24,7 @@ class ConnectionLoggingFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         conn_id = get_connection_id()
         if conn_id is not None:
-            record.connection_id = get_connection_id()
+            record.connection_id = conn_id
         else:
             record.connection_id = None
         return True

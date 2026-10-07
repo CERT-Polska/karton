@@ -75,13 +75,11 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
                 aws_secret_access_key=secret_key,
             )
 
-    async def connect(self):
+    async def connect(self) -> None:
         if self._redis is not None or self._s3_session is not None:
             # Already connected
             return
-        self._redis = await self.make_redis(
-            self.config, identity=self.identity, service_info=self.service_info
-        )
+        self._redis = await self.make_redis(self.config, service_info=self.service_info)
 
         endpoint = self.config.get("s3", "address")
         access_key = self.config.get("s3", "access_key")
@@ -119,7 +117,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         self._s3_session = None
         self._s3_iam_auth = None
 
-    async def iam_auth_s3(self):
+    async def iam_auth_s3(self) -> aioboto3.Session | None:
         boto_session = get_session()
         iam_providers = [
             ContainerProvider(),
@@ -133,6 +131,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             if creds:
                 boto_session._credentials = creds  # type: ignore
                 return aioboto3.Session(botocore_session=boto_session)
+        return None
 
     @classmethod
     async def make_redis(
@@ -231,9 +230,10 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
 
         :param bind: KartonBind object with bind definition
         :param bind_backend: |
-            Bind the KartonBind with the backend for consume_routed_task comparison.
-            Set to False by Karton Gateway that reuses backend for multiple independent
-            Karton services.
+            Store the KartonBind in the backend object for consume_routed_task
+            comparison to validate whether bind is still valid for current consumer.
+            This flag is set to False by Karton Gateway because it reuses backend for
+            multiple independent Karton services.
         :return: Old KartonBind that was registered under this identity
         """
         async with self.redis.pipeline(transaction=True) as pipe:
@@ -303,6 +303,9 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         """
         Get routed task for given consumer identity.
 
+        Raises BindExpiredError if binds are no longer the same as
+        provided in register_bind.
+
         If there are no tasks, blocks until new one appears or timeout is reached.
 
         :param identity: Karton service identity
@@ -310,7 +313,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         :param bind_id: |
             Bind identifier to be compared instead of the bind
             stored in backend. Used internally by Karton Gateway.
-        :return: Task object
+        :return: Task object or None if timeout has been reached
         """
         if bind_id is not None or self._current_bind is not None:
             current_bind = await self.get_bind(identity)
@@ -321,7 +324,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
                     current_bind_id = self.compute_bind_id(current_bind)
                 if current_bind_id != bind_id:
                     raise BindExpiredError(
-                        "Binds changed, shutting down. " f"New binds: {current_bind}"
+                        f"Binds changed, shutting down. New binds: {current_bind}"
                     )
             elif current_bind != self._current_bind:
                 raise BindExpiredError(
@@ -532,12 +535,14 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
 
     async def register_service(
         self, service_info: KartonServiceInfo, connection_id: str, expires_after: int
-    ):
+    ) -> None:
         """
         Registers a connection for an online service.
 
-        Services using gateway backend can't be identified by Redis connection name,
-        so Karton Gateway uses heartbeat-based approach to track them.
+        Karton Gateway multiplexes multiple services over single pool of Redis
+        connections, so we can't use CLIENT INFO for tracking whether services
+        are alive. Karton Gateway uses heartbeat-based approach to track them
+        and this function registers a heartbeat-tracking key in Redis.
 
         Used internally by Karton Gateway.
 
@@ -556,9 +561,9 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
 
     async def heartbeat_service(
         self, service_info: KartonServiceInfo, connection_id: str, expires_after: int
-    ):
+    ) -> None:
         """
-        Updates a heartbeat for the registered connection of an online service
+        Extends a heartbeat for the registered connection of an online service
 
         See also: register_service
 
@@ -578,7 +583,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
 
     async def unregister_service(
         self, service_info: KartonServiceInfo, connection_id: str
-    ):
+    ) -> None:
         """
         Removes a record for a connection of an online service.
         If all connections are dropped, service is considered offline.
