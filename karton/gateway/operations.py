@@ -218,7 +218,7 @@ async def handle_send_task_request(
     if task.status is not TaskState.DECLARED:
         raise InvalidTaskError(
             f"Task status is '{task.status.value}' while only "
-            f"'declared' tasks can be sent"
+            "'declared' tasks can be sent"
         )
 
     await gateway_backend.produce_unrouted_task(task)
