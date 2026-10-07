@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import time
-from typing import IO, Any, AsyncIterator, Dict, List, Optional, Tuple, Union
+from typing import IO, Any, AsyncIterator, Dict, List, Optional, Union, cast
 
 import aioboto3
 from aiobotocore.credentials import ContainerProvider, InstanceMetadataProvider
@@ -178,11 +178,6 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         return RemoteResource.from_dict(resource_spec, backend=self)
 
     async def declare_task(self, task: Task) -> None:
-        """
-        Declares a new task to send it to the queue.
-
-        :param task: Task to declare
-        """
         # Ensure all local resources have good buckets
         for resource in task.iterate_resources():
             if isinstance(resource, LocalResource) and not resource.bucket:
@@ -210,10 +205,9 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         self, task: Task, status: TaskState, pipe: Optional[Pipeline] = None
     ) -> None:
         """
-        Request task status change to be applied by karton-system
+        Extends :meth:`KartonAsyncBackendProtocol.set_task_status` with a
+        Direct-backend-only ``pipe`` argument.
 
-        :param task: Task object
-        :param status: New task status (TaskState)
         :param pipe: Optional pipeline object if operation is a part of pipeline
         """
         task.status = status
@@ -224,15 +218,14 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         self, bind: KartonBind, bind_backend: bool = True
     ) -> Optional[KartonBind]:
         """
-        Register bind for Karton service and return the old one
+        Extends :meth:`KartonAsyncBackendProtocol.register_bind` with a
+        Direct-backend-only ``bind_backend`` argument.
 
-        :param bind: KartonBind object with bind definition
         :param bind_backend: |
             Store the KartonBind in the backend object for consume_routed_task
             comparison to validate whether bind is still valid for current consumer.
             This flag is set to False by Karton Gateway because it reuses backend for
             multiple independent Karton services.
-        :return: Old KartonBind that was registered under this identity
         """
         async with self.redis.pipeline(transaction=True) as pipe:
             await pipe.hget(KARTON_BINDS_HSET, bind.identity)
@@ -253,24 +246,17 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         :param identity: Karton service identity
         :return: KartonBind object or None if not found
         """
-        bind_data = await self.redis.hget(KARTON_BINDS_HSET, identity)
+        bind_data = cast(str | None, await self.redis.hget(KARTON_BINDS_HSET, identity))
         if not bind_data:
             return None
         return self.unserialize_bind(identity, bind_data)
 
     async def produce_unrouted_task(self, task: Task) -> None:
-        """
-        Add given task to unrouted task (``karton.tasks``) queue
-
-        Task must be registered before with :py:meth:`register_task`
-
-        :param task: Task object
-        """
         await self.redis.rpush(KARTON_TASKS_QUEUE, task.uid)
 
     async def consume_queues(
         self, queues: Union[str, List[str]], timeout: int = 0
-    ) -> Optional[Tuple[str, str]]:
+    ) -> tuple[str, str] | None:
         """
         Get item from queues (ordered from the most to the least prioritized)
         If there are no items, wait until one appear.
@@ -279,7 +265,9 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         :param timeout: Waiting for item timeout (default: 0 = wait forever)
         :return: Tuple of [queue_name, item] objects or None if timeout has been reached
         """
-        return await self.redis.blpop(queues, timeout=timeout)
+        return cast(
+            tuple[str, str] | None, await self.redis.blpop(queues, timeout=timeout)
+        )
 
     async def get_task(self, task_uid: str) -> Optional[Task]:
         """
@@ -299,19 +287,12 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         self, identity: str, timeout: int = 5, bind_id: str | None = None
     ) -> Optional[Task]:
         """
-        Get routed task for given consumer identity.
+        Extends :meth:`KartonAsyncBackendProtocol.consume_routed_task` with a
+        Direct-backend-only ``bind_id`` argument.
 
-        Raises BindExpiredError if binds are no longer the same as
-        provided in register_bind.
-
-        If there are no tasks, blocks until new one appears or timeout is reached.
-
-        :param identity: Karton service identity
-        :param timeout: Waiting for task timeout (default: 5)
         :param bind_id: |
             Bind identifier to be compared instead of the bind
             stored in backend. Internal flag for use by Karton Gateway.
-        :return: Task object or None if timeout has been reached
         """
         if bind_id is None and self._current_bind is None:
             raise RuntimeError("Bug: Tried to consume task without registering bind")
@@ -344,10 +325,9 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         self, metric: KartonMetrics, identity: str, pipe: Optional[Pipeline] = None
     ) -> None:
         """
-        Increments metrics for given operation type and identity
+        Extends :meth:`KartonAsyncBackendProtocol.increment_metrics` with a
+        Direct-backend-only ``pipe`` argument.
 
-        :param metric: Operation metric type
-        :param identity: Related Karton service identity
         :param pipe: Optional pipeline object if operation is a part of pipeline
         """
         rs = pipe or self.redis
@@ -358,12 +338,6 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         resource: LocalResource,
         content: Union[bytes, IO[bytes]],
     ) -> None:
-        """
-        Upload resource object to underlying object storage (S3)
-
-        :param resource: Resource to upload
-        :param content: Object content as bytes or file-like stream
-        """
         if resource.bucket is None:
             raise RuntimeError(
                 "Resource object can't be uploaded because its bucket is not set"
@@ -376,12 +350,6 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
     async def upload_resource_from_file(
         self, resource: LocalResource, path: str
     ) -> None:
-        """
-        Upload resource object file to underlying object storage
-
-        :param resource: Resource to upload
-        :param path: Path to the object content
-        """
         if resource.bucket is None:
             raise RuntimeError(
                 "Resource object can't be uploaded because its bucket is not set"
@@ -390,12 +358,6 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             await self.upload_resource(resource, f)
 
     async def download_resource(self, resource: RemoteResource) -> bytes:
-        """
-        Download resource object from object storage.
-
-        :param resource: Resource to download
-        :return: Content bytes
-        """
         if resource.bucket is None:
             raise RuntimeError(
                 "Resource object can't be downloaded because its bucket is not set"
@@ -407,12 +369,6 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
     async def download_resource_to_file(
         self, resource: RemoteResource, path: str
     ) -> None:
-        """
-        Download resource object from object storage to file
-
-        :param resource: Resource to download
-        :param path: Target file path
-        """
         if resource.bucket is None:
             raise RuntimeError(
                 "Resource object can't be downloaded because its bucket is not set"
@@ -428,14 +384,6 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         logger_name: str,
         level: str,
     ) -> bool:
-        """
-        Push new log record to the logs channel
-
-        :param log_record: Dict with log record
-        :param logger_name: Logger name
-        :param level: Log level
-        :return: True if any active log consumer received log record
-        """
         return (
             await self.redis.publish(
                 self._log_channel(logger_name, level), json.dumps(log_record)
@@ -449,18 +397,6 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         logger_filter: Optional[str] = None,
         level: Optional[str] = None,
     ) -> AsyncIterator[Optional[Dict[str, Any]]]:
-        """
-        Subscribe to logs channel and yield subsequent log records
-        or None if timeout has been reached.
-
-        If you want to subscribe only to a specific logger name
-        and/or log level, pass them via logger_filter and level arguments.
-
-        :param timeout: Waiting for log record timeout (default: 5)
-        :param logger_filter: Filter for name of consumed logger
-        :param level: Log level
-        :return: Dict with log record or None if timeout has been reached
-        """
         async with self.redis.pubsub() as pubsub:
             await pubsub.psubscribe(self._log_channel(logger_filter, level))
             while pubsub.subscribed:

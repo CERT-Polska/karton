@@ -5,7 +5,19 @@ import os
 import time
 import warnings
 from collections import defaultdict, namedtuple
-from typing import IO, Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
+from typing import (
+    IO,
+    Any,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+    cast,
+)
 
 import boto3
 from botocore.credentials import (
@@ -14,7 +26,7 @@ from botocore.credentials import (
     InstanceMetadataProvider,
 )
 from botocore.session import get_session
-from redis import AuthenticationError, StrictRedis
+from redis import AuthenticationError, Redis
 from redis.client import Pipeline
 from urllib3.response import HTTPResponse
 
@@ -273,7 +285,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         cls,
         config: Config,
         service_info: KartonServiceInfo,
-    ) -> StrictRedis:
+    ) -> Redis:
         """
         Create and test a Redis connection.
 
@@ -284,9 +296,9 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         redis_args = cls.get_redis_configuration(config, service_info=service_info)
         try:
             if "url" in redis_args:
-                redis = StrictRedis.from_url(**redis_args)
+                redis = Redis.from_url(**redis_args)
             else:
-                redis = StrictRedis(**redis_args)
+                redis = Redis(**redis_args)
             redis.ping()
         except AuthenticationError:
             # Maybe we've sent a wrong password.
@@ -297,9 +309,9 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             if "password" in redis_args:
                 del redis_args["password"]
             if "url" in redis_args:
-                redis = StrictRedis.from_url(**redis_args)
+                redis = Redis.from_url(**redis_args)
             else:
-                redis = StrictRedis(**redis_args)
+                redis = Redis(**redis_args)
             redis.ping()
         return redis
 
@@ -319,7 +331,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         :param identity: Karton service identity
         :return: KartonBind object or None if not found
         """
-        bind_data = self.redis.hget(KARTON_BINDS_HSET, identity)
+        bind_data = cast(str | None, self.redis.hget(KARTON_BINDS_HSET, identity))
         if not bind_data:
             return None
         return self.unserialize_bind(identity, bind_data)
@@ -332,16 +344,12 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         """
         return [
             self.unserialize_bind(identity, raw_bind)
-            for identity, raw_bind in self.redis.hgetall(KARTON_BINDS_HSET).items()
+            for identity, raw_bind in cast(
+                dict[str, str], self.redis.hgetall(KARTON_BINDS_HSET)
+            ).items()
         ]
 
     def register_bind(self, bind: KartonBind) -> Optional[KartonBind]:
-        """
-        Register bind for Karton service and return the old one
-
-        :param bind: KartonBind object with bind definition
-        :return: Old KartonBind that was registered under this identity
-        """
         with self.redis.pipeline(transaction=True) as pipe:
             pipe.hget(KARTON_BINDS_HSET, bind.identity)
             pipe.hset(KARTON_BINDS_HSET, bind.identity, self.serialize_bind(bind))
@@ -401,7 +409,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         ):
             # KartonServiceInfo is returned per connection
             # so returned services can be duplicated
-            for client_name in self.redis.mget(*service_keys):
+            for client_name in cast(list[str | None], self.redis.mget(*service_keys)):
                 if not client_name:
                     continue
                 try:
@@ -673,13 +681,6 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         )
 
     def declare_task(self, task: Task) -> None:
-        """
-        Declares a new task to send it to the queue.
-
-        Task producers should use this method for new tasks.
-
-        :param task: Task to declare
-        """
         # Ensure all local resources have good buckets
         for resource in task.iterate_resources():
             if isinstance(resource, LocalResource) and not resource.bucket:
@@ -719,10 +720,9 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         self, task: Task, status: TaskState, pipe: Optional[Pipeline] = None
     ) -> None:
         """
-        Request task status change to be applied by karton-system
+        Extends :meth:`KartonBackendProtocol.set_task_status` with a
+        Direct-backend-only ``pipe`` argument.
 
-        :param task: Task object
-        :param status: New task status (TaskState)
         :param pipe: Optional pipeline object if operation is a part of pipeline
         """
         task.status = status
@@ -765,7 +765,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         :param queue: Queue name
         :return: List with Task objects contained in queue
         """
-        task_uids = self.redis.lrange(queue, 0, -1)
+        task_uids = cast(list[str], self.redis.lrange(queue, 0, -1))
         return self.get_tasks(task_uids)
 
     def get_task_ids_from_queue(self, queue: str) -> List[str]:
@@ -775,7 +775,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         :param queue: Queue name
         :return: List with task identifiers contained in queue
         """
-        return self.redis.lrange(queue, 0, -1)
+        return cast(list[str], self.redis.lrange(queue, 0, -1))
 
     def delete_consumer_queues(self, identity: str) -> None:
         """
@@ -798,13 +798,6 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         return self.get_tasks(pipe.execute()[0])
 
     def produce_unrouted_task(self, task: Task) -> None:
-        """
-        Add given task to unrouted task (``karton.tasks``) queue
-
-        Task must be registered before with :py:meth:`register_task`
-
-        :param task: Task object
-        """
         self.redis.rpush(KARTON_TASKS_QUEUE, task.uid)
 
     def produce_routed_task(
@@ -833,7 +826,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         :param timeout: Waiting for item timeout (default: 0 = wait forever)
         :return: Tuple of [queue_name, item] objects or None if timeout has been reached
         """
-        return self.redis.blpop(queues, timeout=timeout)
+        return cast(tuple[str, str] | None, self.redis.blpop(queues, timeout=timeout))
 
     def increment_multiple_metrics(
         self, metric: KartonMetrics, increments: Dict[str, int]
@@ -862,15 +855,6 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         return p.execute()[0]
 
     def consume_routed_task(self, identity: str, timeout: int = 5) -> Optional[Task]:
-        """
-        Get routed task for given consumer identity.
-
-        If there are no tasks, blocks until new one appears or timeout is reached.
-
-        :param identity: Karton service identity
-        :param timeout: Waiting for task timeout (default: 5)
-        :return: Task object or None if timeout has been reached
-        """
         if self._current_bind is not None:
             current_bind = self.get_bind(identity)
             if current_bind != self._current_bind:
@@ -917,14 +901,6 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         logger_name: str,
         level: str,
     ) -> bool:
-        """
-        Push new log record to the logs channel
-
-        :param log_record: Dict with log record
-        :param logger_name: Logger name
-        :param level: Log level
-        :return: True if any active log consumer received log record
-        """
         return (
             self.redis.publish(
                 self._log_channel(logger_name, level), json.dumps(log_record)
@@ -957,18 +933,6 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         logger_filter: Optional[str] = None,
         level: Optional[str] = None,
     ) -> Iterator[Optional[Dict[str, Any]]]:
-        """
-        Subscribe to logs channel and yield subsequent log records
-        or None if timeout has been reached.
-
-        If you want to subscribe only to a specific logger name
-        and/or log level, pass them via logger_filter and level arguments.
-
-        :param timeout: Waiting for log record timeout (default: 5)
-        :param logger_filter: Filter for name of consumed logger
-        :param level: Log level
-        :return: Dict with log record
-        """
         with self.redis.pubsub() as pubsub:
             pubsub.psubscribe(self._log_channel(logger_filter, level))
             while pubsub.subscribed:
@@ -989,10 +953,9 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         self, metric: KartonMetrics, identity: str, pipe: Optional[Pipeline] = None
     ) -> None:
         """
-        Increments metrics for given operation type and identity
+        Extends :meth:`KartonBackendProtocol.increment_metrics` with a
+        Direct-backend-only ``pipe`` argument.
 
-        :param metric: Operation metric type
-        :param identity: Related Karton service identity
         :param pipe: Optional pipeline object if operation is a part of pipeline
         """
         rs = pipe or self.redis
@@ -1018,19 +981,16 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
 
         :param metric: Operation metric type
         """
-        return {k: int(v) for k, v in self.redis.hgetall(metric.value).items()}
+        return {
+            k: int(v)
+            for k, v in cast(dict[str, str], self.redis.hgetall(metric.value)).items()
+        }
 
     def upload_resource(
         self,
         resource: LocalResource,
         content: Union[bytes, IO[bytes]],
     ) -> None:
-        """
-        Upload resource object to underlying object storage (S3)
-
-        :param resource: Resource to upload
-        :param content: Object content as bytes or file-like stream
-        """
         if resource.bucket is None:
             raise RuntimeError(
                 "Resource object can't be uploaded because its bucket is not set"
@@ -1038,12 +998,6 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         self.s3.put_object(Bucket=resource.bucket, Key=resource.uid, Body=content)
 
     def upload_resource_from_file(self, resource: LocalResource, path: str) -> None:
-        """
-        Upload resource object file to underlying object storage
-
-        :param resource: Resource to upload
-        :param path: Path to the object content
-        """
         if resource.bucket is None:
             raise RuntimeError(
                 "Resource object can't be uploaded because its bucket is not set"
@@ -1098,12 +1052,6 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         return self.s3.get_object(Bucket=bucket, Key=object_uid)["Body"]
 
     def download_resource(self, resource: RemoteResource) -> bytes:
-        """
-        Download resource object from object storage.
-
-        :param resource: Resource to download
-        :return: Content bytes
-        """
         if resource.bucket is None:
             raise RuntimeError(
                 "Resource object can't be downloaded because its bucket is not set"
@@ -1113,12 +1061,6 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         return ret
 
     def download_resource_to_file(self, resource: RemoteResource, path: str) -> None:
-        """
-        Download resource object from object storage to file
-
-        :param resource: Resource to download
-        :param path: Target file path
-        """
         if resource.bucket is None:
             raise RuntimeError(
                 "Resource object can't be downloaded because its bucket is not set"
@@ -1275,10 +1217,10 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         :return: List of KartonOutputs
         """
 
-        output_keys = self.redis.keys(f"{KARTON_OUTPUTS_NAMESPACE}:*")
+        output_keys = cast(list[str], self.redis.keys(f"{KARTON_OUTPUTS_NAMESPACE}:*"))
         return [
             self.unserialize_output(
-                identity.split(":")[1], self.redis.smembers(identity)
+                identity.split(":")[1], cast(set[str], self.redis.smembers(identity))
             )
             for identity in output_keys
         ]

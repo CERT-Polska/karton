@@ -156,41 +156,130 @@ class KartonBackendProtocol(Protocol):
     Protocol that defines methods that KartonBackend must implement.
 
     Used by producers and consumers to avoid depending on a concrete implementation.
+
+    This Protocol documents the user-facing backend interface. Concrete
+    implementations (e.g. :class:`karton.core.backend.KartonBackend`,
+    :class:`karton.core.backend.KartonGatewayBackend`) provide additional
+    helper methods for internal use.
     """
 
-    def declare_task(self, task: Task) -> None: ...
+    def declare_task(self, task: Task) -> None:
+        """
+        Declares a new task to send it to the queue.
 
-    def set_task_status(self, task: Task, status: TaskState) -> None: ...
+        :param task: Task to declare
+        """
 
-    def register_bind(self, bind: KartonBind) -> KartonBind | None: ...
+    def set_task_status(self, task: Task, status: TaskState) -> None:
+        """
+        Request task status change to be applied.
 
-    def produce_unrouted_task(self, task: Task) -> None: ...
+        :param task: Task object
+        :param status: New task status (TaskState)
+        """
 
-    def consume_routed_task(self, identity: str, timeout: int = 5) -> Task | None: ...
+    def register_bind(self, bind: KartonBind) -> KartonBind | None:
+        """
+        Register bind for Karton consumer and return the old one.
 
-    def increment_metrics(self, metric: KartonMetrics, identity: str) -> None: ...
+        :param bind: KartonBind object with bind definition
+        :return: Old KartonBind that was registered under this identity
+        """
+
+    def produce_unrouted_task(self, task: Task) -> None:
+        """
+        Add given task to unrouted task (``karton.tasks``) queue.
+
+        Task must be declared beforehand.
+
+        :param task: Task object
+        """
+
+    def consume_routed_task(self, identity: str, timeout: int = 5) -> Task | None:
+        """
+        Get routed task for given consumer identity.
+
+        If there are no tasks, blocks until new one appears or timeout is reached.
+
+        Raises :class:`karton.core.exceptions.BindExpiredError` if the bind
+        has been overridden by a newer service version.
+
+        :param identity: Karton service identity
+        :param timeout: Waiting for task timeout in seconds (default: 5)
+        :return: Task object or None if timeout has been reached
+        """
+
+    def increment_metrics(self, metric: KartonMetrics, identity: str) -> None:
+        """
+        Increments metrics for given operation type and identity.
+
+        :param metric: Operation metric type
+        :param identity: Related Karton service identity
+        """
 
     def upload_resource(
         self,
         resource: LocalResource,
         content: bytes | IO[bytes],
-    ) -> None: ...
+    ) -> None:
+        """
+        Upload resource object to underlying object storage (S3).
 
-    def upload_resource_from_file(self, resource: LocalResource, path: str) -> None: ...
+        :param resource: Resource to upload
+        :param content: Object content as bytes or file-like stream
+        """
 
-    def download_resource(self, resource: RemoteResource) -> bytes: ...
+    def upload_resource_from_file(self, resource: LocalResource, path: str) -> None:
+        """
+        Upload resource object file to underlying object storage.
 
-    def download_resource_to_file(
-        self, resource: RemoteResource, path: str
-    ) -> None: ...
+        :param resource: Resource to upload
+        :param path: Path to the object content
+        """
+
+    def download_resource(self, resource: RemoteResource) -> bytes:
+        """
+        Download resource object from object storage.
+
+        :param resource: Resource to download
+        :return: Content bytes
+        """
+
+    def download_resource_to_file(self, resource: RemoteResource, path: str) -> None:
+        """
+        Download resource object from object storage to file.
+
+        :param resource: Resource to download
+        :param path: Target file path
+        """
 
     def produce_log(
         self, log_record: dict[str, Any], logger_name: str, level: str
-    ) -> bool: ...
+    ) -> bool:
+        """
+        Push new log record to the logs channel.
+
+        :param log_record: Dict with log record
+        :param logger_name: Logger name
+        :param level: Log level
+        :return: True if any active log consumer received log record
+        """
 
     def consume_log(
         self,
         timeout: int = 5,
         logger_filter: str | None = None,
         level: str | None = None,
-    ) -> Iterator[dict[str, Any] | None]: ...
+    ) -> Iterator[dict[str, Any] | None]:
+        """
+        Subscribe to logs channel and yield subsequent log records
+        or None if timeout has been reached.
+
+        If you want to subscribe only to a specific logger name
+        and/or log level, pass them via logger_filter and level arguments.
+
+        :param timeout: Waiting for log record timeout (default: 5)
+        :param logger_filter: Filter for name of consumed logger
+        :param level: Log level
+        :return: Dict with log record
+        """
