@@ -24,7 +24,7 @@ from .errors import (
     KartonGatewayError,
     OperationTimeoutError,
 )
-from .messages import send_error, send_success
+from .messages import close_websocket, send_error, send_message, send_success
 from .operations import call_request_handler
 from .shutdown import shutdown_latch
 
@@ -71,7 +71,7 @@ class ClientSession:
     ):
         hello_message = HelloResponseMessage(server_version=__version__)
         hello_response = HelloResponse(message=hello_message)
-        await websocket.send_text(hello_response.model_dump_json())
+        await send_message(websocket, hello_response)
 
         try:
             async with asyncio.timeout(timeout):
@@ -129,7 +129,7 @@ class ClientSession:
                         "Connection was idle for %d seconds. Closing.",
                         IDLE_TIMEOUT,
                     )
-                    await websocket.close(reason="Connection was idle")
+                    await close_websocket(websocket, reason="Connection was idle")
                     break
 
             with shutdown_latch:

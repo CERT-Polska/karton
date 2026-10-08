@@ -1,12 +1,12 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, status
 
 from .backend import gateway_backend
 from .errors import InternalError, KartonGatewayError, ShutdownError
 from .logger import set_connection_id, setup_logger
-from .messages import send_error
+from .messages import close_websocket, send_error
 from .session import ClientSession
 
 
@@ -22,6 +22,13 @@ async def lifespan(app: FastAPI):
 setup_logger()
 logger = logging.getLogger(__name__)
 app = FastAPI(lifespan=lifespan)
+
+
+async def try_send_error(websocket: WebSocket, error: KartonGatewayError):
+    try:
+        await send_error(websocket, error)
+    except WebSocketDisconnect:
+        logger.warning("Client disconnected before error could be sent")
 
 
 @app.websocket("/gateway")
@@ -50,15 +57,16 @@ async def gateway_endpoint(websocket: WebSocket):
         logger.warning(
             "Client was disconnected with error %s: %s", error.__class__.__name__, error
         )
-        await send_error(websocket, error)
+        await try_send_error(websocket, error)
         if isinstance(error, ShutdownError):
-            await websocket.close(code=1001, reason="Server shutting down")
+            await close_websocket(
+                websocket, code=status.WS_1001_GOING_AWAY, reason="Server shutting down"
+            )
         else:
-            await websocket.close()
+            await close_websocket(websocket)
     except WebSocketDisconnect:
         logger.info("Client disconnected gracefully")
     except Exception:
         logger.exception("Internal server error")
         internal_error = InternalError("Internal server error")
-        await send_error(websocket, internal_error)
-        await websocket.close()
+        await try_send_error(websocket, internal_error)

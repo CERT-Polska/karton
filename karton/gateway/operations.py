@@ -18,7 +18,7 @@ from .errors import (
     OperationTimeoutError,
     ShutdownError,
 )
-from .messages import send_success
+from .messages import send_message, send_success
 from .shutdown import shutdown_latch
 from .task import (
     TaskTokenInfo,
@@ -117,7 +117,7 @@ async def handle_bind_request(
         bind_id=bind_id,
     )
     bind_response = BindResponse(message=bind_response_message)
-    await websocket.send_text(bind_response.model_dump_json())
+    await send_message(websocket, bind_response)
 
 
 @request_handler(DeclareTaskRequest)
@@ -189,7 +189,7 @@ async def handle_declare_task_request(
         upload_urls=resource_urls,
     )
     task_declared_request = TaskDeclaredResponse(message=task_declared_message)
-    await websocket.send_text(task_declared_request.model_dump_json())
+    await send_message(websocket, task_declared_request)
 
 
 @request_handler(SendTaskRequest)
@@ -342,7 +342,7 @@ async def handle_get_task_request(
             download_urls=download_urls,
         )
         task_response = TaskResponse(message=task_response_message)
-        await websocket.send_text(task_response.model_dump_json())
+        await send_message(websocket, task_response)
     except Exception:
         # We need to crash gathered task if something went wrong in the process
         exc_info = sys.exc_info()
@@ -378,7 +378,7 @@ async def handle_send_log_request(
     )
     log_sent_message = LogSentResponseMessage(was_received=was_received)
     log_sent_response = LogSentResponse(message=log_sent_message)
-    await websocket.send_text(log_sent_response.model_dump_json())
+    await send_message(websocket, log_sent_response)
 
 
 @request_handler(SubscribeLogsRequest)
@@ -405,4 +405,4 @@ async def handle_subscribe_logs_request(
             log_record = {}
         log_message = LogResponseMessage(log_record=log_record)
         log_response = LogResponse(message=log_message)
-        await websocket.send_text(log_response.model_dump_json())
+        await send_message(websocket, log_response)

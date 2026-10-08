@@ -413,6 +413,10 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
         ):
             if log_response.message.log_record:
                 yield log_response.message.log_record
+            else:
+                # return control back to the caller in case a shutdown or some
+                # other action was requested and needs to be handled
+                yield None
 
     def increment_metrics(self, metric: KartonMetrics, identity: str) -> None:
         # This is no-op, Karton gateway manages all metrics
