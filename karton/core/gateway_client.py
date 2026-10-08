@@ -154,6 +154,8 @@ class AsyncGatewayClient:
                 await self.session_initiator_callback(
                     self, connection, close_on_idle=close_on_idle
                 )
+                if retry_state.try_no > 0:
+                    logger.info("Gateway connection restored.")
                 return connection
             except (ConnectionError, TimeoutError, GatewayShutdownError):
                 if connection is not None:
@@ -167,7 +169,7 @@ class AsyncGatewayClient:
                 raise
             delay = retry_state.get_retry_delay()
             logger.warning(
-                "Failed to send request to gateway. Retry %d/%d after %.1f seconds",
+                "Failed to connect to the gateway. Retry %d/%d after %.1f seconds",
                 retry_state.try_no,
                 self.retries,
                 delay,
