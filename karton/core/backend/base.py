@@ -1,8 +1,8 @@
 import dataclasses
 import enum
 import uuid
-from urllib.parse import urlencode, parse_qsl
 from typing import IO, Any, Iterator, Protocol, Self
+from urllib.parse import parse_qsl, urlencode
 
 from karton.core.__version__ import __version__
 from karton.core.exceptions import InvalidIdentityError
