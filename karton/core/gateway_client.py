@@ -34,6 +34,7 @@ class GatewayError(Exception):
     def __init__(self, message: str, code: str | None = None):
         self.code = code or self.code
         self.message = message
+        super().__init__(message)
 
 
 class OperationTimeoutError(GatewayError):
@@ -268,14 +269,14 @@ class AsyncGatewayClient:
         async with asyncio.timeout(self.response_timeout):
             data = await connection.recv()
         message = Response.model_validate_json(data)
-        if isinstance(message, ErrorResponse):
-            raise make_gateway_error(message)
-        if not isinstance(message, expected_response):
+        if isinstance(message.root, ErrorResponse):
+            raise make_gateway_error(message.root)
+        if not isinstance(message.root, expected_response):
             raise RuntimeError(
-                f"Got unexpected gateway response: {type(message)}, "
+                f"Got unexpected gateway response: {type(message.root)}, "
                 f"expected {expected_response}"
             )
-        return message
+        return message.root
 
     async def send(self, connection: ClientConnection, request: RequestType) -> None:
         data = request.model_dump_json()
@@ -371,12 +372,12 @@ def _start_event_loop() -> None:
 
 def _get_threaded_event_loop() -> AbstractEventLoop:
     global _thread
-    if _loop is None:
-        raise RuntimeError("Loop was not started")
     if _thread is None:
         _thread = threading.Thread(target=_start_event_loop, daemon=True)
         _thread.start()
         _loop_ready.wait()
+    if _loop is None:
+        raise RuntimeError("Loop was not started")
     return _loop
 
 

@@ -48,7 +48,7 @@ def parse_task_token(
             audience=[audience],
             options={"require": ["exp", "iss", "sub", "scope", "resources"]},
         )
-        sub_parts = token_data["sub"].split(":")
+        sub_parts = token_data["sub"].split(":", 1)
         if sub_parts[0] != "karton.task" or len(sub_parts) != 2:
             raise jwt.exceptions.InvalidSubjectError(
                 "Subject of this token is not a karton.task"

@@ -4,7 +4,7 @@ import os
 
 
 INSTANCE_NAME = os.environ["INSTANCE_NAME"]
-BACKEND = "async"
+BACKEND = os.environ.get("BACKEND_TYPE", "async")
 
 
 class TestService(Karton):

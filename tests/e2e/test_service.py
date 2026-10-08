@@ -4,7 +4,7 @@ import os
 
 
 INSTANCE_NAME = os.environ["INSTANCE_NAME"]
-BACKEND = "sync"
+BACKEND = os.environ.get("BACKEND_TYPE", "sync")
 
 
 class TestService(Karton):

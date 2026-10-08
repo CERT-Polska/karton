@@ -84,6 +84,29 @@ class KartonGatewayBackendBase:
         )
         self._bind_id: str | None = None
 
+    def _validate_local_resources(
+        self, resources: dict[ResourceIdentifier, LocalResourceBase]
+    ) -> None:
+        """
+        Validates that local resources don't have foreign buckets set.
+
+        Karton Gateway only allows uploads to the default bucket (managed
+        by the gateway server). Resources with bucket=None are fine (the
+        server resolves them to the default bucket), but explicit non-None
+        buckets are rejected client-side to fail fast before contacting the
+        server.
+
+        :param resources: Local resources collected by serialize_resources
+        """
+        for resource in resources.values():
+            if resource.bucket is not None:
+                raise RuntimeError(
+                    f"Karton Gateway backend doesn't allow uploading "
+                    f"resources to custom buckets (resource '{resource.uid}' "
+                    f"has bucket '{resource.bucket}' set). Leave bucket unset "
+                    f"to use the default bucket."
+                )
+
     async def session_initiator_callback(
         self,
         gateway_client: AsyncGatewayClient,
@@ -208,6 +231,7 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
             task.payload_persistent
         )
         resources.update(resources_persistent)
+        self._validate_local_resources(resources)
         response = self._gateway_client.make_request(
             request=DeclareTaskRequest(
                 message=DeclareTaskRequestMessage(
@@ -226,10 +250,11 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
         task.uid = response.message.uid
         task.root_uid = root_uid_from_task_uid(response.message.uid)
         task.bind_token(response.message.token)
+        # Ignore bucket part: resources can be uploaded only
+        # to the default Karton bucket
+        resources_by_uid = {uid: res for (_, uid), res in resources.items()}
         for upload_url in response.message.upload_urls:
-            resources[(upload_url.bucket, upload_url.uid)].bind_upload_url(
-                upload_url.url
-            )
+            resources_by_uid[upload_url.uid].bind_upload_url(upload_url.url)
 
     def set_task_status(self, task: Task, status: TaskState) -> None:
         self._gateway_client.make_request(

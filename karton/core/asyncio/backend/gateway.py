@@ -103,6 +103,7 @@ class KartonAsyncGatewayBackend(KartonGatewayBackendBase, KartonAsyncBackendProt
             task.payload_persistent
         )
         resources.update(resources_persistent)
+        self._validate_local_resources(resources)
         response = await self._gateway_client.make_request(
             request=DeclareTaskRequest(
                 message=DeclareTaskRequestMessage(
@@ -121,10 +122,9 @@ class KartonAsyncGatewayBackend(KartonGatewayBackendBase, KartonAsyncBackendProt
         task.uid = response.message.uid
         task.root_uid = root_uid_from_task_uid(response.message.uid)
         task.bind_token(response.message.token)
+        resources_by_uid = {uid: res for (_, uid), res in resources.items()}
         for upload_url in response.message.upload_urls:
-            resources[(upload_url.bucket, upload_url.uid)].bind_upload_url(
-                upload_url.url
-            )
+            resources_by_uid[upload_url.uid].bind_upload_url(upload_url.url)
 
     async def set_task_status(self, task: Task, status: TaskState) -> None:
         await self._gateway_client.make_request(
