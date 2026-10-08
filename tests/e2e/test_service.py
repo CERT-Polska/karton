@@ -1,4 +1,5 @@
 from karton.core import Karton, Task
+from karton.core.resource import RemoteResource
 from time import sleep
 import os
 
@@ -31,6 +32,11 @@ class TestService(Karton):
         },
         {"instance": INSTANCE_NAME, "backend": BACKEND, "type": "timeout-task"},
         {
+            "instance": INSTANCE_NAME,
+            "backend": BACKEND,
+            "type": "verify-task",
+        },
+        {
             "backend": BACKEND,
             "type": "multiple-routed-task",
             "duration": {"$gt": 0},
@@ -48,6 +54,10 @@ class TestService(Karton):
             new_task = Task(headers={"type": "derived-task"})
             self.send_task(new_task)
         elif task_type in ("sleep-task", "multiple-routed-task"):
+            if task_type == "multiple-routed-task":
+                self.send_task(Task(
+                    headers={"type": "verify-result", "backend": BACKEND},
+                ))
             sleep(task.headers["duration"])
         elif task_type == "crash-task":
             raise Exception(task.headers["error"])
@@ -56,6 +66,17 @@ class TestService(Karton):
                 raise Exception("Cannot timeout because task_timeout is not set")
 
             sleep(self.task_timeout + 5)
+        elif task_type == "verify-task":
+            result_payload = {"original_uid": task.uid}
+            if task.has_payload("resource"):
+                resource = task.get_payload("resource")
+                if isinstance(resource, RemoteResource):
+                    resource.download()
+                result_payload["sha256"] = resource.sha256
+            self.send_task(Task(
+                headers={"type": "verify-result", "backend": BACKEND},
+                payload=result_payload,
+            ))
 
 
 if __name__ == "__main__":
