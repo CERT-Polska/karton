@@ -55,6 +55,8 @@ from .base import KartonBackendProtocol, KartonBind, KartonMetrics, KartonServic
 
 logger = logging.getLogger(__name__)
 
+type ResourceIdentifier = tuple[str | None, str]  # Tuple[bucket, uid]
+
 
 class KartonGatewayBackendBase:
     def __init__(
@@ -139,9 +141,6 @@ def override_presigned_url(presigned_url: str, override_host: str) -> tuple[str,
     parsed_url = urllib.parse.urlparse(presigned_url)
     url_host = parsed_url.netloc
     return url_host, parsed_url._replace(netloc=override_host).geturl()
-
-
-ResourceIdentifier = tuple[str | None, str]  # Tuple[bucket, uid]
 
 
 def serialize_resources(
