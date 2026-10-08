@@ -1,4 +1,3 @@
-from time import sleep
 import pytest
 
 from shared import (
@@ -13,13 +12,13 @@ from karton.core.backend import KartonBackend
 
 
 @pytest.mark.parametrize("service_backend", BACKENDS)
-def test_simple_task(backend: KartonBackend, producer: Producer, service_backend: str):
+def test_simple_task(backend: KartonBackend, producer: Producer, services, service_backend: str):
     task = Task(
         headers={
             "instance": "first",
             "backend": service_backend,
             "type": "sleep-task",
-            "duration": 5,
+            "duration": 1,
         }
     )
     task_id = task.uid
@@ -46,12 +45,12 @@ def test_simple_task(backend: KartonBackend, producer: Producer, service_backend
 
 @pytest.mark.parametrize("service_backend", BACKENDS)
 def test_multiple_routing(
-    backend: KartonBackend, producer: Producer, service_backend: str
+    backend: KartonBackend, producer: Producer, services, service_backend: str
 ):
     task = Task(
         headers={
             "type": "multiple-routed-task",
-            "duration": 5,
+            "duration": 1,
             "backend": service_backend,
         }
     )

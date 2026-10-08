@@ -11,12 +11,11 @@ and ``consume_log`` methods. No direct Redis/S3 access is used for inspection,
 so these tests work in a gateway-only deployment.
 """
 from hashlib import sha256
-from itertools import islice
 import os
 
 import pytest
 
-from shared import wait_for_result
+from shared import wait_for_event, wait_for_result
 
 from karton.core import Producer, Task
 from karton.core.backend import KartonBackendProtocol
@@ -39,6 +38,7 @@ def test_simple_task(
     mixed_producer: Producer,
     consumer_backend: str,
     gateway_verifier: KartonBackendProtocol,
+    services,
 ):
     task = Task(
         headers={
@@ -59,11 +59,12 @@ def test_multiple_routing(
     mixed_producer: Producer,
     consumer_backend: str,
     gateway_verifier: KartonBackendProtocol,
+    services,
 ):
     task = Task(
         headers={
             "type": "multiple-routed-task",
-            "duration": 5,
+            "duration": 1,
             "backend": consumer_backend,
         }
     )
@@ -80,6 +81,7 @@ def test_resource_upload(
     mixed_producer: Producer,
     consumer_backend: str,
     gateway_verifier: KartonBackendProtocol,
+    services,
 ):
     content = b"Random Resource Content" + os.urandom(2048)
     content_digest = sha256(content).hexdigest()
@@ -103,7 +105,8 @@ def test_resource_upload(
 def test_task_crash(
     mixed_producer: Producer,
     consumer_backend: str,
-    gateway_verifier: KartonBackendProtocol,
+    event_queue,
+    services,
 ):
     error_msg = "hello this is an error"
     task = Task(
@@ -114,22 +117,15 @@ def test_task_crash(
             "error": error_msg,
         }
     )
-
-    logs = gateway_verifier.consume_log(
-        timeout=10,
-        logger_filter=f"karton.test-{consumer_backend}-service-1",
-    )
-
     mixed_producer.send_task(task)
 
-    service_logs = list(islice(logs, 10))
-    for log_record in service_logs:
-        if not log_record:
-            continue
-        exc_text = log_record.get("excText", "")
-        if error_msg in exc_text:
-            return
-    pytest.fail(f"Error message '{error_msg}' not found in logs")
+    event = wait_for_event(
+        event_queue,
+        event_type="crashed",
+        uid=task.uid,
+        error=error_msg,
+    )
+    assert event["error"] == error_msg
 
 
 @pytest.mark.parametrize("mixed_producer", PRODUCER_BACKENDS, indirect=True)
@@ -137,7 +133,8 @@ def test_task_crash(
 def test_logging(
     mixed_producer: Producer,
     consumer_backend: str,
-    gateway_verifier: KartonBackendProtocol,
+    event_queue,
+    services,
 ):
     log_message = "hello this is a test"
     task = Task(
@@ -148,20 +145,21 @@ def test_logging(
             "message": log_message,
         }
     )
-
-    logs = gateway_verifier.consume_log(
-        timeout=10,
-        logger_filter=f"karton.test-{consumer_backend}-service-1",
-    )
-
     mixed_producer.send_task(task)
 
-    service_logs = list(islice(logs, 10))
-    messages = [x.get("message") for x in service_logs if x]
-    assert log_message in messages
+    event = wait_for_event(
+        event_queue,
+        event_type="logged",
+        uid=task.uid,
+        message=log_message,
+    )
+    assert event["message"] == log_message
 
 
-def test_gateway_rejects_foreign_bucket_upload(gateway_producer: Producer):
+def test_gateway_rejects_foreign_bucket_upload(
+    gateway_producer: Producer,
+    services,
+):
     """
     Gateway backend should reject uploading resources with a custom bucket
     set, client-side, before contacting the server.
