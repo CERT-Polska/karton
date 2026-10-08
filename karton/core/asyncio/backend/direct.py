@@ -129,7 +129,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         for provider in iam_providers:
             creds = await provider.load()
             if creds:
-                boto_session._credentials = creds  # type: ignore
+                boto_session._credentials = creds
                 return aioboto3.Session(botocore_session=boto_session)
         return None
 
