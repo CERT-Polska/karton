@@ -12,4 +12,4 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install .[gateway]
 
 ENTRYPOINT ["gunicorn"]
-CMD ["-k", "karton.gateway.worker:GatewayASGIWorker", "-w", "1", "-b", "0.0.0.0:8000", "karton.gateway:app"]
+CMD ["-k", "karton.gateway.worker.GatewayASGIWorker", "-w", "1", "-b", "0.0.0.0:8000", "karton.gateway:app"]
