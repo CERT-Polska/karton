@@ -6,7 +6,7 @@ from fastapi import WebSocket
 
 from karton.core.asyncio.backend import KartonBind, KartonMetrics
 from karton.core.exceptions import BindExpiredError as KartonBindExpiredError
-from karton.core.task import Task, TaskState
+from karton.core.task import Task, TaskState, root_uid_from_task_uid
 from karton.gateway.errors import BadRequestError
 
 from .backend import gateway_backend
@@ -168,6 +168,7 @@ async def handle_declare_task_request(
         payload_persistent=task_payload_persistent,
         priority=task_params.priority,
         parent_uid=parent_task_uid,
+        root_uid=root_uid_from_task_uid(parent_task_uid) if parent_task_uid else None,
     )
     task_token_info = TaskTokenInfo(
         task_uid=task.uid,

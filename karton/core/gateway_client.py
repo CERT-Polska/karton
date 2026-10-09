@@ -6,16 +6,17 @@ import threading
 from asyncio import AbstractEventLoop
 from typing import (
     Any,
+    AsyncGenerator,
     AsyncIterator,
     Coroutine,
     Iterator,
     Protocol,
     Type,
     TypeVar,
-    cast,
 )
 
 from websockets.asyncio.client import ClientConnection, connect
+from websockets.exceptions import ConnectionClosed
 from websockets.protocol import CLOSED
 
 from karton.core.gateway_protocol import (
@@ -157,7 +158,12 @@ class AsyncGatewayClient:
                 if retry_state.try_no > 0:
                     logger.info("Gateway connection restored.")
                 return connection
-            except (ConnectionError, TimeoutError, GatewayShutdownError):
+            except (
+                ConnectionError,
+                ConnectionClosed,
+                TimeoutError,
+                GatewayShutdownError,
+            ):
                 if connection is not None:
                     await connection.close()
                 retry_state.next_try()
@@ -258,6 +264,13 @@ class AsyncGatewayClient:
         connection = await self._get_available_connection(retry_state)
         try:
             yield connection
+        except (asyncio.CancelledError, GeneratorExit):
+            # If connection was gathered for a request
+            # that was cancelled in the middle of the operation
+            # we should ensure that it is closed before we
+            # return it back to the pool
+            await connection.close()
+            raise
         finally:
             await self._return_connection(connection)
 
@@ -299,7 +312,12 @@ class AsyncGatewayClient:
                     await self.send(connection, request)
                     request_sent = True
                     return await self.recv(connection, expected_response)
-                except (ConnectionError, TimeoutError, GatewayShutdownError) as e:
+                except (
+                    ConnectionError,
+                    ConnectionClosed,
+                    TimeoutError,
+                    GatewayShutdownError,
+                ) as e:
                     # Ensure connection is closed
                     await connection.close()
                     if not isinstance(e, GatewayShutdownError) and request_sent:
@@ -328,9 +346,7 @@ class AsyncGatewayClient:
         self,
         request: RequestType,
         expected_response: Type[ResponseT],
-    ) -> AsyncIterator[
-        ResponseT
-    ]:
+    ) -> AsyncGenerator[ResponseT, None]:
         retry_state = RetryState(
             max_retries=self.retries,
             base_timeout=self.retry_base_timeout,
@@ -342,12 +358,21 @@ class AsyncGatewayClient:
                     await self.send(connection, request)
                     while True:
                         yield await self.recv(connection, expected_response)
-                except (ConnectionError, TimeoutError, GatewayShutdownError):
-                    # Ensure connection is closed
-                    await connection.close()
+                except (
+                    ConnectionError,
+                    ConnectionClosed,
+                    TimeoutError,
+                    GatewayShutdownError,
+                ):
                     retry_state.next_try()
                     if retry_state.last_try():
                         raise
+                finally:
+                    # Ensure connection is always closed
+                    # Streaming requests are non-interruptible
+                    # so connection should be discarded after
+                    # we exit the receiving loop
+                    await connection.close()
             delay = retry_state.get_retry_delay()
             logger.warning(
                 "Failed to send request to gateway. Retry %d/%d after %.1f seconds",
@@ -389,13 +414,16 @@ def run_async(coro: Coroutine[Any, Any, _T]) -> _T:
     return future.result()
 
 
-def iter_async(async_iterable: AsyncIterator[_T]) -> Iterator[_T]:
-    ait = async_iterable.__aiter__()
-    while True:
-        try:
-            yield run_async(cast(Coroutine[Any, Any, _T], ait.__anext__()))
-        except StopAsyncIteration:
-            break
+def iter_async(async_iterable: AsyncGenerator[_T, None]) -> Iterator[_T]:
+    try:
+        while True:
+            try:
+                item = run_async(async_iterable.__anext__())
+            except StopAsyncIteration:
+                return
+            yield item
+    finally:
+        run_async(async_iterable.aclose())
 
 
 class SyncGatewayClient:

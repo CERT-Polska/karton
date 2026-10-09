@@ -104,9 +104,12 @@ class ClientSession:
         await gateway_backend.register_service(
             service_info, connection_id, HEARTBEAT_HARD_TIMEOUT
         )
+        # TODO: For now we never ingest the maintain heartbeat exceptions
+        # We may use TaskGroup for that, but then we need to unwrap the
+        # ExceptionGroup to properly handle session exceptions further
         heartbeat = asyncio.create_task(session._maintain_heartbeat(connection_id))
-        await send_success(websocket)
         try:
+            await send_success(websocket)
             yield session
         finally:
             heartbeat.cancel()
