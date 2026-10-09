@@ -7,4 +7,4 @@ websockets
 httpx2<3.0.0
 pydantic<3.0.0
 cryptography
-pyjwt
+pyjwt<3.0.0

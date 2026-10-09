@@ -6,10 +6,10 @@ from fastapi import WebSocket
 
 from karton.core.asyncio.backend import KartonBind, KartonMetrics
 from karton.core.auth.models import (
-    AllowedConsumeLog,
-    AllowedConsumeTask,
-    AllowedProduceTask,
-    AllowedRegisterBind,
+    ConsumeLogOperation,
+    ConsumeTaskOperation,
+    ProduceTaskOperation,
+    RegisterBindOperation,
 )
 from karton.core.exceptions import BindExpiredError as KartonBindExpiredError
 from karton.core.task import Task, TaskState, root_uid_from_task_uid
@@ -29,9 +29,9 @@ from .shutdown import shutdown_latch
 from .task import (
     TaskTokenInfo,
     TaskTokenScope,
-    find_foreign_bucket_upload_references,
     generate_resource_download_urls,
     generate_resource_upload_urls,
+    get_referenced_foreign_buckets,
     is_valid_task_status_transition,
     make_task_token,
     parse_task_token,
@@ -108,8 +108,8 @@ async def handle_bind_request(
     :param request: Parsed request object
     :param session: Client session that initiated the request
     """
-    session.authorize(
-        AllowedRegisterBind(
+    session.can_perform(
+        RegisterBindOperation(
             filters=request.message.filters,
             persistent=request.message.persistent,
         )
@@ -166,8 +166,10 @@ async def handle_declare_task_request(
     payload_bags = (task_params.payload, task_params.payload_persistent)
 
     if session.auth_required:
-        foreign_bucket_uploads = find_foreign_bucket_upload_references(payload_bags)
-        session.authorize(AllowedProduceTask(foreign_buckets=foreign_bucket_uploads))
+        foreign_bucket_uploads = get_referenced_foreign_buckets(payload_bags)
+        session.can_perform(
+            ProduceTaskOperation(foreign_buckets=foreign_bucket_uploads)
+        )
 
     # Now, we need to translate DeclaredResourceSpec to RemoteResource
     task_payload_bags, validated_resources = process_declared_task_resources(
@@ -221,7 +223,7 @@ async def handle_send_task_request(
     :param request: Parsed request object
     :param session: Client session that initiated the request
     """
-    session.authorize(AllowedProduceTask())
+    session.can_perform(ProduceTaskOperation())
 
     task_token = request.message.token
     task_info = parse_task_token(
@@ -316,7 +318,7 @@ async def handle_get_task_request(
     :param request: Parsed request object
     :param session: User session that initiated the request
     """
-    session.authorize(AllowedConsumeTask())
+    session.can_perform(ConsumeTaskOperation())
     try:
         task = await gateway_backend.consume_routed_task(
             session.service_info.identity,
@@ -415,12 +417,12 @@ async def handle_subscribe_logs_request(
     :param request: Parsed request object
     :param session: User session that initiated the request
     """
-    session.authorize(AllowedConsumeLog())
+    session.can_perform(ConsumeLogOperation())
     async for log_record in gateway_backend.consume_log(
         logger_filter=request.message.logger_filter, level=request.message.level
     ):
         # Re-check in case of expiration
-        session.authorize(AllowedConsumeLog())
+        session.can_perform(ConsumeLogOperation())
         if shutdown_latch.shutdown_in_progress:
             raise ShutdownError("Operation terminated, shutdown is in progress")
         if not log_record:

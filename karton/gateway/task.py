@@ -113,7 +113,7 @@ def is_resource_allowed(
     return {"uid": uid, "bucket": bucket} in allowed_parent_resources
 
 
-def find_foreign_bucket_upload_references(
+def get_referenced_foreign_buckets(
     payload_bags: PayloadBags,
 ) -> list[str]:
     foreign_buckets = set()

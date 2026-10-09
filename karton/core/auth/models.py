@@ -1,8 +1,8 @@
 import json
 from dataclasses import dataclass
-from typing import Any, Literal, TypedDict, Union
+from typing import Any, Literal, NotRequired, TypedDict
 
-from pydantic import BaseModel, Field, RootModel
+from pydantic import BaseModel, Field
 
 DEFAULT_AUDIENCE = "karton-gateway"
 TOKEN_VERSION = 1
@@ -16,61 +16,82 @@ class JWKSDict(TypedDict):
     keys: list[dict[str, str]]
 
 
-class AllowedRegisterBind(BaseModel):
+class RegisterBindOperation(BaseModel):
     operation: Literal["register_bind"] = "register_bind"
     filters: list[dict[str, Any]]
     persistent: bool
 
-    def covers(self, required: "AllowedOperation") -> bool:
-        if not isinstance(required, AllowedRegisterBind):
+    def covers(self, operation: "AllowedOperation") -> bool:
+        """
+        Checks if this entitlement allows the specified operation
+
+        :param operation: Operation to be authorized
+        :return: True if operation is authorized by this entitlement, False otherwise
+        """
+        if not isinstance(operation, RegisterBindOperation):
             return False
-        if required.persistent != self.persistent:
+        if operation.persistent != self.persistent:
             return False
         # Filters are considered equal if their JSON representation is equal
         # regardless of the position in the list.
+        # The sorting is shallow, nested lists are order-sensitive
         if sorted(
             json.dumps(filter_bind, sort_keys=True) for filter_bind in self.filters
         ) != sorted(
-            json.dumps(filter_bind, sort_keys=True) for filter_bind in required.filters
+            json.dumps(filter_bind, sort_keys=True) for filter_bind in operation.filters
         ):
             return False
         return True
 
 
-class AllowedConsumeTask(BaseModel):
+class ConsumeTaskOperation(BaseModel):
     operation: Literal["consume_task"] = "consume_task"
 
-    def covers(self, required: "AllowedOperation") -> bool:
-        return isinstance(required, AllowedConsumeTask)
+    def covers(self, operation: "AllowedOperation") -> bool:
+        """
+        Checks if this entitlement allows the specified operation
+
+        :param operation: Operation to be authorized
+        :return: True if operation is authorized by this entitlement, False otherwise
+        """
+        return isinstance(operation, ConsumeTaskOperation)
 
 
-class AllowedProduceTask(BaseModel):
+class ProduceTaskOperation(BaseModel):
     operation: Literal["produce_task"] = "produce_task"
     foreign_buckets: list[str] = Field(default_factory=list)
 
-    def covers(self, required: "AllowedOperation") -> bool:
-        return isinstance(required, AllowedProduceTask) and set(
-            required.foreign_buckets
+    def covers(self, operation: "AllowedOperation") -> bool:
+        """
+        Checks if this entitlement allows the specified operation
+
+        :param operation: Operation to be authorized
+        :return: True if operation is authorized by this entitlement, False otherwise
+        """
+        return isinstance(operation, ProduceTaskOperation) and set(
+            operation.foreign_buckets
         ).issubset(self.foreign_buckets)
 
 
-class AllowedConsumeLog(BaseModel):
+class ConsumeLogOperation(BaseModel):
     operation: Literal["consume_log"] = "consume_log"
 
-    def covers(self, required: "AllowedOperation") -> bool:
-        return isinstance(required, AllowedConsumeLog)
+    def covers(self, operation: "AllowedOperation") -> bool:
+        """
+        Checks if this entitlement allows the specified operation
+
+        :param operation: Operation to be authorized
+        :return: True if operation is authorized by this entitlement, False otherwise
+        """
+        return isinstance(operation, ConsumeLogOperation)
 
 
-AllowedOperation = Union[
-    AllowedRegisterBind,
-    AllowedConsumeTask,
-    AllowedProduceTask,
-    AllowedConsumeLog,
-]
-
-
-class Request(RootModel):
-    root: AllowedOperation = Field(discriminator="operation")
+type AllowedOperation = (
+    RegisterBindOperation
+    | ConsumeTaskOperation
+    | ProduceTaskOperation
+    | ConsumeLogOperation
+)
 
 
 class AuthClaims(BaseModel):
@@ -83,3 +104,14 @@ class VerifiedGrant:
     claims: AuthClaims
     expires_at: int | None
     token_id: str
+
+
+class JWTPayload(TypedDict):
+    sub: str
+    iss: str
+    aud: str
+    exp: NotRequired[int]
+    iat: int
+    jti: str
+    ver: int
+    claims: dict[str, Any]

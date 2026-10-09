@@ -1,12 +1,15 @@
 import json
 import pathlib
+from typing import cast
 
 import jwt
+from jwt import InvalidTokenError
 
 from .models import (
     DEFAULT_AUDIENCE,
     SUPPORTED_TOKEN_VERSIONS,
     AuthClaims,
+    JWTPayload,
     VerifiedGrant,
 )
 
@@ -25,18 +28,32 @@ def decode_auth_token(
     token: str,
     jwk_set: jwt.PyJWKSet,
 ) -> VerifiedGrant:
+    """
+    Decode and validate provided token against provided JWKS
+
+    :param token: Authorization token to decode
+    :param jwk_set: Parsed JWKS with public keys for signature verification
+    :return: VerifiedGrant object describing authorization grants
+    """
     unverified = jwt.decode_complete(token, options={"verify_signature": False})
     header = unverified["header"]
+    if not header.get("kid"):
+        raise InvalidTokenError("'kid' not found in provided authorization token")
     kid = header.get("kid")
+    if kid not in jwk_set:
+        raise InvalidTokenError("Token is signed using unknown public key")
     jwk = jwk_set[kid]
-    payload = jwt.decode(
-        token,
-        key=jwk,
-        algorithms=["ES256"],
-        options={
-            "require": ["aud", "iat", "jti", "ver", "claims"],
-        },
-        audience=DEFAULT_AUDIENCE,
+    payload = cast(
+        JWTPayload,
+        jwt.decode(
+            token,
+            key=jwk,
+            algorithms=["ES256"],
+            options={
+                "require": list(JWTPayload.__required_keys__),
+            },
+            audience=DEFAULT_AUDIENCE,
+        ),
     )
     # We may want to change the ACL semantics in the future
     # and keep some compatibility with older tokens.

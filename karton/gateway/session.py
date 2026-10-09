@@ -84,9 +84,9 @@ class ClientSession:
             # for services that initiated connection from the start
             await asyncio.sleep(HEARTBEAT_BASE_INTERVAL + random.random())
 
-    def authorize(self, required: AllowedOperation) -> AllowedOperation:
+    def can_perform(self, operation: AllowedOperation) -> bool:
         if not self.auth_required:
-            return required
+            return True
         now = time()
         self.auth_grants = [
             grant
@@ -94,13 +94,13 @@ class ClientSession:
             if grant.expires_at is None or now < grant.expires_at
         ]
         if not self.auth_grants:
-            raise CredentialsExpiredError("Session credentials expired")
+            raise CredentialsExpiredError("No fresh credentials available")
 
         for grant in self.auth_grants:
             for op in grant.claims.allowed_operations:
-                if op.covers(required):
-                    return op
-        raise UnauthorizedError(f"Operation '{required.operation}' is not authorized")
+                if op.covers(operation):
+                    return True
+        raise UnauthorizedError(f"Operation '{operation.operation}' is not authorized")
 
     @classmethod
     @asynccontextmanager

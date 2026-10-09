@@ -13,12 +13,12 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from karton.core.asyncio.base import KartonAsyncBase
 from karton.core.auth.models import (
-    AllowedConsumeLog,
-    AllowedConsumeTask,
     AllowedOperation,
-    AllowedProduceTask,
-    AllowedRegisterBind,
     AuthClaims,
+    ConsumeLogOperation,
+    ConsumeTaskOperation,
+    ProduceTaskOperation,
+    RegisterBindOperation,
 )
 from karton.core.auth.signer import generate_new_keypair, issue_auth_token
 from karton.core.auth.verifier import decode_auth_token
@@ -43,19 +43,19 @@ def get_claims_from_karton_class(
     claims = AuthClaims(identity=karton_class.identity, allowed_operations=[])
 
     if issubclass(karton_class, (Producer, AsyncProducer)):
-        claims.allowed_operations.append(AllowedProduceTask())
+        claims.allowed_operations.append(ProduceTaskOperation())
 
     if issubclass(karton_class, (Consumer, AsyncConsumer)):
-        claims.allowed_operations.append(AllowedConsumeTask())
+        claims.allowed_operations.append(ConsumeTaskOperation())
         claims.allowed_operations.append(
-            AllowedRegisterBind(
+            RegisterBindOperation(
                 filters=karton_class.filters,
                 persistent=karton_class.persistent,
             )
         )
 
     if issubclass(karton_class, LogConsumer):
-        claims.allowed_operations.append(AllowedConsumeLog())
+        claims.allowed_operations.append(ConsumeLogOperation())
     return claims
 
 
@@ -212,14 +212,14 @@ def claims_from_args(args: argparse.Namespace) -> AuthClaims:
     operations: list[AllowedOperation] = []
     foreign_buckets = args.foreign_buckets or []
     if args.produce_task or foreign_buckets:
-        operations.append(AllowedProduceTask(foreign_buckets=foreign_buckets))
+        operations.append(ProduceTaskOperation(foreign_buckets=foreign_buckets))
     if args.consume_task:
-        operations.append(AllowedConsumeTask())
+        operations.append(ConsumeTaskOperation())
     if args.register_bind is not None:
         for bind in args.register_bind:
-            operations.append(AllowedRegisterBind.model_validate(json.loads(bind)))
+            operations.append(RegisterBindOperation.model_validate(json.loads(bind)))
     if args.consume_log:
-        operations.append(AllowedConsumeLog())
+        operations.append(ConsumeLogOperation())
     return AuthClaims(identity=args.identity, allowed_operations=operations)
 
 
