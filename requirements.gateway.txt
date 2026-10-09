@@ -1,3 +1,2 @@
 fastapi
-pyjwt
 gunicorn==26.2.0

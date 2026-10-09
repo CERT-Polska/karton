@@ -21,6 +21,10 @@ class BadCredentialsError(KartonGatewayError):
     code: str = "bad_credentials"
 
 
+class CredentialsExpiredError(KartonGatewayError):
+    code: str = "credentials_expired"
+
+
 class OperationTimeoutError(KartonGatewayError):
     code: str = "timeout"
 
@@ -39,6 +43,10 @@ class InvalidTaskStatusError(KartonGatewayError):
 
 class InvalidTaskError(KartonGatewayError):
     code: str = "invalid_task"
+
+
+class UnauthorizedError(KartonGatewayError):
+    code: str = "unauthorized"
 
 
 class ShutdownError(KartonGatewayError):

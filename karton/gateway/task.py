@@ -113,6 +113,20 @@ def is_resource_allowed(
     return {"uid": uid, "bucket": bucket} in allowed_parent_resources
 
 
+def get_referenced_foreign_buckets(
+    payload_bags: PayloadBags,
+) -> list[str]:
+    foreign_buckets = set()
+    for resource in iter_resources(payload_bags):
+        if not resource.get("to_upload", False):
+            continue
+        bucket = resource.get("bucket")
+        if bucket is None or bucket == gateway_backend.default_bucket_name:
+            continue
+        foreign_buckets.add(bucket)
+    return list(foreign_buckets)
+
+
 def process_declared_task_resources(
     payload_bags: PayloadBags,
     allowed_parent_resources: list[AllowedResource],
@@ -149,7 +163,12 @@ def process_declared_task_resources(
         ):
             # If bucket is set to None: service wants to use Karton-managed bucket
             resource_bucket = gateway_backend.default_bucket_name
-            if not resource_spec.to_upload:
+            if resource_spec.to_upload:
+                # to_upload=True is LocalResource. In that case we don't trust
+                # the UID from the client - we treat is as a payload bag reference
+                # and we generate real UID server-side
+                resource_server_uid = str(uuid.uuid4())
+            else:
                 # to_upload=False is passthrough of RemoteResource reference
                 # Service must be authorized to reference the resource
                 if not is_resource_allowed(
@@ -160,37 +179,37 @@ def process_declared_task_resources(
                         f"'{resource_spec.uid}'"
                     )
                 resource_server_uid = resource_spec.uid
-            else:
-                # to_upload=True is LocalResource. In that case we don't trust
-                # the UID from the client - we treat is as a payload bag reference
-                # and we generate real UID server-side
-                resource_server_uid = str(uuid.uuid4())
         else:
             # If bucket is not set to None or default bucket
             # then it's a foreign bucket reference
             if resource_spec.to_upload:
-                # We don't allow foreign bucket uploads
-                raise InvalidTaskError(
-                    f"Service is not allowed to upload resource "
-                    f"'{resource_spec.uid}' "
-                    f"to foreign bucket '{resource_spec.bucket}'"
-                )
-            if (
-                not is_resource_allowed(
-                    resource_spec.uid, resource_spec.bucket, allowed_parent_resources
-                )
-                and resource_spec.bucket not in allowed_foreign_buckets
-            ):
-                # Foreign bucket downloads are allowed only:
-                # - if object was received from parent task
-                # OR
-                # - if service is allowed to reference a foreign bucket
-                raise InvalidTaskError(
-                    f"Service is not allowed to reference "
-                    f"bucket '{resource_spec.bucket}' "
-                    f"in resource '{resource_spec.uid}'"
-                )
-            resource_server_uid = resource_spec.uid
+                # Foreign upload: gateway must have S3 write access
+                if resource_spec.bucket not in allowed_foreign_buckets:
+                    raise InvalidTaskError(
+                        f"Gateway can't upload resource '{resource_spec.uid}' "
+                        f"to foreign bucket '{resource_spec.bucket}'"
+                    )
+                # Don't trust client UID for uploads — generate server-side
+                resource_server_uid = str(uuid.uuid4())
+            else:
+                if (
+                    not is_resource_allowed(
+                        resource_spec.uid,
+                        resource_spec.bucket,
+                        allowed_parent_resources,
+                    )
+                    and resource_spec.bucket not in allowed_foreign_buckets
+                ):
+                    # Foreign bucket downloads are allowed only:
+                    # - if object was received from parent task
+                    # OR
+                    # - if service is allowed to reference a foreign bucket
+                    raise InvalidTaskError(
+                        f"Service is not allowed to reference "
+                        f"bucket '{resource_spec.bucket}' "
+                        f"in resource '{resource_spec.uid}'"
+                    )
+                resource_server_uid = resource_spec.uid
             resource_bucket = resource_spec.bucket
 
         resource_identity = (resource_bucket, resource_spec.uid)

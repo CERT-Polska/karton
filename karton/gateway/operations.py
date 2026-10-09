@@ -5,6 +5,12 @@ from typing import TYPE_CHECKING, Protocol, Type, cast
 from fastapi import WebSocket
 
 from karton.core.asyncio.backend import KartonBind, KartonMetrics
+from karton.core.auth.models import (
+    ConsumeLogOperation,
+    ConsumeTaskOperation,
+    ProduceTaskOperation,
+    RegisterBindOperation,
+)
 from karton.core.exceptions import BindExpiredError as KartonBindExpiredError
 from karton.core.task import Task, TaskState, root_uid_from_task_uid
 from karton.gateway.errors import BadRequestError
@@ -25,6 +31,7 @@ from .task import (
     TaskTokenScope,
     generate_resource_download_urls,
     generate_resource_upload_urls,
+    get_referenced_foreign_buckets,
     is_valid_task_status_transition,
     make_task_token,
     parse_task_token,
@@ -101,6 +108,12 @@ async def handle_bind_request(
     :param request: Parsed request object
     :param session: Client session that initiated the request
     """
+    session.can_perform(
+        RegisterBindOperation(
+            filters=request.message.filters,
+            persistent=request.message.persistent,
+        )
+    )
     bind = KartonBind(
         identity=session.service_info.identity,
         info=request.message.info,
@@ -149,14 +162,18 @@ async def handle_declare_task_request(
         parent_task_uid = parent_task_info.task_uid
         allowed_parent_resources = parent_task_info.resources
 
-    # For now it's global setting but in future it may be
-    # also configured per identity/username.
-    allowed_extra_buckets = gateway_config.allowed_extra_buckets
+    server_allowed_foreign_buckets = gateway_config.allowed_foreign_buckets
     payload_bags = (task_params.payload, task_params.payload_persistent)
+
+    if session.auth_required:
+        foreign_bucket_uploads = get_referenced_foreign_buckets(payload_bags)
+        session.can_perform(
+            ProduceTaskOperation(foreign_buckets=foreign_bucket_uploads)
+        )
 
     # Now, we need to translate DeclaredResourceSpec to RemoteResource
     task_payload_bags, validated_resources = process_declared_task_resources(
-        payload_bags, allowed_parent_resources, allowed_extra_buckets
+        payload_bags, allowed_parent_resources, server_allowed_foreign_buckets
     )
     resource_urls = await generate_resource_upload_urls(validated_resources)
     task_payload, task_payload_persistent = task_payload_bags
@@ -206,6 +223,8 @@ async def handle_send_task_request(
     :param request: Parsed request object
     :param session: Client session that initiated the request
     """
+    session.can_perform(ProduceTaskOperation())
+
     task_token = request.message.token
     task_info = parse_task_token(
         token=task_token,
@@ -299,6 +318,7 @@ async def handle_get_task_request(
     :param request: Parsed request object
     :param session: User session that initiated the request
     """
+    session.can_perform(ConsumeTaskOperation())
     try:
         task = await gateway_backend.consume_routed_task(
             session.service_info.identity,
@@ -313,7 +333,7 @@ async def handle_get_task_request(
     try:
         allowed_buckets = [
             gateway_backend.default_bucket_name
-        ] + gateway_config.allowed_extra_buckets
+        ] + gateway_config.allowed_foreign_buckets
         download_urls = await generate_resource_download_urls(task, allowed_buckets)
         task_token_info = TaskTokenInfo(
             task_uid=task.uid,
@@ -397,9 +417,12 @@ async def handle_subscribe_logs_request(
     :param request: Parsed request object
     :param session: User session that initiated the request
     """
+    session.can_perform(ConsumeLogOperation())
     async for log_record in gateway_backend.consume_log(
         logger_filter=request.message.logger_filter, level=request.message.level
     ):
+        # Re-check in case of expiration
+        session.can_perform(ConsumeLogOperation())
         if shutdown_latch.shutdown_in_progress:
             raise ShutdownError("Operation terminated, shutdown is in progress")
         if not log_record:
