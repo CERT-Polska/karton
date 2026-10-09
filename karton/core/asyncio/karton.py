@@ -11,10 +11,10 @@ from karton.core import query
 from karton.core.__version__ import __version__
 from karton.core.backend import KartonBind, KartonMetrics
 from karton.core.config import Config
-from karton.core.exceptions import TaskTimeoutError
+from karton.core.exceptions import BindExpiredError, TaskTimeoutError
 from karton.core.task import Task, TaskState
 
-from .backend import KartonAsyncBackend
+from .backend import KartonAsyncBackendProtocol
 from .base import KartonAsyncBase, KartonAsyncServiceBase
 from .resource import LocalResource
 
@@ -23,10 +23,10 @@ class Producer(KartonAsyncBase):
     """
     Producer part of Karton. Used for dispatching initial tasks into karton.
 
+    :param identity: Producer name
+    :type identity: str
     :param config: Karton configuration object (optional)
     :type config: :class:`karton.Config`
-    :param identity: Producer name (optional)
-    :type identity: str
 
     Usage example:
 
@@ -54,9 +54,9 @@ class Producer(KartonAsyncBase):
 
     def __init__(
         self,
+        identity: str,
         config: Optional[Config] = None,
-        identity: Optional[str] = None,
-        backend: Optional[KartonAsyncBackend] = None,
+        backend: Optional[KartonAsyncBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -119,7 +119,7 @@ class Consumer(KartonAsyncServiceBase):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonAsyncBackend] = None,
+        backend: Optional[KartonAsyncBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -168,7 +168,7 @@ class Consumer(KartonAsyncServiceBase):
             if self.task_timeout:
                 try:
                     # asyncio.timeout is Py3.11+
-                    async with asyncio.timeout(self.task_timeout):  # type: ignore
+                    async with asyncio.timeout(self.task_timeout):
                         await self.process(task)
                 except asyncio.TimeoutError as e:
                     raise TaskTimeoutError from e
@@ -309,19 +309,15 @@ class Consumer(KartonAsyncServiceBase):
 
         try:
             while True:
-                current_bind = await self.backend.get_bind(self.identity)
-                if current_bind != self._bind:
-                    self.log.info(
-                        "Binds changed, shutting down. "
-                        "Old binds: %s "
-                        "New binds: %s",
-                        self._bind,
-                        current_bind,
-                    )
-                    break
                 if self.concurrency_semaphore is not None:
                     await self.concurrency_semaphore.acquire()
-                task = await self.backend.consume_routed_task(self.identity)
+                try:
+                    task = await self.backend.consume_routed_task(self.identity)
+                except BindExpiredError as e:
+                    if self.concurrency_semaphore is not None:
+                        self.concurrency_semaphore.release()
+                    self.log.info("%r", e)
+                    break
                 if task:
                     coro_task = asyncio.create_task(self.internal_process(task))
                     concurrent_tasks.append(coro_task)
@@ -359,6 +355,6 @@ class Karton(Consumer, Producer):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonAsyncBackend] = None,
+        backend: Optional[KartonAsyncBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)

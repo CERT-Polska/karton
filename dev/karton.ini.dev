@@ -7,4 +7,3 @@ bucket = karton
 [redis]
 host=localhost
 port=6379
-

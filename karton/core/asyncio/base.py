@@ -2,23 +2,30 @@ import abc
 import asyncio
 import signal
 from asyncio import CancelledError
-from typing import Optional
+from typing import Optional, Protocol
 
 from karton.core import Task
-from karton.core.__version__ import __version__
 from karton.core.backend import KartonServiceInfo
 from karton.core.base import ConfigMixin, LoggingMixin
 from karton.core.config import Config
 from karton.core.task import get_current_task, set_current_task
 from karton.core.utils import StrictClassMethod
 
-from .backend import KartonAsyncBackend
+from .backend import KartonAsyncBackendProtocol, get_backend
 from .logger import KartonAsyncLogHandler
+
+
+class KartonAsyncBackendFactory(Protocol):
+    def __call__(
+        self,
+        config: Config,
+        service_info: KartonServiceInfo,
+    ) -> KartonAsyncBackendProtocol: ...
 
 
 class KartonAsyncBase(abc.ABC, ConfigMixin, LoggingMixin):
     """
-    Base class for all Karton services
+    Karton base class for looping services (Consumer, LogConsumer, System).
 
     You can set an informative version information by setting the ``version`` class
     attribute.
@@ -28,27 +35,19 @@ class KartonAsyncBase(abc.ABC, ConfigMixin, LoggingMixin):
     identity: str = ""
     #: Karton service version
     version: Optional[str] = None
-    #: Include extended service information for non-consumer services
-    with_service_info: bool = False
+    backend: KartonAsyncBackendProtocol
+    _backend_factory: KartonAsyncBackendFactory = staticmethod(get_backend)
 
     def __init__(
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonAsyncBackend] = None,
+        backend: Optional[KartonAsyncBackendProtocol] = None,
     ) -> None:
         ConfigMixin.__init__(self, config, identity)
 
-        self.service_info = None
-        if self.identity is not None and self.with_service_info:
-            self.service_info = KartonServiceInfo(
-                identity=self.identity,
-                karton_version=__version__,
-                service_version=self.version,
-            )
-
-        self.backend = backend or KartonAsyncBackend(
-            self.config, identity=self.identity, service_info=self.service_info
+        self.backend = backend or self._backend_factory(
+            self.config, service_info=self.service_info
         )
 
         log_handler = KartonAsyncLogHandler(backend=self.backend, channel=self.identity)
@@ -86,7 +85,7 @@ class KartonAsyncServiceBase(KartonAsyncBase):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonAsyncBackend] = None,
+        backend: Optional[KartonAsyncBackendProtocol] = None,
     ) -> None:
         super().__init__(
             config=config,
@@ -108,7 +107,7 @@ class KartonAsyncServiceBase(KartonAsyncBase):
     # Base class for Karton services
     async def loop(self) -> None:
         if self.enable_publish_log and hasattr(self.log_handler, "start_consuming"):
-            self.log_handler.start_consuming()
+            self.log_handler.start_consuming()  # type: ignore
         await self.connect()
         event_loop = asyncio.get_event_loop()
         for sig in (signal.SIGTERM, signal.SIGINT):
@@ -120,7 +119,7 @@ class KartonAsyncServiceBase(KartonAsyncBase):
             for sig in (signal.SIGTERM, signal.SIGINT):
                 event_loop.remove_signal_handler(sig)
             if self.enable_publish_log and hasattr(self.log_handler, "stop_consuming"):
-                await self.log_handler.stop_consuming()
+                await self.log_handler.stop_consuming()  # type: ignore
 
     @StrictClassMethod
     def main(cls) -> None:

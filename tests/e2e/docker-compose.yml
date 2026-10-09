@@ -1,3 +1,4 @@
+# ONLY FOR LOCAL DEVELOPMENT
 services:
   redis:
     image: library/redis:alpine
@@ -26,6 +27,7 @@ services:
   system:
     build:
       context: ../..
+      dockerfile: system.Dockerfile
     env_file:
       - karton-vars.env
     command:
@@ -35,66 +37,19 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-  logger:
+  gateway:
     build:
       context: ../..
-      dockerfile: dev/logger.Dockerfile
+      dockerfile: gateway.Dockerfile
     env_file:
       - karton-vars.env
+    ports:
+      - "127.0.0.1:8000:8000"
     depends_on:
-      - system
-  test-sync-service-1:
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-    env_file:
-      - karton-vars.env
-    depends_on:
-      - system
-    environment:
-      - INSTANCE_NAME=first
-    volumes:
-      - ./test_service.py:/app/test_service.py
-    entrypoint: ["python3", "/app/test_service.py", "--identity", "karton.test-sync-service-1"]
-  test-sync-service-2:
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-    env_file:
-      - karton-vars.env
-    depends_on:
-      - system
-    environment:
-      - INSTANCE_NAME=second
-    volumes:
-      - ./test_service.py:/app/test_service.py
-    entrypoint: ["python3", "/app/test_service.py", "--identity", "karton.test-sync-service-2"]
-  test-async-service-1:
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-    env_file:
-      - karton-vars.env
-    depends_on:
-      - system
-    environment:
-      - INSTANCE_NAME=first
-    volumes:
-      - ./test_service_async.py:/app/test_service_async.py
-    entrypoint: ["python3", "/app/test_service_async.py", "--identity", "karton.test-async-service-1"]
-  test-async-service-2:
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-    env_file:
-      - karton-vars.env
-    depends_on:
-      - system
-    environment:
-      - INSTANCE_NAME=second
-    volumes:
-      - ./test_service_async.py:/app/test_service_async.py
-    entrypoint: ["python3", "/app/test_service_async.py", "--identity", "karton.test-async-service-2"]
+      silo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
   pytest:
     build:
       context: ../..
@@ -103,6 +58,7 @@ services:
       - karton-vars.env
     depends_on:
       - system
+      - gateway
     volumes:
       - ./tests:/app/tests
     entrypoint: ["pytest", "/app/tests"]

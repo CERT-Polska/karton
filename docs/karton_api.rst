@@ -52,3 +52,19 @@ karton.core.Config
 
 .. autoclass:: karton.core.config.Config
    :members:
+
+[internals] karton.core.backend
+-------------------------------
+
+.. autoclass:: karton.core.backend.KartonBackendProtocol
+   :members:
+
+.. autofunction:: karton.core.backend.get_backend
+
+[internals] karton.core.asyncio.backend
+---------------------------------------
+
+.. autoclass:: karton.core.asyncio.backend.KartonAsyncBackendProtocol
+   :members:
+
+.. autofunction:: karton.core.asyncio.backend.get_backend

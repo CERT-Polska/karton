@@ -1,5 +1,3 @@
-from time import sleep
-from itertools import islice
 from hashlib import sha256
 import os
 
@@ -18,7 +16,7 @@ from karton.core.backend import KartonBackend
 
 @pytest.mark.parametrize("service_backend", BACKENDS)
 def test_resource_upload(
-    backend: KartonBackend, producer: Producer, service_backend: str
+    backend: KartonBackend, producer: Producer, services, service_backend: str
 ):
     content = b"Random Resource Content" + os.urandom(2048)
     content_digest = sha256(content).hexdigest()
@@ -28,7 +26,7 @@ def test_resource_upload(
             "instance": "first",
             "backend": service_backend,
             "type": "sleep-task",
-            "duration": 10,
+            "duration": 1,
         },
         payload={"resource": LocalResource(name="random.txt", content=content)},
     )
@@ -39,7 +37,7 @@ def test_resource_upload(
 
     routed_task = routed_tasks[0]
     resource_task = wait_for_task_state(
-        backend=backend, task_uid=routed_task.uid, state=TaskState.STARTED, timeout=10
+        backend=backend, task_uid=routed_task.uid, state=TaskState.STARTED, timeout=5
     )
 
     payload = resource_task.get_payload("resource")

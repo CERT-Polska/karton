@@ -11,10 +11,10 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from . import query
 from .__version__ import __version__
-from .backend import KartonBackend, KartonBind, KartonMetrics
+from .backend import KartonBackendProtocol, KartonBind, KartonMetrics
 from .base import KartonBase, KartonServiceBase
 from .config import Config
-from .exceptions import TaskTimeoutError
+from .exceptions import BindExpiredError, TaskTimeoutError
 from .resource import LocalResource
 from .task import Task, TaskState
 from .utils import timeout
@@ -24,10 +24,10 @@ class Producer(KartonBase):
     """
     Producer part of Karton. Used for dispatching initial tasks into karton.
 
+    :param identity: Producer name
+    :type identity: str
     :param config: Karton configuration object (optional)
     :type config: :class:`karton.Config`
-    :param identity: Producer name (optional)
-    :type identity: str
 
     Usage example:
 
@@ -54,9 +54,9 @@ class Producer(KartonBase):
 
     def __init__(
         self,
+        identity: str,
         config: Optional[Config] = None,
-        identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -83,13 +83,24 @@ class Producer(KartonBase):
         # Register new task
         self.backend.declare_task(task)
 
-        # Upload local resources
-        for resource in task.iterate_resources():
-            if isinstance(resource, LocalResource):
-                resource.upload(self.backend)
+        try:
+            # Upload local resources
+            for resource in task.iterate_resources():
+                if isinstance(resource, LocalResource):
+                    resource.upload(self.backend)
 
-        # Add task to karton.tasks
-        self.backend.produce_unrouted_task(task)
+            # Add task to karton.tasks
+            self.backend.produce_unrouted_task(task)
+        except BaseException:
+            try:
+                self.backend.set_task_status(task, TaskState.FINISHED)
+            except Exception:
+                # This is our good will that shouldn't interfere with
+                # original exception handling, especially in case of
+                # BaseException which could be masked with Exception
+                pass
+            raise
+
         self.backend.increment_metrics(KartonMetrics.TASK_PRODUCED, self.identity)
         return True
 
@@ -110,13 +121,13 @@ class Consumer(KartonServiceBase):
     filters: List[Dict[str, Any]] = []
     persistent: bool = True
     version: Optional[str] = None
-    task_timeout = None
+    task_timeout: Optional[int] = None
 
     def __init__(
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -169,7 +180,7 @@ class Consumer(KartonServiceBase):
         if not task.matches_filters(self.filters):
             self.log.info(
                 "Task rejected because binds are no longer valid. "
-                "Rejected ask headers: %s",
+                "Rejected task headers: %s",
                 task.headers,
             )
             self.backend.set_task_status(task, TaskState.FINISHED)
@@ -351,17 +362,11 @@ class Consumer(KartonServiceBase):
 
         with self.graceful_killer():
             while not self.shutdown:
-                current_bind = self.backend.get_bind(self.identity)
-                if current_bind != self._bind:
-                    self.log.info(
-                        "Binds changed, shutting down. "
-                        "Old binds: %s "
-                        "New binds: %s",
-                        self._bind,
-                        current_bind,
-                    )
+                try:
+                    task = self.backend.consume_routed_task(self.identity)
+                except BindExpiredError as e:
+                    self.log.info("%r", e)
                     break
-                task = self.backend.consume_routed_task(self.identity)
                 if task:
                     self.internal_process(task)
 
@@ -370,26 +375,30 @@ class LogConsumer(KartonServiceBase):
     """
     Base class for log consumer subsystems.
 
-    You can consume logs from specific logger
-    by setting a :py:meth:`logger_filter` class attribute.
-
-    You can also select logs of specific level via
-    :py:meth:`level` class attribute.
+    Consume logs from specific loggers and/or levels by setting the
+    :attr:`logger_filter` and :attr:`level` class attributes.
 
     :param config: Karton config to use for service configuration
     :param identity: Karton service identity
     :param backend: Karton backend to use
     """
 
+    #: Filter logs by logger name. ``None`` (default) matches all loggers.
+    #: Supports Redis Pub/Sub glob patterns, e.g. ``"karton.*"`` matches all
+    #: ``karton.*`` services. Otherwise an exact logger name (e.g.
+    #: ``"karton.classifier"``).
     logger_filter: Optional[str] = None
+
+    #: Filter logs by uppercase log level name (e.g. ``"INFO"``). ``None``
+    #: (default) matches all levels. Case-insensitive. Exact match, not a
+    #: threshold - ``"INFO"`` does not include ``"WARNING"`` or higher.
     level: Optional[str] = None
-    with_service_info = True
 
     def __init__(
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -441,7 +450,7 @@ class Karton(Consumer, Producer):
         self,
         config: Optional[Config] = None,
         identity: Optional[str] = None,
-        backend: Optional[KartonBackend] = None,
+        backend: Optional[KartonBackendProtocol] = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 

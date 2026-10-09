@@ -8,10 +8,6 @@ Karton v5.8.0 implements experimental support for asyncio. The intended use-case
 - "auto-scalable" Consumers that are waiting for external job to be done for most of the time (e.g. sandbox executors)
 - Producers in asyncio-based projects
 
-.. warning::
-
-    ``karton.core.asyncio`` requires at least Python 3.11
-
 How to use it?
 --------------
 

@@ -54,6 +54,14 @@ class Config(object):
         self._load_from_env()
 
         if check_sections:
+            if self.has_section("gateway"):
+                for disallowed_section in ["redis", "minio", "s3"]:
+                    if self.has_section(disallowed_section):
+                        raise RuntimeError(
+                            f"[{disallowed_section}] configuration section "
+                            "is not allowed when [gateway] section is defined"
+                        )
+                return
             if self.has_section("minio") and not self.has_section("s3"):
                 self._map_minio_to_s3()
             if not self.has_section("s3"):

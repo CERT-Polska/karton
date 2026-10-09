@@ -1,13 +1,23 @@
-import dataclasses
-import enum
+import hashlib
 import json
 import logging
 import os
 import time
-import urllib.parse
 import warnings
 from collections import defaultdict, namedtuple
-from typing import IO, Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
+from typing import (
+    IO,
+    Any,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+    cast,
+)
 
 import boto3
 from botocore.credentials import (
@@ -16,15 +26,24 @@ from botocore.credentials import (
     InstanceMetadataProvider,
 )
 from botocore.session import get_session
-from redis import AuthenticationError, StrictRedis
+from redis import AuthenticationError, Redis
 from redis.client import Pipeline
 from urllib3.response import HTTPResponse
 
-from .config import Config
-from .exceptions import InvalidIdentityError
-from .resource import LocalResource, RemoteResource
-from .task import Task, TaskPriority, TaskState
-from .utils import chunks, chunks_iter
+from karton.core.config import Config
+from karton.core.exceptions import BindExpiredError
+from karton.core.resource import LocalResource, RemoteResource
+from karton.core.task import Task, TaskPriority, TaskState
+from karton.core.utils import chunks, chunks_iter
+
+from .base import (
+    KartonBackendProtocol,
+    KartonBind,
+    KartonExternalServiceInfo,
+    KartonMetrics,
+    KartonServiceInfo,
+    unserialize_bind,
+)
 
 KARTON_TASKS_QUEUE = "karton.tasks"
 KARTON_OPERATIONS_QUEUE = "karton.operations"
@@ -32,109 +51,32 @@ KARTON_LOG_CHANNEL = "karton.log"
 KARTON_BINDS_HSET = "karton.binds"
 KARTON_TASK_NAMESPACE = "karton.task"
 KARTON_OUTPUTS_NAMESPACE = "karton.outputs"
-
-KartonBind = namedtuple(
-    "KartonBind",
-    [
-        "identity",
-        "info",
-        "version",
-        "persistent",
-        "filters",
-        "service_version",
-        "is_async",
-    ],
-)
-
+KARTON_SERVICES_NAMESPACE = "karton.services"
 
 KartonOutputs = namedtuple("KartonOutputs", ["identity", "outputs"])
 logger = logging.getLogger(__name__)
 
 
-class KartonMetrics(enum.Enum):
-    TASK_PRODUCED = "karton.metrics.produced"
-    TASK_CONSUMED = "karton.metrics.consumed"
-    TASK_CRASHED = "karton.metrics.crashed"
-    TASK_ASSIGNED = "karton.metrics.assigned"
-    TASK_GARBAGE_COLLECTED = "karton.metrics.garbage-collected"
-
-
-@dataclasses.dataclass(frozen=True, order=True)
-class KartonServiceInfo:
-    """
-    Extended Karton service information.
-
-    Instances of this dataclass are meant to be aggregated to count service replicas
-    in Karton Dashboard. They're considered equal if identity and versions strings
-    are the same.
-    """
-
-    identity: str = dataclasses.field(metadata={"serializable": False})
-    karton_version: str
-    service_version: Optional[str] = None
-    # Extra information about Redis client
-    redis_client_info: Optional[Dict[str, str]] = dataclasses.field(
-        default=None, hash=False, compare=False, metadata={"serializable": False}
-    )
-
-    def make_client_name(self) -> str:
-        included_keys = [
-            field.name
-            for field in dataclasses.fields(self)
-            if field.metadata.get("serializable", True)
-        ]
-        params = {
-            k: v
-            for k, v in dataclasses.asdict(self).items()
-            if k in included_keys and v is not None
-        }
-        return f"{self.identity}?{urllib.parse.urlencode(params)}"
-
-    @classmethod
-    def parse_client_name(
-        cls, client_name: str, redis_client_info: Optional[Dict[str, str]] = None
-    ) -> "KartonServiceInfo":
-        included_keys = [
-            field.name
-            for field in dataclasses.fields(cls)
-            if field.metadata.get("serializable", True)
-        ]
-        identity, params_string = client_name.split("?", 1)
-        # Filter out unknown params to not get crashed by future extensions
-        params = dict(
-            [
-                (key, value)
-                for key, value in urllib.parse.parse_qsl(params_string)
-                if key in included_keys
-            ]
-        )
-        return KartonServiceInfo(
-            identity, redis_client_info=redis_client_info, **params
-        )
-
-
 class KartonBackendBase:
+    """
+    Direct KartonBackend base class shared between
+    sync and async implementation.
+    """
+
     def __init__(
         self,
         config: Config,
-        identity: Optional[str] = None,
-        service_info: Optional[KartonServiceInfo] = None,
-    ):
+        service_info: KartonServiceInfo,
+    ) -> None:
         self.config = config
-
-        if identity is not None:
-            self._validate_identity(identity)
-        self.identity = identity
-
         self.service_info = service_info
+        # Bind is stored for expiration check done by consume_routed_task
+        # Explicit expiration check is not required when using Karton Gateway
+        self._current_bind: Optional[KartonBind] = None
 
-    @staticmethod
-    def _validate_identity(identity: str):
-        disallowed_chars = [" ", "?"]
-        if any(disallowed_char in identity for disallowed_char in disallowed_chars):
-            raise InvalidIdentityError(
-                f"Karton identity should not contain {disallowed_chars}"
-            )
+    @property
+    def identity(self) -> str | None:
+        return self.service_info.identity
 
     @property
     def default_bucket_name(self) -> str:
@@ -146,13 +88,9 @@ class KartonBackendBase:
     @staticmethod
     def get_redis_configuration(
         config: Config,
-        identity: Optional[str] = None,
-        service_info: Optional[KartonServiceInfo] = None,
+        service_info: KartonServiceInfo,
     ) -> Dict[str, Any]:
-        if service_info is not None:
-            client_name: Optional[str] = service_info.make_client_name()
-        else:
-            client_name = identity
+        client_name = service_info.make_client_name()
 
         redis_url = config.get("redis", "url")
         if redis_url is not None:
@@ -191,7 +129,9 @@ class KartonBackendBase:
     def get_queue_names(identity: str) -> List[str]:
         """
         Return all Redis routed task queue names for given identity,
-        ordered by priority (descending). Used internally by Consumer.
+        ordered by priority (descending).
+
+        Internal function for use by Consumer.
 
         :param identity: Karton service identity
         :return: List of queue names
@@ -223,6 +163,18 @@ class KartonBackendBase:
             sort_keys=True,
         )
 
+    @classmethod
+    def compute_bind_id(cls, bind: KartonBind) -> str:
+        """
+        Compute an KartonBind identifier that can be used for checking
+        whether bind is still valid and wasn't overridden by the newer
+        version of service.
+
+        :param bind: KartonBind object with bind definition
+        :return: Identifier of the serialized bind (SHA256 hex-encoded digest)
+        """
+        return hashlib.sha256(cls.serialize_bind(bind).encode()).hexdigest()
+
     @staticmethod
     def unserialize_bind(identity: str, bind_data: str) -> KartonBind:
         """
@@ -245,15 +197,7 @@ class KartonBackendBase:
                 service_version=None,
                 is_async=False,
             )
-        return KartonBind(
-            identity=identity,
-            info=bind["info"],
-            version=bind["version"],
-            persistent=bind["persistent"],
-            filters=bind["filters"],
-            service_version=bind.get("service_version"),
-            is_async=bind.get("is_async", False),
-        )
+        return unserialize_bind(identity, bind)
 
     @staticmethod
     def unserialize_output(identity: str, output_data: Set[str]) -> KartonOutputs:
@@ -274,17 +218,14 @@ class KartonBackendBase:
         )
 
 
-class KartonBackend(KartonBackendBase):
+class KartonBackend(KartonBackendBase, KartonBackendProtocol):
     def __init__(
         self,
         config: Config,
-        identity: Optional[str] = None,
-        service_info: Optional[KartonServiceInfo] = None,
+        service_info: KartonServiceInfo,
     ) -> None:
-        super().__init__(config, identity, service_info)
-        self.redis = self.make_redis(
-            config, identity=identity, service_info=service_info
-        )
+        super().__init__(config, service_info)
+        self.redis = self.make_redis(config, service_info=service_info)
 
         endpoint = config.get("s3", "address") or os.getenv("AWS_ENDPOINT_URL")
         access_key = config.get("s3", "access_key") or os.getenv("AWS_ACCESS_KEY_ID")
@@ -320,7 +261,7 @@ class KartonBackend(KartonBackendBase):
             aws_secret_access_key=secret_key,
         )
 
-    def iam_auth_s3(self, endpoint: str):
+    def iam_auth_s3(self, endpoint: str) -> boto3.Session | None:
         boto_session = get_session()
         iam_providers = [
             ContainerProvider(),
@@ -337,30 +278,27 @@ class KartonBackend(KartonBackendBase):
                     "s3",
                     endpoint_url=endpoint,
                 )
+        return None
 
     @classmethod
     def make_redis(
         cls,
-        config,
-        identity: Optional[str] = None,
-        service_info: Optional[KartonServiceInfo] = None,
-    ) -> StrictRedis:
+        config: Config,
+        service_info: KartonServiceInfo,
+    ) -> Redis:
         """
         Create and test a Redis connection.
 
         :param config: The karton configuration
-        :param identity: Karton service identity
-        :param service_info: Additional service identity metadata
+        :param service_info: Service identity metadata
         :return: Redis connection
         """
-        redis_args = cls.get_redis_configuration(
-            config, identity=identity, service_info=service_info
-        )
+        redis_args = cls.get_redis_configuration(config, service_info=service_info)
         try:
             if "url" in redis_args:
-                redis = StrictRedis.from_url(**redis_args)
+                redis = Redis.from_url(**redis_args)
             else:
-                redis = StrictRedis(**redis_args)
+                redis = Redis(**redis_args)
             redis.ping()
         except AuthenticationError:
             # Maybe we've sent a wrong password.
@@ -371,9 +309,9 @@ class KartonBackend(KartonBackendBase):
             if "password" in redis_args:
                 del redis_args["password"]
             if "url" in redis_args:
-                redis = StrictRedis.from_url(**redis_args)
+                redis = Redis.from_url(**redis_args)
             else:
-                redis = StrictRedis(**redis_args)
+                redis = Redis(**redis_args)
             redis.ping()
         return redis
 
@@ -386,16 +324,17 @@ class KartonBackend(KartonBackendBase):
         """
         return RemoteResource.from_dict(resource_spec, backend=self)
 
-    def get_bind(self, identity: str) -> KartonBind:
+    def get_bind(self, identity: str) -> KartonBind | None:
         """
         Get bind object for given identity
 
         :param identity: Karton service identity
-        :return: KartonBind object
+        :return: KartonBind object or None if not found
         """
-        return self.unserialize_bind(
-            identity, self.redis.hget(KARTON_BINDS_HSET, identity)
-        )
+        bind_data = cast(str | None, self.redis.hget(KARTON_BINDS_HSET, identity))
+        if not bind_data:
+            return None
+        return self.unserialize_bind(identity, bind_data)
 
     def get_binds(self) -> List[KartonBind]:
         """
@@ -405,21 +344,18 @@ class KartonBackend(KartonBackendBase):
         """
         return [
             self.unserialize_bind(identity, raw_bind)
-            for identity, raw_bind in self.redis.hgetall(KARTON_BINDS_HSET).items()
+            for identity, raw_bind in cast(
+                dict[str, str], self.redis.hgetall(KARTON_BINDS_HSET)
+            ).items()
         ]
 
     def register_bind(self, bind: KartonBind) -> Optional[KartonBind]:
-        """
-        Register bind for Karton service and return the old one
-
-        :param bind: KartonBind object with bind definition
-        :return: Old KartonBind that was registered under this identity
-        """
         with self.redis.pipeline(transaction=True) as pipe:
             pipe.hget(KARTON_BINDS_HSET, bind.identity)
             pipe.hset(KARTON_BINDS_HSET, bind.identity, self.serialize_bind(bind))
             old_serialized_bind, _ = pipe.execute()
 
+        self._current_bind = bind
         if old_serialized_bind:
             return self.unserialize_bind(bind.identity, old_serialized_bind)
         else:
@@ -428,7 +364,7 @@ class KartonBackend(KartonBackendBase):
     def unregister_bind(self, identity: str) -> None:
         """
         Removes bind for identity
-        :param bind: Identity to be unregistered
+        :param identity: Identity to be unregistered
         """
         self.redis.hdel(KARTON_BINDS_HSET, identity)
 
@@ -449,6 +385,9 @@ class KartonBackend(KartonBackendBase):
         Actually this method returns all services having an identity,
         so the list is not limited to consumers.
 
+        Deprecated: it doesn't return consumers connected to Karton Gateway.
+        Use :py:meth:`get_online_identities` instead.
+
         :return: Dictionary {identity: [list of clients]}
         """
         bound_identities = defaultdict(list)
@@ -460,31 +399,108 @@ class KartonBackend(KartonBackendBase):
             bound_identities[name].append(client)
         return bound_identities
 
-    def get_online_services(self) -> List[KartonServiceInfo]:
+    def _get_online_gateway_services(self) -> Iterator[KartonExternalServiceInfo]:
+        for service_keys in chunks_iter(
+            self.redis.scan_iter(
+                match=f"{KARTON_SERVICES_NAMESPACE}:*",
+                count=100,
+            ),
+            size=100,
+        ):
+            # KartonServiceInfo is returned per connection
+            # so returned services can be duplicated
+            for client_name in cast(list[str | None], self.redis.mget(*service_keys)):
+                if not client_name:
+                    continue
+                try:
+                    yield KartonExternalServiceInfo.parse_client_name(client_name)
+                except Exception:
+                    logger.exception(
+                        "Fatal error while parsing client name: %s", client_name
+                    )
+                    continue
+
+    def _get_online_direct_services(self) -> Iterator[KartonExternalServiceInfo]:
+        for client in self.redis.client_list():
+            name = client["name"]
+            try:
+                service_info = KartonExternalServiceInfo.parse_client_name(
+                    name, redis_client_info=client
+                )
+                yield service_info
+            except Exception:
+                logger.exception("Fatal error while parsing client name: %s", name)
+                continue
+
+    def _get_online_services(self) -> Iterator[KartonExternalServiceInfo]:
+        # Services having instance_id should be returned only once per instance_id
+        # Services without instance_id are counted by amount of Redis connections
+        # so they should be returned as many times as they appear in the output
+        services: defaultdict[KartonExternalServiceInfo, int] = defaultdict(int)
+        for service in self._get_online_direct_services():
+            services[service] += 1
+        for service in self._get_online_gateway_services():
+            services[service] += 1
+
+        for service in services.keys():
+            if service.instance_id is None:
+                for _ in range(services[service]):
+                    yield service
+            else:
+                yield service
+
+    def get_online_services(self, _legacy=True) -> List[KartonExternalServiceInfo]:
         """
         Gets all online services providing extended service information.
 
-        Consumers by default don't provide that information and it's included in binds
-        instead. If you want to get information about all services, use
-        :py:meth:`KartonBackend.get_online_consumers`.
+        This method stays compatible with <=5.10.0 and doesn't return information
+        about legacy consumers (without with_service_info) flag. It also nullifies
+        the instance_id to aggregate KartonServiceInfo objects by equality for
+        counting the number of instances. New code should not rely on that behavior.
+
+        This method will return complete information about services in >=6.0.0.
+        You can turn on the new behavior by enabling _legacy=True, although this
+        argument will be removed as well in future major version.
 
         .. versionadded:: 5.1.0
 
         :return: List of KartonServiceInfo objects
         """
-        bound_services = []
-        for client in self.redis.client_list():
-            name = client["name"]
-            if "?" in name:
-                try:
-                    service_info = KartonServiceInfo.parse_client_name(
-                        name, redis_client_info=client
-                    )
-                    bound_services.append(service_info)
-                except Exception:
-                    logger.exception("Fatal error while parsing client name: %s", name)
-                    continue
-        return bound_services
+        if not _legacy:
+            return list(self._get_online_services())
+
+        # Legacy users of this method doesn't expect two things:
+        # - that karton_version can be None in case of pre-5.10.0 consumers
+        # - that KartonServiceInfo are not equal per identity+version
+        #   but per instance (e.g. karton-dashboard)
+        #
+        # That loop removes instance_id and filters out services without
+        # karton_version
+        return [
+            KartonExternalServiceInfo(
+                identity=service.identity,
+                karton_version=service.karton_version,
+                service_version=service.service_version,
+                instance_id=None,
+                redis_client_info=service.redis_client_info,
+            )
+            for service in self._get_online_services()
+            if service.karton_version is not None
+        ]
+
+    def get_online_identities(self) -> Dict[str, List[KartonExternalServiceInfo]]:
+        """
+        Returns a dictionary for all online identities with list of
+        KartonServiceInfo of each instance
+
+        :return: Dictionary {identity: [list of KartonServiceInfo objects]}
+        """
+        identities: defaultdict[str, List[KartonExternalServiceInfo]] = defaultdict(
+            list
+        )
+        for service in self._get_online_services():
+            identities[service.identity].append(service)
+        return dict(identities)
 
     def get_task(self, task_uid: str) -> Optional[Task]:
         """
@@ -617,7 +633,7 @@ class KartonBackend(KartonBackendBase):
         Processes tasks made by <5.4.0 (unrouted from <5.4.0 producers or existing
         before upgrade)
 
-        Used internally by iter_task_tree.
+        Internal function for use by iter_task_tree.
         """
         # Iterate over all karton tasks that do not match the new task id format
         legacy_task_keys = self.redis.scan_iter(
@@ -665,13 +681,6 @@ class KartonBackend(KartonBackendBase):
         )
 
     def declare_task(self, task: Task) -> None:
-        """
-        Declares a new task to send it to the queue.
-
-        Task producers should use this method for new tasks.
-
-        :param task: Task to declare
-        """
         # Ensure all local resources have good buckets
         for resource in task.iterate_resources():
             if isinstance(resource, LocalResource) and not resource.bucket:
@@ -711,14 +720,11 @@ class KartonBackend(KartonBackendBase):
         self, task: Task, status: TaskState, pipe: Optional[Pipeline] = None
     ) -> None:
         """
-        Request task status change to be applied by karton-system
+        Extends :meth:`KartonBackendProtocol.set_task_status` with a
+        Direct-backend-only ``pipe`` argument.
 
-        :param task: Task object
-        :param status: New task status (TaskState)
         :param pipe: Optional pipeline object if operation is a part of pipeline
         """
-        if task.status == status:
-            return
         task.status = status
         task.last_update = time.time()
         self.register_task(task, pipe=pipe)
@@ -728,7 +734,7 @@ class KartonBackend(KartonBackendBase):
         Remove task from Redis
 
         .. warning::
-            Used internally by karton.system.
+            Internal function for use by karton.system.
             If you want to cancel task: mark it as finished and let it be deleted
             by karton.system.
 
@@ -741,7 +747,7 @@ class KartonBackend(KartonBackendBase):
         Remove multiple tasks from Redis
 
         .. warning::
-            Used internally by karton.system.
+            Internal function for use by karton.system.
             If you want to cancel task: mark it as finished and let it be deleted
             by karton.system.
 
@@ -759,7 +765,7 @@ class KartonBackend(KartonBackendBase):
         :param queue: Queue name
         :return: List with Task objects contained in queue
         """
-        task_uids = self.redis.lrange(queue, 0, -1)
+        task_uids = cast(list[str], self.redis.lrange(queue, 0, -1))
         return self.get_tasks(task_uids)
 
     def get_task_ids_from_queue(self, queue: str) -> List[str]:
@@ -769,7 +775,7 @@ class KartonBackend(KartonBackendBase):
         :param queue: Queue name
         :return: List with task identifiers contained in queue
         """
-        return self.redis.lrange(queue, 0, -1)
+        return cast(list[str], self.redis.lrange(queue, 0, -1))
 
     def delete_consumer_queues(self, identity: str) -> None:
         """
@@ -792,13 +798,6 @@ class KartonBackend(KartonBackendBase):
         return self.get_tasks(pipe.execute()[0])
 
     def produce_unrouted_task(self, task: Task) -> None:
-        """
-        Add given task to unrouted task (``karton.tasks``) queue
-
-        Task must be registered before with :py:meth:`register_task`
-
-        :param task: Task object
-        """
         self.redis.rpush(KARTON_TASKS_QUEUE, task.uid)
 
     def produce_routed_task(
@@ -827,7 +826,7 @@ class KartonBackend(KartonBackendBase):
         :param timeout: Waiting for item timeout (default: 0 = wait forever)
         :return: Tuple of [queue_name, item] objects or None if timeout has been reached
         """
-        return self.redis.blpop(queues, timeout=timeout)
+        return cast(tuple[str, str] | None, self.redis.blpop(queues, timeout=timeout))
 
     def increment_multiple_metrics(
         self, metric: KartonMetrics, increments: Dict[str, int]
@@ -856,15 +855,14 @@ class KartonBackend(KartonBackendBase):
         return p.execute()[0]
 
     def consume_routed_task(self, identity: str, timeout: int = 5) -> Optional[Task]:
-        """
-        Get routed task for given consumer identity.
-
-        If there are no tasks, blocks until new one appears or timeout is reached.
-
-        :param identity: Karton service identity
-        :param timeout: Waiting for task timeout (default: 5)
-        :return: Task object
-        """
+        if self._current_bind is not None:
+            current_bind = self.get_bind(identity)
+            if current_bind != self._current_bind:
+                raise BindExpiredError(
+                    "Binds changed, shutting down. "
+                    f"Old binds: {self._current_bind} "
+                    f"New binds: {current_bind}"
+                )
         item = self.consume_queues(
             self.get_queue_names(identity),
             timeout=timeout,
@@ -903,14 +901,6 @@ class KartonBackend(KartonBackendBase):
         logger_name: str,
         level: str,
     ) -> bool:
-        """
-        Push new log record to the logs channel
-
-        :param log_record: Dict with log record
-        :param logger_name: Logger name
-        :param level: Log level
-        :return: True if any active log consumer received log record
-        """
         return (
             self.redis.publish(
                 self._log_channel(logger_name, level), json.dumps(log_record)
@@ -943,18 +933,6 @@ class KartonBackend(KartonBackendBase):
         logger_filter: Optional[str] = None,
         level: Optional[str] = None,
     ) -> Iterator[Optional[Dict[str, Any]]]:
-        """
-        Subscribe to logs channel and yield subsequent log records
-        or None if timeout has been reached.
-
-        If you want to subscribe only to a specific logger name
-        and/or log level, pass them via logger_filter and level arguments.
-
-        :param timeout: Waiting for log record timeout (default: 5)
-        :param logger_filter: Filter for name of consumed logger
-        :param level: Log level
-        :return: Dict with log record
-        """
         with self.redis.pubsub() as pubsub:
             pubsub.psubscribe(self._log_channel(logger_filter, level))
             while pubsub.subscribed:
@@ -975,10 +953,9 @@ class KartonBackend(KartonBackendBase):
         self, metric: KartonMetrics, identity: str, pipe: Optional[Pipeline] = None
     ) -> None:
         """
-        Increments metrics for given operation type and identity
+        Extends :meth:`KartonBackendProtocol.increment_metrics` with a
+        Direct-backend-only ``pipe`` argument.
 
-        :param metric: Operation metric type
-        :param identity: Related Karton service identity
         :param pipe: Optional pipeline object if operation is a part of pipeline
         """
         rs = pipe or self.redis
@@ -1004,7 +981,29 @@ class KartonBackend(KartonBackendBase):
 
         :param metric: Operation metric type
         """
-        return {k: int(v) for k, v in self.redis.hgetall(metric.value).items()}
+        return {
+            k: int(v)
+            for k, v in cast(dict[str, str], self.redis.hgetall(metric.value)).items()
+        }
+
+    def upload_resource(
+        self,
+        resource: LocalResource,
+        content: Union[bytes, IO[bytes]],
+    ) -> None:
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be uploaded because its bucket is not set"
+            )
+        self.s3.put_object(Bucket=resource.bucket, Key=resource.uid, Body=content)
+
+    def upload_resource_from_file(self, resource: LocalResource, path: str) -> None:
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be uploaded because its bucket is not set"
+            )
+        with open(path, "rb") as f:
+            self.upload_resource(resource, f)
 
     def upload_object(
         self,
@@ -1015,6 +1014,9 @@ class KartonBackend(KartonBackendBase):
         """
         Upload resource object to underlying object storage (S3)
 
+        .. deprecated:: 5.10.0
+           Use :py:meth:`upload_resource` instead
+
         :param bucket: Bucket name
         :param object_uid: Object identifier
         :param content: Object content as bytes or file-like stream
@@ -1024,6 +1026,9 @@ class KartonBackend(KartonBackendBase):
     def upload_object_from_file(self, bucket: str, object_uid: str, path: str) -> None:
         """
         Upload resource object file to underlying object storage
+
+        .. deprecated:: 5.10.0
+           Use :py:meth:`upload_resource_from_file` instead
 
         :param bucket: Bucket name
         :param object_uid: Object identifier
@@ -1046,9 +1051,28 @@ class KartonBackend(KartonBackendBase):
         """
         return self.s3.get_object(Bucket=bucket, Key=object_uid)["Body"]
 
+    def download_resource(self, resource: RemoteResource) -> bytes:
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be downloaded because its bucket is not set"
+            )
+        with self.s3.get_object(Bucket=resource.bucket, Key=resource.uid)["Body"] as f:
+            ret = f.read()
+        return ret
+
+    def download_resource_to_file(self, resource: RemoteResource, path: str) -> None:
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be downloaded because its bucket is not set"
+            )
+        self.s3.download_file(Bucket=resource.bucket, Key=resource.uid, Filename=path)
+
     def download_object(self, bucket: str, object_uid: str) -> bytes:
         """
         Download resource object from object storage.
+
+        .. deprecated:: 5.10.0
+           Use :py:meth:`download_resource` instead
 
         :param bucket: Bucket name
         :param object_uid: Object identifier
@@ -1061,6 +1085,9 @@ class KartonBackend(KartonBackendBase):
     def download_object_to_file(self, bucket: str, object_uid: str, path: str) -> None:
         """
         Download resource object from object storage to file
+
+        .. deprecated:: 5.10.0
+           Use :py:meth:`download_resource_to_file` instead
 
         :param bucket: Bucket name
         :param object_uid: Object identifier
@@ -1190,10 +1217,10 @@ class KartonBackend(KartonBackendBase):
         :return: List of KartonOutputs
         """
 
-        output_keys = self.redis.keys(f"{KARTON_OUTPUTS_NAMESPACE}:*")
+        output_keys = cast(list[str], self.redis.keys(f"{KARTON_OUTPUTS_NAMESPACE}:*"))
         return [
             self.unserialize_output(
-                identity.split(":")[1], self.redis.smembers(identity)
+                identity.split(":")[1], cast(set[str], self.redis.smembers(identity))
             )
             for identity in output_keys
         ]
