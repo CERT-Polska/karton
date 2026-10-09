@@ -1,6 +1,6 @@
 import json
 from dataclasses import dataclass
-from typing import Any, Literal, Union
+from typing import Any, Literal, TypedDict, Union
 
 from pydantic import BaseModel, Field, RootModel
 
@@ -10,6 +10,10 @@ TOKEN_VERSION = 1
 # TOKEN_VERSION here; retain older versions during a grace period when
 # bumping TOKEN_VERSION with breaking ACL-semantic changes.
 SUPPORTED_TOKEN_VERSIONS: frozenset[int] = frozenset({TOKEN_VERSION})
+
+
+class JWKSDict(TypedDict):
+    keys: list[dict[str, str]]
 
 
 class AllowedRegisterBind(BaseModel):
