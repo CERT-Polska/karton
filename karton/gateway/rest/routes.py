@@ -1,6 +1,4 @@
-import secrets
-
-from fastapi import APIRouter, Depends, Header, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import PlainTextResponse
 
 from karton.core.__version__ import __version__
@@ -8,6 +6,13 @@ from karton.core.backend import KartonBind, KartonMetrics
 from karton.core.task import Task, TaskState
 from karton.gateway.backend import gateway_backend
 from karton.gateway.config import gateway_config
+from karton.gateway.rest.auth import (
+    CanCancelTask,
+    CanGetMetrics,
+    CanInspectKarton,
+    CanRemoveBind,
+    CanRestartTask,
+)
 from karton.gateway.rest.models import (
     AnalysisView,
     Bind,
@@ -19,25 +24,15 @@ from karton.gateway.rest.models import (
 )
 from karton.gateway.task import generate_resource_download_urls
 
-
-async def verify_api_key(authorization: str | None = Header(default=None)) -> None:
-    # TODO: This is just a functional placeholder
-    #       Final solution won't use Authorization: Bearer for passing the password
-    password = gateway_config.password
-    if password is None:
-        return
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid bearer token")
-    if not secrets.compare_digest(authorization[len("Bearer ") :], password):
-        raise HTTPException(status_code=401, detail="Invalid API key")
-
-
-router = APIRouter(prefix="/api/v1", dependencies=[Depends(verify_api_key)])
-varz_router = APIRouter(dependencies=[Depends(verify_api_key)])
+rest_api_router = APIRouter(prefix="/api/v1")
+varz_router = APIRouter()
 
 
 def _allowed_buckets() -> list[str]:
-    return [gateway_backend.default_bucket_name, *gateway_config.allowed_extra_buckets]
+    return [
+        gateway_backend.default_bucket_name,
+        *gateway_config.allowed_foreign_buckets,
+    ]
 
 
 async def _task_to_view(task: Task) -> TaskView:
@@ -45,12 +40,12 @@ async def _task_to_view(task: Task) -> TaskView:
     return TaskView(**task.to_dict(), download_urls=download_urls)
 
 
-@router.get("/binds")
+@rest_api_router.get("/binds", dependencies=[Depends(CanInspectKarton)])
 async def get_binds() -> list[Bind]:
     return [Bind.model_validate(bind) for bind in await gateway_backend.get_binds()]
 
 
-@router.get("/binds/{identity}")
+@rest_api_router.get("/binds/{identity}", dependencies=[Depends(CanInspectKarton)])
 async def get_bind_details(identity: str) -> Bind:
     for bind in await gateway_backend.get_binds():
         if bind.identity == identity:
@@ -58,7 +53,7 @@ async def get_bind_details(identity: str) -> Bind:
     raise HTTPException(status_code=404, detail="Bind doesn't exist")
 
 
-@router.delete("/binds/{identity}")
+@rest_api_router.delete("/binds/{identity}", dependencies=[Depends(CanRemoveBind)])
 async def delete_bind(identity: str) -> Response:
     binds = {bind.identity for bind in await gateway_backend.get_binds()}
     if identity not in binds:
@@ -87,7 +82,7 @@ async def delete_bind(identity: str) -> Response:
     return Response(status_code=204)
 
 
-@router.get("/services")
+@rest_api_router.get("/services", dependencies=[Depends(CanInspectKarton)])
 async def get_services() -> list[ServiceInfo]:
     services = await gateway_backend.get_online_services(_legacy=False)
     counts: dict[tuple[str, str | None, str | None], int] = {}
@@ -144,12 +139,12 @@ async def _build_queues() -> dict[str, QueueView]:
     return queues
 
 
-@router.get("/queues")
+@rest_api_router.get("/queues", dependencies=[Depends(CanInspectKarton)])
 async def get_queues() -> dict[str, QueueView]:
     return await _build_queues()
 
 
-@router.get("/queues/{identity}")
+@rest_api_router.get("/queues/{identity}", dependencies=[Depends(CanInspectKarton)])
 async def get_queue_details(identity: str) -> QueueView:
     queues = await _build_queues()
     if identity not in queues:
@@ -157,7 +152,7 @@ async def get_queue_details(identity: str) -> QueueView:
     return queues[identity]
 
 
-@router.get("/tasks/{uid}")
+@rest_api_router.get("/tasks/{uid}", dependencies=[Depends(CanInspectKarton)])
 async def get_task_details(uid: str) -> TaskView:
     task = await gateway_backend.get_task(uid)
     if task is None:
@@ -165,7 +160,7 @@ async def get_task_details(uid: str) -> TaskView:
     return await _task_to_view(task)
 
 
-@router.get("/analyses/{uid}")
+@rest_api_router.get("/analyses/{uid}", dependencies=[Depends(CanInspectKarton)])
 async def get_analysis_details(uid: str) -> AnalysisView:
     binds = {bind.identity for bind in await gateway_backend.get_binds()}
     queues: dict[str, list[TaskView]] = {}
@@ -179,7 +174,7 @@ async def get_analysis_details(uid: str) -> AnalysisView:
     return AnalysisView(uid=uid, queues=queues)
 
 
-@router.post("/tasks/{uid}/restart")
+@rest_api_router.post("/tasks/{uid}/restart", dependencies=[Depends(CanRestartTask)])
 async def restart_task(uid: str) -> RestartedTask:
     task = await gateway_backend.get_task(uid)
     if task is None:
@@ -188,7 +183,7 @@ async def restart_task(uid: str) -> RestartedTask:
     return RestartedTask(uid=new_task.uid)
 
 
-@router.post("/tasks/{uid}/cancel")
+@rest_api_router.post("/tasks/{uid}/cancel", dependencies=[Depends(CanCancelTask)])
 async def cancel_task(uid: str) -> Response:
     task = await gateway_backend.get_task(uid)
     if task is None:
@@ -197,16 +192,7 @@ async def cancel_task(uid: str) -> Response:
     return Response(status_code=204)
 
 
-@router.delete("/tasks/{uid}")
-async def delete_task(uid: str) -> Response:
-    task = await gateway_backend.get_task(uid)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task doesn't exist")
-    await gateway_backend.delete_task(task)
-    return Response(status_code=204)
-
-
-@router.get("/outputs")
+@rest_api_router.get("/outputs", dependencies=[Depends(CanInspectKarton)])
 async def get_outputs() -> list[ProducerOutput]:
     return [
         ProducerOutput.model_validate(output)
@@ -214,7 +200,7 @@ async def get_outputs() -> list[ProducerOutput]:
     ]
 
 
-@varz_router.get("/varz")
+@varz_router.get("/varz", dependencies=[Depends(CanGetMetrics)])
 async def varz() -> PlainTextResponse:
     identities = await gateway_backend.get_online_identities()
     tasks = await gateway_backend.get_all_tasks(parse_resources=False)

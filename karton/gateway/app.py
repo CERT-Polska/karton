@@ -7,6 +7,7 @@ from .backend import gateway_backend
 from .errors import InternalError, KartonGatewayError, ShutdownError
 from .logger import set_connection_id, setup_logger
 from .messages import close_websocket, send_error
+from .rest.routes import rest_api_router, varz_router
 from .session import ClientSession
 
 
@@ -22,6 +23,9 @@ async def lifespan(app: FastAPI):
 setup_logger()
 logger = logging.getLogger(__name__)
 app = FastAPI(lifespan=lifespan)
+
+app.include_router(rest_api_router)
+app.include_router(varz_router)
 
 
 async def try_send_error(websocket: WebSocket, error: KartonGatewayError):

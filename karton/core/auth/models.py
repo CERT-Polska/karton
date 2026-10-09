@@ -85,12 +85,38 @@ class EnableDebugOperation(Operation):
     operation: Literal["enable_debug"] = "enable_debug"
 
 
+class InspectKartonOperation(Operation):
+    operation: Literal["inspect_karton"] = "inspect_karton"
+
+
+class RestartTaskOperation(Operation):
+    operation: Literal["restart_task"] = "restart_task"
+
+
+class CancelTaskOperation(Operation):
+    operation: Literal["cancel_task"] = "cancel_task"
+
+
+class RemoveBindOperation(Operation):
+    operation: Literal["remove_bind"] = "remove_bind"
+
+
+class GetMetricsOperation(Operation):
+    operation: Literal["get_metrics"] = "get_metrics"
+
+
+
 type AllowedOperation = (
     RegisterBindOperation
     | ConsumeTaskOperation
     | ProduceTaskOperation
     | ConsumeLogOperation
     | EnableDebugOperation
+    | InspectKartonOperation
+    | RestartTaskOperation
+    | CancelTaskOperation
+    | RemoveBindOperation
+    | GetMetricsOperation
 )
 
 
