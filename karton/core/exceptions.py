@@ -12,3 +12,7 @@ class HardShutdownInterrupt(BaseException):
 
 class BindExpiredError(Exception):
     pass
+
+
+class HeartbeatExpiredError(Exception):
+    pass
