@@ -53,13 +53,18 @@ class ClientSession:
         return self.service_info.identity
 
     async def _maintain_heartbeat(self, connection_id: str):
-        while True:
-            await gateway_backend.heartbeat_service(
-                self.service_info, connection_id, expires_after=HEARTBEAT_HARD_TIMEOUT
-            )
-            # Added random.random() to better distribute the heartbeat
-            # for services that initiated connection from the start
-            await asyncio.sleep(HEARTBEAT_BASE_INTERVAL + random.random())
+        try:
+            while True:
+                await gateway_backend.heartbeat_service(
+                    self.service_info,
+                    connection_id,
+                    expires_after=HEARTBEAT_HARD_TIMEOUT,
+                )
+                # Added random.random() to better distribute the heartbeat
+                # for services that initiated connection from the start
+                await asyncio.sleep(HEARTBEAT_BASE_INTERVAL + random.random())
+        finally:
+            await gateway_backend.unregister_service(self.service_info, connection_id)
 
     @classmethod
     @asynccontextmanager
@@ -104,17 +109,23 @@ class ClientSession:
         await gateway_backend.register_service(
             service_info, connection_id, HEARTBEAT_HARD_TIMEOUT
         )
-        # TODO: For now we never ingest the maintain heartbeat exceptions
-        # We may use TaskGroup for that, but then we need to unwrap the
-        # ExceptionGroup to properly handle session exceptions further
-        heartbeat = asyncio.create_task(session._maintain_heartbeat(connection_id))
         try:
-            await send_success(websocket)
-            yield session
-        finally:
-            heartbeat.cancel()
-            await asyncio.wait([heartbeat])
-            await gateway_backend.unregister_service(service_info, connection_id)
+            async with asyncio.TaskGroup() as tg:
+                heartbeat = tg.create_task(session._maintain_heartbeat(connection_id))
+                try:
+                    await send_success(websocket)
+                    yield session
+                finally:
+                    heartbeat.cancel()
+        except BaseExceptionGroup as excg:
+            if len(excg.exceptions) == 1:
+                # If there is a single exception, unwrap it
+                raise excg.exceptions[0] from None
+            else:
+                # If both session and heartbeat failed, then
+                # something serious happened, it's better to
+                # bubble-up the whole group and report it
+                raise
 
     async def message_loop(self, websocket: WebSocket):
         while True:
