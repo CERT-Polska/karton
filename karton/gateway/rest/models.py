@@ -2,8 +2,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from karton.core.gateway_protocol import ResourceUrl
 from karton.core.task import TaskPriority, TaskState
-from karton.gateway.models import ResourceUrl
 
 
 class Bind(BaseModel):

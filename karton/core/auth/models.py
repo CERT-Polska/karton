@@ -86,11 +86,81 @@ class ConsumeLogOperation(BaseModel):
         return isinstance(operation, ConsumeLogOperation)
 
 
+class InspectKartonOperation(BaseModel):
+    operation: Literal["inspect_karton"] = "inspect_karton"
+
+    def covers(self, operation: "AllowedOperation") -> bool:
+        """
+        Checks if this entitlement allows the specified operation
+
+        :param operation: Operation to be authorized
+        :return: True if operation is authorized by this entitlement, False otherwise
+        """
+        return isinstance(operation, InspectKartonOperation)
+
+
+class RestartTaskOperation(BaseModel):
+    operation: Literal["restart_task"] = "restart_task"
+
+    def covers(self, operation: "AllowedOperation") -> bool:
+        """
+        Checks if this entitlement allows the specified operation
+
+        :param operation: Operation to be authorized
+        :return: True if operation is authorized by this entitlement, False otherwise
+        """
+        return isinstance(operation, RestartTaskOperation)
+
+
+class CancelTaskOperation(BaseModel):
+    operation: Literal["cancel_task"] = "cancel_task"
+
+    def covers(self, operation: "AllowedOperation") -> bool:
+        """
+        Checks if this entitlement allows the specified operation
+
+        :param operation: Operation to be authorized
+        :return: True if operation is authorized by this entitlement, False otherwise
+        """
+        return isinstance(operation, CancelTaskOperation)
+
+
+class RemoveBindOperation(BaseModel):
+    operation: Literal["remove_bind"] = "remove_bind"
+
+    def covers(self, operation: "AllowedOperation") -> bool:
+        """
+        Checks if this entitlement allows the specified operation
+
+        :param operation: Operation to be authorized
+        :return: True if operation is authorized by this entitlement, False otherwise
+        """
+        return isinstance(operation, RemoveBindOperation)
+
+
+class GetMetricsOperation(BaseModel):
+    operation: Literal["get_metrics"] = "get_metrics"
+
+    def covers(self, operation: "AllowedOperation") -> bool:
+        """
+        Checks if this entitlement allows the specified operation
+
+        :param operation: Operation to be authorized
+        :return: True if operation is authorized by this entitlement, False otherwise
+        """
+        return isinstance(operation, GetMetricsOperation)
+
+
 type AllowedOperation = (
     RegisterBindOperation
     | ConsumeTaskOperation
     | ProduceTaskOperation
     | ConsumeLogOperation
+    | InspectKartonOperation
+    | RestartTaskOperation
+    | CancelTaskOperation
+    | RemoveBindOperation
+    | GetMetricsOperation
 )
 
 
