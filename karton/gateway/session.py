@@ -3,6 +3,7 @@ import logging
 import random
 from contextlib import asynccontextmanager
 from time import time
+from typing import AsyncIterator, Self
 
 from fastapi import WebSocket
 from pydantic import ValidationError
@@ -41,6 +42,21 @@ logger = logging.getLogger(__name__)
 
 
 def parse_auth_tokens(client_tokens: list[str]) -> list[VerifiedGrant]:
+    """
+    Parse and validate set of authorization tokens provided by client.
+
+    Returns list of VerifiedGrant objects for each valid token. This function
+    doesn't fail when any of the tokens is invalid - it is just not
+    included in the returned list.
+
+    Validation in this method checks whether token itself is correct and trustworthy.
+    Code that is using this method must still validate if claims in the token
+    are valid in a current context e.g. whether grant applies to the identity
+    provided by the client.
+
+    :param client_tokens: List of client-provided tokens
+    :return: List of VerifiedGrant objects for each valid token.
+    """
     verified_grants = []
     jwks = gateway_config.jwks
     if not jwks:
@@ -62,7 +78,7 @@ class ClientSession:
         close_on_idle: bool,
         auth_required: bool,
         auth_grants: list[VerifiedGrant],
-    ):
+    ) -> None:
         self.service_info = service_info
         self.close_on_idle = close_on_idle
         self.auth_required = auth_required
@@ -75,7 +91,7 @@ class ClientSession:
         """
         return self.service_info.identity
 
-    async def _maintain_heartbeat(self, connection_id: str):
+    async def _maintain_heartbeat(self, connection_id: str) -> None:
         while True:
             await gateway_backend.heartbeat_service(
                 self.service_info, connection_id, expires_after=HEARTBEAT_HARD_TIMEOUT
@@ -109,7 +125,7 @@ class ClientSession:
         websocket: WebSocket,
         connection_id: str,
         timeout: float = INIT_SESSION_TIMEOUT,
-    ):
+    ) -> AsyncIterator[Self]:
         hello_message = HelloResponseMessage(server_version=__version__)
         hello_response = HelloResponse(message=hello_message)
         await send_message(websocket, hello_response)

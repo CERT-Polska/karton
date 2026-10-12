@@ -203,7 +203,7 @@ def cmd_issue(args: argparse.Namespace) -> None:
         private_key,
         claims,
         issuer=args.issuer or default_issuer(),
-        expire_after=args.expire_after,
+        expire_after_seconds=args.expire_after,
     )
     print(token)
 

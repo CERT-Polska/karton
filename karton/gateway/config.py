@@ -18,7 +18,7 @@ class GatewayServerConfig(BaseModel):
 
 def get_gateway_config(config: Config) -> GatewayServerConfig:
     secret_key = config.get("gateway-server", "secret_key")
-    auth_required = config.getboolean("gateway-server", "auth_required", fallback=False)
+    auth_required = config.getboolean("gateway-server", "auth_required", fallback=True)
     jwks_path = pathlib.Path(config.get("gateway-server", "jwks_path", "jwks.json"))
     if auth_required:
         if not jwks_path.exists():

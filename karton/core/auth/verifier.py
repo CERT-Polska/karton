@@ -33,13 +33,12 @@ def decode_auth_token(
 
     :param token: Authorization token to decode
     :param jwk_set: Parsed JWKS with public keys for signature verification
-    :return: VerifiedGrant object describing authorization grants
+    :return: VerifiedGrant object describing token grants included in token
     """
-    unverified = jwt.decode_complete(token, options={"verify_signature": False})
-    header = unverified["header"]
+    header = jwt.get_unverified_header(token)
     if not header.get("kid"):
         raise InvalidTokenError("'kid' not found in provided authorization token")
-    kid = header.get("kid")
+    kid = header["kid"]
     if kid not in jwk_set:
         raise InvalidTokenError("Token is signed using unknown public key")
     jwk = jwk_set[kid]

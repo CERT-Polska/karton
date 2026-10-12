@@ -162,7 +162,6 @@ async def handle_declare_task_request(
         parent_task_uid = parent_task_info.task_uid
         allowed_parent_resources = parent_task_info.resources
 
-    server_allowed_foreign_buckets = gateway_config.allowed_foreign_buckets
     payload_bags = (task_params.payload, task_params.payload_persistent)
 
     if session.auth_required:
@@ -173,7 +172,7 @@ async def handle_declare_task_request(
 
     # Now, we need to translate DeclaredResourceSpec to RemoteResource
     task_payload_bags, validated_resources = process_declared_task_resources(
-        payload_bags, allowed_parent_resources, server_allowed_foreign_buckets
+        payload_bags, allowed_parent_resources, gateway_config.allowed_foreign_buckets
     )
     resource_urls = await generate_resource_upload_urls(validated_resources)
     task_payload, task_payload_persistent = task_payload_bags

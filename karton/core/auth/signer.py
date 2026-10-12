@@ -35,8 +35,19 @@ def issue_auth_token(
     private_key: ec.EllipticCurvePrivateKey,
     claims: AuthClaims,
     issuer: str,
-    expire_after: int | None = None,
-):
+    expire_after_seconds: int | None = None,
+) -> str:
+    """
+    Issue a new Karton authentication token signed with private key
+
+    :param private_key: Private key to use for signing
+    :param claims: Authorization claims to include in a token
+    :param issuer: Issuer name
+    :param expire_after_seconds: |
+        Set token validity time in seconds. If None (default), token
+        never expires
+    :return: JWT token string
+    """
     kid = get_jwk_thumbprint_from_private_key(private_key)
     issued_at = datetime.datetime.now(datetime.timezone.utc)
     payload = {
@@ -48,8 +59,8 @@ def issue_auth_token(
         "ver": TOKEN_VERSION,
         "claims": claims.model_dump(mode="json"),
     }
-    if expire_after is not None:
-        payload["exp"] = issued_at + datetime.timedelta(seconds=expire_after)
+    if expire_after_seconds is not None:
+        payload["exp"] = issued_at + datetime.timedelta(seconds=expire_after_seconds)
 
     return jwt.encode(
         payload,
