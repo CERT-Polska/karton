@@ -1,4 +1,5 @@
 from collections import defaultdict
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import PlainTextResponse
@@ -18,6 +19,7 @@ from karton.gateway.rest.auth import (
 from karton.gateway.rest.models import (
     AnalysisView,
     Bind,
+    BulkRestartedTask,
     ProducerOutput,
     QueueView,
     RestartedTask,
@@ -146,6 +148,24 @@ async def _build_queues() -> dict[str, QueueView]:
     return queues
 
 
+async def _get_queue_tasks_by_status(identity: str, status: str) -> list[Task]:
+    binds = {bind.identity for bind in await gateway_backend.get_binds()}
+    if identity not in binds:
+        raise HTTPException(status_code=404, detail="Queue doesn't exist")
+
+    tasks: list[Task] = []
+    async for task in gateway_backend.iter_all_tasks(parse_resources=False):
+        if task.headers.get("receiver") != identity:
+            continue
+        if status == "crashed":
+            if task.status == TaskState.CRASHED:
+                tasks.append(task)
+        elif status == "pending":
+            if task.status not in (TaskState.FINISHED, TaskState.CRASHED):
+                tasks.append(task)
+    return tasks
+
+
 @rest_api_router.get("/queues", dependencies=[Depends(CanInspectKarton)])
 async def get_queues() -> dict[str, QueueView]:
     return await _build_queues()
@@ -157,6 +177,34 @@ async def get_queue_details(identity: str) -> QueueView:
     if identity not in queues:
         raise HTTPException(status_code=404, detail="Queue doesn't exist")
     return queues[identity]
+
+
+@rest_api_router.post(
+    "/queues/{identity}/restart", dependencies=[Depends(CanRestartTask)]
+)
+async def restart_queue_tasks(
+    identity: str,
+    status: Literal["crashed", "pending"] = "crashed",
+) -> list[BulkRestartedTask]:
+    tasks = await _get_queue_tasks_by_status(identity, status)
+    restarted: list[BulkRestartedTask] = []
+    for task in tasks:
+        new_task = await gateway_backend.restart_task(task)
+        restarted.append(BulkRestartedTask(old_uid=task.uid, new_uid=new_task.uid))
+    return restarted
+
+
+@rest_api_router.post(
+    "/queues/{identity}/cancel", dependencies=[Depends(CanCancelTask)]
+)
+async def cancel_queue_tasks(
+    identity: str,
+    status: Literal["crashed", "pending"] = "crashed",
+) -> Response:
+    tasks = await _get_queue_tasks_by_status(identity, status)
+    for task in tasks:
+        await gateway_backend.set_task_status(task, TaskState.FINISHED)
+    return Response(status_code=204)
 
 
 @rest_api_router.get("/tasks/{uid}", dependencies=[Depends(CanInspectKarton)])
