@@ -76,5 +76,9 @@ class BulkRestartedTask(BaseModel):
     new_uid: str
 
 
+class BatchTaskRequest(BaseModel):
+    uids: list[str]
+
+
 class APIError(BaseModel):
     error: str
