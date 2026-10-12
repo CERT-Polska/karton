@@ -838,7 +838,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         new_task.orig_uid = task.orig_uid
         new_task.status = TaskState.SPAWNED
 
-        p = self.make_pipeline()
+        p = self.make_pipeline(transaction=True)
         self.register_task(new_task, pipe=p)
         self.produce_routed_task(new_task.headers["receiver"], new_task, pipe=p)
         self.set_task_status(task, status=TaskState.FINISHED, pipe=p)
