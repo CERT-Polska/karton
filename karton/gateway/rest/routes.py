@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import PlainTextResponse
 
@@ -104,24 +106,29 @@ async def get_services() -> list[ServiceInfo]:
 async def _build_queues() -> dict[str, QueueView]:
     binds = {bind.identity: bind for bind in await gateway_backend.get_binds()}
     replicas = await gateway_backend.get_online_identities()
-    tasks = await gateway_backend.get_all_tasks(parse_resources=False)
-    pending = [
-        task
-        for task in tasks
-        if task.status not in (TaskState.FINISHED, TaskState.CRASHED)
-    ]
-    crashed = [task for task in tasks if task.status == TaskState.CRASHED]
+
+    pending_uids: dict[str, list[tuple[float, str]]] = defaultdict(list)
+    crashed_uids: dict[str, list[tuple[float, str]]] = defaultdict(list)
+
+    async for task in gateway_backend.iter_all_tasks(parse_resources=False):
+        receiver = task.headers.get("receiver")
+        if receiver is None or receiver not in binds:
+            continue
+        if task.status == TaskState.CRASHED:
+            crashed_uids[receiver].append((task.last_update, task.uid))
+        elif task.status not in (TaskState.FINISHED, TaskState.CRASHED):
+            pending_uids[receiver].append((task.last_update, task.uid))
 
     queues: dict[str, QueueView] = {}
     for identity, bind in binds.items():
         queue_pending = sorted(
-            (task for task in pending if task.headers.get("receiver") == identity),
-            key=lambda task: task.last_update,
+            pending_uids.get(identity, []),
+            key=lambda item: item[0],
             reverse=True,
         )
         queue_crashed = sorted(
-            (task for task in crashed if task.headers.get("receiver") == identity),
-            key=lambda task: task.last_update,
+            crashed_uids.get(identity, []),
+            key=lambda item: item[0],
             reverse=True,
         )
         queues[identity] = QueueView(
@@ -133,8 +140,8 @@ async def _build_queues() -> dict[str, QueueView]:
             service_version=bind.service_version,
             is_async=bind.is_async,
             replicas=len(replicas.get(identity, [])),
-            pending_task_uids=[task.uid for task in queue_pending],
-            crashed_task_uids=[task.uid for task in queue_crashed],
+            pending_task_uids=[uid for _, uid in queue_pending],
+            crashed_task_uids=[uid for _, uid in queue_crashed],
         )
     return queues
 
@@ -203,7 +210,6 @@ async def get_outputs() -> list[ProducerOutput]:
 @varz_router.get("/varz", dependencies=[Depends(CanGetMetrics)])
 async def varz() -> PlainTextResponse:
     identities = await gateway_backend.get_online_identities()
-    tasks = await gateway_backend.get_all_tasks(parse_resources=False)
 
     lines = [
         "# HELP karton_replicas Number of online replicas per identity",
@@ -216,11 +222,13 @@ async def varz() -> PlainTextResponse:
         "# HELP karton_tasks Number of tasks per queue, priority and status",
         "# TYPE karton_tasks gauge",
     ]
+
     task_counts: dict[tuple[str, str, str], int] = {}
-    for task in tasks:
+    async for task in gateway_backend.iter_all_tasks(parse_resources=False):
         receiver = task.headers.get("receiver", "")
         key = (receiver, task.priority.value, task.status.value)
         task_counts[key] = task_counts.get(key, 0) + 1
+
     for (queue, priority, status), count in task_counts.items():
         lines.append(
             f'karton_tasks{{queue="{queue}",priority="{priority}",'
