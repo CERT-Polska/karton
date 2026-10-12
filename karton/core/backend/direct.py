@@ -4,11 +4,12 @@ import logging
 import os
 import time
 import warnings
-from collections import defaultdict, namedtuple
+from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from typing import (
     IO,
     Any,
+    Literal,
     cast,
 )
 
@@ -34,7 +35,9 @@ from .base import (
     KartonBind,
     KartonExternalServiceInfo,
     KartonMetrics,
+    KartonOutputs,
     KartonServiceInfo,
+    QueueSummary,
     unserialize_bind,
 )
 
@@ -46,7 +49,6 @@ KARTON_TASK_NAMESPACE = "karton.task"
 KARTON_OUTPUTS_NAMESPACE = "karton.outputs"
 KARTON_SERVICES_NAMESPACE = "karton.services"
 
-KartonOutputs = namedtuple("KartonOutputs", ["identity", "outputs"])
 logger = logging.getLogger(__name__)
 
 
@@ -1214,6 +1216,129 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             )
             for identity in output_keys
         ]
+
+    def get_queues(self, parse_resources: bool = False) -> dict[str, QueueSummary]:
+        """
+        Get a summary of all queues and their task state.
+
+        Streams all tasks from Redis via :meth:`iter_all_tasks` and groups
+        them by receiver. Full Task objects are pre-loaded in each
+        :class:`QueueSummary` for in-memory filtering by
+        :class:`karton.core.inspect.KartonQueue`.
+
+        :param parse_resources: If False (default), resources are not parsed
+            to speed up deserialization.
+        :return: Dictionary mapping queue identity to :class:`QueueSummary`
+        """
+        binds = {bind.identity: bind for bind in self.get_binds()}
+        replicas = self.get_online_identities()
+
+        tasks_per_queue: dict[str, list[Task]] = defaultdict(list)
+        pending_uids: dict[str, list[str]] = defaultdict(list)
+        crashed_uids: dict[str, list[str]] = defaultdict(list)
+
+        for task in self.iter_all_tasks(parse_resources=parse_resources):
+            receiver = task.headers.get("receiver")
+            if receiver is None or receiver not in binds:
+                continue
+            if task.status == TaskState.FINISHED:
+                continue
+            tasks_per_queue[receiver].append(task)
+            if task.status == TaskState.CRASHED:
+                crashed_uids[receiver].append(task.uid)
+            else:
+                pending_uids[receiver].append(task.uid)
+
+        queues: dict[str, QueueSummary] = {}
+        for identity, bind in binds.items():
+            queues[identity] = QueueSummary(
+                bind=bind,
+                replicas=len(replicas.get(identity, [])),
+                tasks=tasks_per_queue.get(identity, []),
+                pending_task_uids=pending_uids.get(identity, []),
+                crashed_task_uids=crashed_uids.get(identity, []),
+            )
+        return queues
+
+    def get_analysis_tasks(self, root_uid: str) -> dict[str, list[Task]]:
+        """
+        Get all non-finished tasks belonging to the same analysis tree,
+        grouped by receiver queue.
+
+        :param root_uid: Root identifier of the analysis task tree
+        :return: Dictionary mapping receiver queue identity to list of tasks
+        """
+        binds = {bind.identity for bind in self.get_binds()}
+        tasks_per_queue: dict[str, list[Task]] = defaultdict(list)
+
+        for task in self.iter_task_tree(root_uid, parse_resources=False):
+            if task.status == TaskState.FINISHED:
+                continue
+            receiver = task.headers.get("receiver")
+            if receiver is None or receiver not in binds:
+                continue
+            tasks_per_queue[receiver].append(task)
+
+        return dict(tasks_per_queue)
+
+    def cancel_task(self, task_uid: str) -> None:
+        """
+        Cancel a task by marking it as finished.
+
+        :param task_uid: Task identifier to cancel
+        """
+        task = self.get_task(task_uid)
+        if task is None:
+            raise RuntimeError(f"Task {task_uid} doesn't exist")
+        self.set_task_status(task, TaskState.FINISHED)
+
+    def restart_queue_tasks(
+        self,
+        identity: str,
+        status: Literal["crashed", "pending"] = "crashed",
+    ) -> list[tuple[str, str]]:
+        """
+        Restart all tasks matching the given status in a queue.
+
+        :param identity: Karton service identity (queue name)
+        :param status: Which tasks to restart (``"crashed"`` or ``"pending"``)
+        :return: List of ``(old_uid, new_uid)`` pairs for each restarted task
+        """
+        restarted: list[tuple[str, str]] = []
+        for task in self.iter_all_tasks(parse_resources=False):
+            if task.headers.get("receiver") != identity:
+                continue
+            if status == "crashed":
+                if task.status != TaskState.CRASHED:
+                    continue
+            else:
+                if task.status in (TaskState.FINISHED, TaskState.CRASHED):
+                    continue
+            new_task = self.restart_task(task)
+            restarted.append((task.uid, new_task.uid))
+        return restarted
+
+    def cancel_queue_tasks(
+        self,
+        identity: str,
+        status: Literal["crashed", "pending"] = "crashed",
+    ) -> None:
+        """
+        Cancel all tasks matching the given status in a queue.
+
+        :param identity: Karton service identity (queue name)
+        :param status: Which tasks to cancel (``"crashed"`` or ``"pending"``)
+        """
+        for task in self.iter_all_tasks(parse_resources=False):
+            if task.headers.get("receiver") != identity:
+                continue
+            if status == "crashed":
+                if task.status != TaskState.CRASHED:
+                    continue
+            else:
+                if task.status in (TaskState.FINISHED, TaskState.CRASHED):
+                    continue
+            self.set_task_status(task, TaskState.FINISHED)
 
     def make_pipeline(self, transaction: bool = False) -> Pipeline:
         return self.redis.pipeline(transaction=transaction)
