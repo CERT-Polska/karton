@@ -42,11 +42,6 @@ def _allowed_buckets() -> list[str]:
     ]
 
 
-async def _task_to_view(task: Task) -> TaskView:
-    download_urls = await generate_resource_download_urls(task, _allowed_buckets())
-    return TaskView(**task.to_dict(), download_urls=download_urls)
-
-
 @rest_api_router.get("/binds", dependencies=[Depends(CanInspectKarton)])
 async def get_binds() -> list[Bind]:
     return [Bind.model_validate(bind) for bind in await gateway_backend.get_binds()]
@@ -235,7 +230,8 @@ async def get_task_details(uid: str) -> TaskView:
     task = await gateway_backend.get_task(uid)
     if task is None:
         raise HTTPException(status_code=404, detail="Task doesn't exist")
-    return await _task_to_view(task)
+    download_urls = await generate_resource_download_urls(task, _allowed_buckets())
+    return TaskView(**task.to_dict(), download_urls=download_urls)
 
 
 @rest_api_router.get("/analyses/{uid}", dependencies=[Depends(CanInspectKarton)])
