@@ -17,7 +17,7 @@ from redis.exceptions import AuthenticationError
 from karton.core import Config, Task
 from karton.core.asyncio.resource import LocalResource, RemoteResource, ResourceData
 from karton.core.backend import KartonBind, KartonMetrics, KartonServiceInfo
-from karton.core.backend.base import KartonExternalServiceInfo
+from karton.core.backend.base import KartonExternalServiceInfo, KartonOutputs
 from karton.core.backend.direct import (
     KARTON_BINDS_HSET,
     KARTON_OUTPUTS_NAMESPACE,
@@ -25,7 +25,6 @@ from karton.core.backend.direct import (
     KARTON_TASK_NAMESPACE,
     KARTON_TASKS_QUEUE,
     KartonBackendBase,
-    KartonOutputs,
 )
 from karton.core.exceptions import BindExpiredError, HeartbeatExpiredError
 from karton.core.resource import LocalResource as SyncLocalResource
