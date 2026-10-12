@@ -1,11 +1,13 @@
 from collections import defaultdict
+from collections.abc import AsyncIterator
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import PlainTextResponse
 
 from karton.core.__version__ import __version__
 from karton.core.backend import KartonBind, KartonMetrics
+from karton.core.backend.direct import KARTON_TASK_NAMESPACE
 from karton.core.task import Task, TaskState
 from karton.gateway.backend import gateway_backend
 from karton.gateway.config import gateway_config
@@ -18,6 +20,7 @@ from karton.gateway.rest.auth import (
 )
 from karton.gateway.rest.models import (
     AnalysisView,
+    BatchTaskRequest,
     Bind,
     BulkRestartedTask,
     ProducerOutput,
@@ -173,65 +176,10 @@ async def get_queues() -> dict[str, QueueView]:
 
 @rest_api_router.get("/queues/{identity}", dependencies=[Depends(CanInspectKarton)])
 async def get_queue_details(identity: str) -> QueueView:
-    bind = await gateway_backend.get_bind(identity)
-    if bind is None:
+    queues = await _build_queues()
+    if identity not in queues:
         raise HTTPException(status_code=404, detail="Queue doesn't exist")
-    replicas = await gateway_backend.get_online_identities()
-
-    pending_uids: list[tuple[float, str]] = []
-    crashed_uids: list[tuple[float, str]] = []
-    async for task in gateway_backend.iter_all_tasks(parse_resources=False):
-        if task.headers.get("receiver") != identity:
-            continue
-        if task.status == TaskState.CRASHED:
-            crashed_uids.append((task.last_update, task.uid))
-        elif task.status not in (TaskState.FINISHED, TaskState.CRASHED):
-            pending_uids.append((task.last_update, task.uid))
-
-    queue_pending = sorted(pending_uids, key=lambda item: item[0], reverse=True)
-    queue_crashed = sorted(crashed_uids, key=lambda item: item[0], reverse=True)
-    return QueueView(
-        identity=bind.identity,
-        info=bind.info,
-        version=bind.version,
-        persistent=bind.persistent,
-        filters=bind.filters,
-        service_version=bind.service_version,
-        is_async=bind.is_async,
-        replicas=len(replicas.get(identity, [])),
-        pending_task_uids=[uid for _, uid in queue_pending],
-        crashed_task_uids=[uid for _, uid in queue_crashed],
-    )
-
-
-@rest_api_router.get(
-    "/queues/{identity}/tasks", dependencies=[Depends(CanInspectKarton)]
-)
-async def get_queue_tasks(
-    identity: str,
-    status: Literal["pending", "crashed"] = "pending",
-    limit: int = Query(default=100, ge=1, le=1000),
-    offset: int = Query(default=0, ge=0),
-) -> list[TaskView]:
-    bind = await gateway_backend.get_bind(identity)
-    if bind is None:
-        raise HTTPException(status_code=404, detail="Queue doesn't exist")
-
-    matched: list[Task] = []
-    async for task in gateway_backend.iter_all_tasks(parse_resources=False):
-        if task.headers.get("receiver") != identity:
-            continue
-        if status == "crashed":
-            if task.status != TaskState.CRASHED:
-                continue
-        else:
-            if task.status in (TaskState.FINISHED, TaskState.CRASHED):
-                continue
-        matched.append(task)
-
-    matched.sort(key=lambda task: task.last_update, reverse=True)
-    page = matched[offset : offset + limit]
-    return [await _task_to_view(task) for task in page]
+    return queues[identity]
 
 
 @rest_api_router.post(
@@ -262,6 +210,26 @@ async def cancel_queue_tasks(
     return Response(status_code=204)
 
 
+@rest_api_router.post("/tasks/batch", dependencies=[Depends(CanInspectKarton)])
+async def get_tasks_batch(request: BatchTaskRequest) -> list[TaskView]:
+    if len(request.uids) > 10000:
+        raise HTTPException(
+            status_code=400,
+            detail="Maximum number of task UIDs per request is 10000",
+        )
+
+    async def _key_iter() -> AsyncIterator[str]:
+        for uid in request.uids:
+            yield f"{KARTON_TASK_NAMESPACE}:{uid}"
+
+    tasks: list[Task] = []
+    async for task in gateway_backend._iter_tasks(
+        _key_iter(), chunk_size=1000, parse_resources=False
+    ):
+        tasks.append(task)
+    return [TaskView(**task.to_dict()) for task in tasks]
+
+
 @rest_api_router.get("/tasks/{uid}", dependencies=[Depends(CanInspectKarton)])
 async def get_task_details(uid: str) -> TaskView:
     task = await gateway_backend.get_task(uid)
@@ -280,7 +248,7 @@ async def get_analysis_details(uid: str) -> AnalysisView:
         receiver = task.headers.get("receiver")
         if receiver is None or receiver not in binds:
             continue
-        queues.setdefault(receiver, []).append(await _task_to_view(task))
+        queues.setdefault(receiver, []).append(TaskView(**task.to_dict()))
     return AnalysisView(uid=uid, queues=queues)
 
 
