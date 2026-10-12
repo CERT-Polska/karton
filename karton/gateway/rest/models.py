@@ -71,5 +71,10 @@ class RestartedTask(BaseModel):
     uid: str
 
 
+class BulkRestartedTask(BaseModel):
+    old_uid: str
+    new_uid: str
+
+
 class APIError(BaseModel):
     error: str
