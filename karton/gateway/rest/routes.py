@@ -1,7 +1,7 @@
 from collections import defaultdict
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import PlainTextResponse
 
 from karton.core.__version__ import __version__
@@ -51,16 +51,16 @@ async def get_binds() -> list[Bind]:
 
 @rest_api_router.get("/binds/{identity}", dependencies=[Depends(CanInspectKarton)])
 async def get_bind_details(identity: str) -> Bind:
-    for bind in await gateway_backend.get_binds():
-        if bind.identity == identity:
-            return Bind.model_validate(bind)
-    raise HTTPException(status_code=404, detail="Bind doesn't exist")
+    bind = await gateway_backend.get_bind(identity)
+    if bind is None:
+        raise HTTPException(status_code=404, detail="Bind doesn't exist")
+    return Bind.model_validate(bind)
 
 
 @rest_api_router.delete("/binds/{identity}", dependencies=[Depends(CanRemoveBind)])
 async def delete_bind(identity: str) -> Response:
-    binds = {bind.identity for bind in await gateway_backend.get_binds()}
-    if identity not in binds:
+    bind = await gateway_backend.get_bind(identity)
+    if bind is None:
         raise HTTPException(status_code=404, detail="Bind doesn't exist")
     replicas = await gateway_backend.get_online_identities()
     if replicas.get(identity):
@@ -149,8 +149,8 @@ async def _build_queues() -> dict[str, QueueView]:
 
 
 async def _get_queue_tasks_by_status(identity: str, status: str) -> list[Task]:
-    binds = {bind.identity for bind in await gateway_backend.get_binds()}
-    if identity not in binds:
+    bind = await gateway_backend.get_bind(identity)
+    if bind is None:
         raise HTTPException(status_code=404, detail="Queue doesn't exist")
 
     tasks: list[Task] = []
@@ -173,10 +173,65 @@ async def get_queues() -> dict[str, QueueView]:
 
 @rest_api_router.get("/queues/{identity}", dependencies=[Depends(CanInspectKarton)])
 async def get_queue_details(identity: str) -> QueueView:
-    queues = await _build_queues()
-    if identity not in queues:
+    bind = await gateway_backend.get_bind(identity)
+    if bind is None:
         raise HTTPException(status_code=404, detail="Queue doesn't exist")
-    return queues[identity]
+    replicas = await gateway_backend.get_online_identities()
+
+    pending_uids: list[tuple[float, str]] = []
+    crashed_uids: list[tuple[float, str]] = []
+    async for task in gateway_backend.iter_all_tasks(parse_resources=False):
+        if task.headers.get("receiver") != identity:
+            continue
+        if task.status == TaskState.CRASHED:
+            crashed_uids.append((task.last_update, task.uid))
+        elif task.status not in (TaskState.FINISHED, TaskState.CRASHED):
+            pending_uids.append((task.last_update, task.uid))
+
+    queue_pending = sorted(pending_uids, key=lambda item: item[0], reverse=True)
+    queue_crashed = sorted(crashed_uids, key=lambda item: item[0], reverse=True)
+    return QueueView(
+        identity=bind.identity,
+        info=bind.info,
+        version=bind.version,
+        persistent=bind.persistent,
+        filters=bind.filters,
+        service_version=bind.service_version,
+        is_async=bind.is_async,
+        replicas=len(replicas.get(identity, [])),
+        pending_task_uids=[uid for _, uid in queue_pending],
+        crashed_task_uids=[uid for _, uid in queue_crashed],
+    )
+
+
+@rest_api_router.get(
+    "/queues/{identity}/tasks", dependencies=[Depends(CanInspectKarton)]
+)
+async def get_queue_tasks(
+    identity: str,
+    status: Literal["pending", "crashed"] = "pending",
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+) -> list[TaskView]:
+    bind = await gateway_backend.get_bind(identity)
+    if bind is None:
+        raise HTTPException(status_code=404, detail="Queue doesn't exist")
+
+    matched: list[Task] = []
+    async for task in gateway_backend.iter_all_tasks(parse_resources=False):
+        if task.headers.get("receiver") != identity:
+            continue
+        if status == "crashed":
+            if task.status != TaskState.CRASHED:
+                continue
+        else:
+            if task.status in (TaskState.FINISHED, TaskState.CRASHED):
+                continue
+        matched.append(task)
+
+    matched.sort(key=lambda task: task.last_update, reverse=True)
+    page = matched[offset : offset + limit]
+    return [await _task_to_view(task) for task in page]
 
 
 @rest_api_router.post(
