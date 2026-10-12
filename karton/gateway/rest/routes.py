@@ -275,7 +275,7 @@ async def get_analysis_details(uid: str) -> AnalysisView:
     binds = {bind.identity for bind in await gateway_backend.get_binds()}
     queues: dict[str, list[TaskView]] = {}
     async for task in gateway_backend.iter_task_tree(uid):
-        if task.status in (TaskState.FINISHED, TaskState.CRASHED):
+        if task.status == TaskState.FINISHED:
             continue
         receiver = task.headers.get("receiver")
         if receiver is None or receiver not in binds:
