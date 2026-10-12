@@ -217,29 +217,6 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             task_keys, chunk_size=chunk_size, parse_resources=parse_resources
         )
 
-    async def get_all_tasks(
-        self, chunk_size: int = 1000, parse_resources: bool = True
-    ) -> list[Task]:
-        """
-        Get all tasks registered in Redis
-
-        .. warning::
-            This method loads all tasks into memory.
-            It's recommended to use :py:meth:`iter_all_tasks` instead.
-
-        :param chunk_size: Size of chunks passed to the Redis MGET command
-        :param parse_resources: If set to False, resources are not parsed.
-            It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
-            to learn more.
-        :return: List with Task objects
-        """
-        return [
-            task
-            async for task in self.iter_all_tasks(
-                chunk_size=chunk_size, parse_resources=parse_resources
-            )
-        ]
-
     async def _iter_legacy_task_tree(
         self, root_uid: str, chunk_size: int = 1000, parse_resources: bool = True
     ) -> AsyncIterator[Task]:
