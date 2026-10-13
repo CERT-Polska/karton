@@ -2,7 +2,7 @@ import dataclasses
 import datetime
 import enum
 import uuid
-from typing import Any, Callable, Iterator, TypedDict
+from typing import Any, Callable, TypedDict
 
 import jwt
 from pydantic import ValidationError
@@ -14,6 +14,7 @@ from karton.core.gateway_protocol import (
 )
 from karton.core.resource import ResourceBase
 from karton.core.task import Task, TaskState
+from karton.core.utils import recursive_map
 from karton.gateway.backend import gateway_backend
 from karton.gateway.errors import InvalidTaskError, InvalidTaskTokenError
 
@@ -83,28 +84,15 @@ def make_task_token(
     return jwt.encode(payload, secret_key, algorithm="HS256")
 
 
-def iter_resources(obj: Any) -> Iterator[dict[str, Any]]:
-    if type(obj) is dict:
-        if "__karton_resource__" in obj:
-            yield obj["__karton_resource__"]
-        else:
-            for v in obj.values():
-                yield from iter_resources(v)
-    elif type(obj) in (list, tuple):
-        for el in obj:
-            yield from iter_resources(el)
-
-
 def map_resources(obj: Any, mapper: Callable[[dict[str, Any]], Any]) -> Any:
-    if type(obj) is dict:
-        if "__karton_resource__" in obj:
-            return mapper(obj["__karton_resource__"])
-        else:
-            return {k: map_resources(v, mapper) for k, v in obj.items()}
-    elif type(obj) in (list, tuple):
-        return [map_resources(el, mapper) for el in obj]
-    else:
-        return obj
+    return recursive_map(
+        obj,
+        lambda el: (
+            mapper(el["__karton_resource__"])
+            if type(el) is dict and "__karton_resource__" in el
+            else el
+        ),
+    )
 
 
 def is_resource_allowed(

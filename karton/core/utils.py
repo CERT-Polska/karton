@@ -25,7 +25,7 @@ def chunks_iter(seq: Iterator[T], size: int) -> Iterator[Sequence[T]]:
 
 def recursive_iter(obj: Any) -> Iterator[Any]:
     """
-    Yields all values recursively from nested list/dict structures
+    Yields all leaf values recursively from nested list/dict structures
 
     :param obj: Object to iterate over
     """
