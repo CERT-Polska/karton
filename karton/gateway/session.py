@@ -65,8 +65,8 @@ def parse_auth_tokens(client_tokens: list[str]) -> list[VerifiedGrant]:
         try:
             verified_grant = decode_auth_token(client_token, jwks)
             verified_grants.append(verified_grant)
-        except Exception:
-            # TODO: Logging about invalid token
+        except Exception as e:
+            logger.warning("Client presented invalid token: %r", e)
             pass
     return verified_grants
 

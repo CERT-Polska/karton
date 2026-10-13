@@ -1,3 +1,4 @@
+import logging
 import sys
 import traceback
 from typing import TYPE_CHECKING, Protocol, Type, cast
@@ -62,6 +63,8 @@ from karton.core.gateway_protocol import (
     TaskResponse,
     TaskResponseMessage,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class RequestHandler[T: RequestType](Protocol):
