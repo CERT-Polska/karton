@@ -113,25 +113,11 @@ def is_resource_allowed(
     return {"uid": uid, "bucket": bucket} in allowed_parent_resources
 
 
-def get_referenced_foreign_buckets(
-    payload_bags: PayloadBags,
-) -> list[str]:
-    foreign_buckets = set()
-    for resource in iter_resources(payload_bags):
-        if not resource.get("to_upload", False):
-            continue
-        bucket = resource.get("bucket")
-        if bucket is None or bucket == gateway_backend.default_bucket_name:
-            continue
-        foreign_buckets.add(bucket)
-    return list(foreign_buckets)
-
-
 def process_declared_task_resources(
     payload_bags: PayloadBags,
     allowed_parent_resources: list[AllowedResource],
     allowed_foreign_buckets: list[str],
-) -> tuple[PayloadBags, list[ValidatedDeclaredResourceSpec]]:
+) -> tuple[PayloadBags, list[ValidatedDeclaredResourceSpec], list[str]]:
     """
     Performs a lookup for resources referenced in payload bags, validates them
     and maps them to ResourceBase objects for Task.serialize
@@ -141,76 +127,67 @@ def process_declared_task_resources(
 
     :param payload_bags: Payload bags to process
     :param allowed_parent_resources: Allowed remote resources referenced in parent token
-    :param allowed_foreign_buckets: Allowed foreign buckets to use for resource upload
+    :param allowed_foreign_buckets: Allowed foreign buckets for RemoteResource reference
     :return: |
-        Tuple with two elements: payload bags with mapped resources to ResourceBase and
-        list of DeclaredResourceSpec objects with validated resource specification.
+        Tuple of three elements:
+        - payload bags with mapped resources to ResourceBase,
+        - list of DeclaredResourceSpec objects with validated resource specification
+        - referenced foreign buckets not explicitly allowed by task token
     """
     resources: dict[tuple[str, str], ValidatedDeclaredResourceSpec] = {}
+    referenced_foreign_buckets: set[str] = set()
 
-    def process_resource(resource_data: dict[str, Any]) -> Any:
+    def process_resource(resource_data: dict[str, Any]) -> ResourceBase:
         try:
             resource_spec = DeclaredResourceSpec.model_validate(resource_data)
         except ValidationError as e:
             raise InvalidTaskError(f"Invalid resource specification {e}")
 
-        resource_server_uid: str
-        resource_bucket: str
+        if resource_spec.bucket is None:
+            # LocalResources (for upload) will have bucket=None
+            # RemoteResources will have bucket always set to the bucket name
+            resource_bucket = gateway_backend.default_bucket_name
+        else:
+            resource_bucket = resource_spec.bucket
 
         if (
-            resource_spec.bucket is None
-            or resource_spec.bucket == gateway_backend.default_bucket_name
+            resource_bucket != gateway_backend.default_bucket_name
+            and resource_bucket not in allowed_foreign_buckets
         ):
-            # If bucket is set to None: service wants to use Karton-managed bucket
-            resource_bucket = gateway_backend.default_bucket_name
-            if resource_spec.to_upload:
+            # Server is not configured to access that foreign bucket
+            raise InvalidTaskError(
+                f"Task is referencing a bucket '{resource_bucket}' "
+                f"but gateway server is not allowed to access it."
+            )
+
+        if resource_spec.to_upload:  # LocalResource reference
+            if resource_bucket != gateway_backend.default_bucket_name:
+                # We don't allow foreign bucket uploads
+                raise InvalidTaskError(
+                    f"Gateway server is not allowed to upload resource "
+                    f"to foreign bucket '{resource_spec.bucket}'"
+                )
+            else:
                 # to_upload=True is LocalResource. In that case we don't trust
                 # the UID from the client - we treat is as a payload bag reference
                 # and we generate real UID server-side
                 resource_server_uid = str(uuid.uuid4())
-            else:
-                # to_upload=False is passthrough of RemoteResource reference
-                # Service must be authorized to reference the resource
-                if not is_resource_allowed(
-                    resource_spec.uid, resource_bucket, allowed_parent_resources
-                ):
+        else:  # RemoteResource reference
+            if not is_resource_allowed(
+                resource_spec.uid, resource_bucket, allowed_parent_resources
+            ):
+                # Karton bucket RemoteResource must be allowed via task token
+                if resource_bucket == gateway_backend.default_bucket_name:
                     raise InvalidTaskError(
                         f"Service is not allowed to reference resource "
                         f"'{resource_spec.uid}'"
                     )
-                resource_server_uid = resource_spec.uid
-        else:
-            # If bucket is not set to None or default bucket
-            # then it's a foreign bucket reference
-            if resource_spec.to_upload:
-                # Foreign upload: gateway must have S3 write access
-                if resource_spec.bucket not in allowed_foreign_buckets:
-                    raise InvalidTaskError(
-                        f"Gateway can't upload resource '{resource_spec.uid}' "
-                        f"to foreign bucket '{resource_spec.bucket}'"
-                    )
-                # Don't trust client UID for uploads — generate server-side
-                resource_server_uid = str(uuid.uuid4())
-            else:
-                if (
-                    not is_resource_allowed(
-                        resource_spec.uid,
-                        resource_spec.bucket,
-                        allowed_parent_resources,
-                    )
-                    and resource_spec.bucket not in allowed_foreign_buckets
-                ):
-                    # Foreign bucket downloads are allowed only:
-                    # - if object was received from parent task
-                    # OR
-                    # - if service is allowed to reference a foreign bucket
-                    raise InvalidTaskError(
-                        f"Service is not allowed to reference "
-                        f"bucket '{resource_spec.bucket}' "
-                        f"in resource '{resource_spec.uid}'"
-                    )
-                resource_server_uid = resource_spec.uid
-            resource_bucket = resource_spec.bucket
+                # If it's a foreign bucket reference and gateway is allowed
+                # to reference it, the only thing we need to check is the
+                # client ACL.
+                referenced_foreign_buckets.add(resource_bucket)
+            # RemoteResource UID is used directly
+            resource_server_uid = resource_spec.uid
 
         resource_identity = (resource_bucket, resource_spec.uid)
 
@@ -239,7 +216,11 @@ def process_declared_task_resources(
         )
 
     transformed_payload_bags = map_resources(payload_bags, process_resource)
-    return transformed_payload_bags, list(resources.values())
+    return (
+        transformed_payload_bags,
+        list(resources.values()),
+        list(referenced_foreign_buckets),
+    )
 
 
 async def generate_resource_upload_urls(
@@ -283,16 +264,17 @@ async def generate_resource_download_urls(
 
     for resource in task.iterate_resources():
         if resource.bucket is None:
-            # If bucket is somehow not specified, assume default bucket
+            # Failsafe - if bucket is somehow not specified, assume default bucket
             bucket = gateway_backend.default_bucket_name
         else:
             bucket = resource.bucket
         if (bucket, resource.uid) in resources:
+            # Already processed
             continue
         if bucket not in allowed_buckets:
             raise InvalidTaskError(
-                f"Got task that references bucket '{bucket}' "
-                f"that can't be handled by Karton Gateway"
+                f"Task is referencing a bucket '{bucket}' "
+                f"but gateway server is not allowed to access it."
             )
         download_url = await gateway_backend.get_presigned_object_download_url(
             bucket=bucket, object_uid=resource.uid

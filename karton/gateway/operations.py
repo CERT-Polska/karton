@@ -31,7 +31,6 @@ from .task import (
     TaskTokenScope,
     generate_resource_download_urls,
     generate_resource_upload_urls,
-    get_referenced_foreign_buckets,
     is_valid_task_status_transition,
     make_task_token,
     parse_task_token,
@@ -164,16 +163,22 @@ async def handle_declare_task_request(
 
     payload_bags = (task_params.payload, task_params.payload_persistent)
 
+    # Perform the validation and translation of Gateway resource references
+    # into Karton resource references
+    task_payload_bags, validated_resources, referenced_foreign_buckets = (
+        process_declared_task_resources(
+            payload_bags,
+            allowed_parent_resources,
+            gateway_config.allowed_foreign_buckets,
+        )
+    )
+
+    # Check if service is allowed to operate on referenced foreign buckets
     if session.auth_required:
-        foreign_bucket_uploads = get_referenced_foreign_buckets(payload_bags)
         session.can_perform(
-            ProduceTaskOperation(foreign_buckets=foreign_bucket_uploads)
+            ProduceTaskOperation(foreign_buckets=list(referenced_foreign_buckets))
         )
 
-    # Now, we need to translate DeclaredResourceSpec to RemoteResource
-    task_payload_bags, validated_resources = process_declared_task_resources(
-        payload_bags, allowed_parent_resources, gateway_config.allowed_foreign_buckets
-    )
     resource_urls = await generate_resource_upload_urls(validated_resources)
     task_payload, task_payload_persistent = task_payload_bags
 
@@ -222,8 +227,8 @@ async def handle_send_task_request(
     :param request: Parsed request object
     :param session: Client session that initiated the request
     """
-    session.can_perform(ProduceTaskOperation())
-
+    # Note: we don't check the client token authorization
+    # The holder of the declared task token is allowed to send the task
     task_token = request.message.token
     task_info = parse_task_token(
         token=task_token,
