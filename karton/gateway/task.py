@@ -86,12 +86,12 @@ def make_task_token(
 
 def map_resources(obj: Any, mapper: Callable[[dict[str, Any]], Any]) -> Any:
     return recursive_map(
-        obj,
         lambda el: (
             mapper(el["__karton_resource__"])
             if type(el) is dict and "__karton_resource__" in el
             else el
         ),
+        obj,
     )
 
 
