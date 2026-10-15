@@ -37,6 +37,11 @@ dependencies = { file = ["requirements.txt"] }
 [tool.setuptools.dynamic.optional-dependencies]
 gateway = { file = ["requirements.gateway.txt"] }
 
+[tool.ruff]
+extend-exclude = [
+    "README.md"
+]
+
 [tool.ruff.lint]
 extend-ignore = [
     "ASYNC230",

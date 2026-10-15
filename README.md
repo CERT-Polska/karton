@@ -39,7 +39,13 @@ class GenericUnpacker(Karton):
     """
 
     identity = "karton.generic-unpacker"
-    filters = [{"type": "sample", "kind": "runnable", "platform": "win32"}]
+    filters = [
+        {
+            "type": "sample", 
+            "kind": "runnable", 
+            "platform": "win32"
+        }
+    ]
 
     def process(self, task: Task) -> None:
         # Get sample object
@@ -49,8 +55,14 @@ class GenericUnpacker(Karton):
         ...
         # Send our results for further processing or reporting
         task = Task(
-            {"type": "sample", "kind": "raw"},
-            payload={"parent": packed_sample, "sample": Resource(filename, unpacked)},
+            {
+                "type": "sample", 
+                "kind": "raw"
+            },
+            payload={
+                "parent": packed_sample, 
+                "sample": Resource(filename, unpacked)
+            },
         )
         self.send_task(task)
 
