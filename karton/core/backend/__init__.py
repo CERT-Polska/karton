@@ -30,7 +30,6 @@ __all__ = [
     "KartonMetrics",
     "KartonOutputs",
     "KartonServiceInfo",
-    "KartonBackendProtocol",
     "QueueSummary",
     "get_backend",
 ]
