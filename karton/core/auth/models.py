@@ -6,9 +6,7 @@ from pydantic import BaseModel, Field
 
 DEFAULT_AUDIENCE = "karton-gateway"
 TOKEN_VERSION = 1
-# Set of token versions accepted by decode_auth_token. Keep the current
-# TOKEN_VERSION here; retain older versions during a grace period when
-# bumping TOKEN_VERSION with breaking ACL-semantic changes.
+# Set of token versions accepted by decode_auth_token.
 SUPPORTED_TOKEN_VERSIONS: frozenset[int] = frozenset({TOKEN_VERSION})
 
 
