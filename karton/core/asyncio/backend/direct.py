@@ -381,7 +381,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         async for service in self._get_online_gateway_services():
             services[service] += 1
 
-        for service in services.keys():
+        for service in services:
             if service.instance_id is None:
                 for _ in range(services[service]):
                     yield service
