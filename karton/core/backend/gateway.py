@@ -71,9 +71,18 @@ class KartonGatewayBackendBase:
         self.gateway_s3_hostname_override = self.config.get(
             "gateway", "s3_hostname_override"
         )
-        self.gateway_auth_tokens: list[str] = self.config.get(
-            "gateway", "auth_tokens", ""
+
+        auth_tokens: list[str] = self.config.get("gateway", "auth_tokens", "").split(
+            ","
+        )
+
+        # In some scenarios is may be easier to roll tokens having
+        # separate environment variable
+        secondary_auth_tokens: list[str] = self.config.get(
+            "gateway", "secondary_auth_tokens", ""
         ).split(",")
+
+        self.gateway_auth_tokens: list[str] = auth_tokens + secondary_auth_tokens
 
         self.gateway_retries = self.config.getint("gateway", "retries", 5)
         self.gateway_retry_base_timeout = self.config.getint(
