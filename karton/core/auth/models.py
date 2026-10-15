@@ -94,6 +94,7 @@ type AllowedOperation = (
 
 class AuthClaims(BaseModel):
     """List of operations requested by a Karton service."""
+
     identity: str
     allowed_operations: list[AllowedOperation]
 
@@ -102,6 +103,7 @@ class AuthClaims(BaseModel):
 class VerifiedGrant:
     """List of operations granted to the Karton service.
     Contains operations requested and subsequently verified by the gateway."""
+
     claims: AuthClaims
     expires_at: int | None
     token_id: str
