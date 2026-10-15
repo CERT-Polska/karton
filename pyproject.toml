@@ -47,6 +47,7 @@ extend-ignore = [
     "ASYNC230",
     "BLE001",
     "RUF012",
+    "SIM102",
     "SIM103",
     "SIM115",
     "TRY004",

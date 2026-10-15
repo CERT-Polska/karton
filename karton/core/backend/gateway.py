@@ -130,8 +130,7 @@ class KartonGatewayBackendBase:
         else:
             scheme = parsed.scheme
         path = parsed.path
-        if path.endswith("/gateway"):
-            path = path[: -len("/gateway")]
+        path = path.removesuffix("/gateway")
         path = path.rstrip("/") + "/api/v1"
         return urllib.parse.urlunparse(parsed._replace(scheme=scheme, path=path))
 
