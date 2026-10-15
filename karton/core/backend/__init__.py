@@ -17,10 +17,10 @@ def get_backend(
 
 __all__ = [
     "KartonBackend",
-    "KartonGatewayBackend",
+    "KartonBackendProtocol",
     "KartonBind",
+    "KartonGatewayBackend",
     "KartonMetrics",
     "KartonServiceInfo",
-    "KartonBackendProtocol",
     "get_backend",
 ]

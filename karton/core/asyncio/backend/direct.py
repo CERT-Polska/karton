@@ -2,7 +2,8 @@ import json
 import logging
 import os
 import time
-from typing import IO, Any, AsyncIterator, Dict, List, Optional, Union, cast
+from collections.abc import AsyncIterator
+from typing import IO, Any, cast
 
 import aioboto3
 from aiobotocore.credentials import ContainerProvider, InstanceMetadataProvider
@@ -36,13 +37,13 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         self,
         config: Config,
         service_info: KartonServiceInfo,
-        _redis: Optional[Redis] = None,
-        _s3_session: Optional[aioboto3.Session] = None,
+        _redis: Redis | None = None,
+        _s3_session: aioboto3.Session | None = None,
         _s3_iam_auth=False,
     ) -> None:
         super().__init__(config, service_info)
-        self._redis: Optional[Redis] = _redis
-        self._s3_session: Optional[aioboto3.Session] = _s3_session
+        self._redis: Redis | None = _redis
+        self._s3_session: aioboto3.Session | None = _s3_session
         self._s3_iam_auth = _s3_iam_auth
 
     @property
@@ -168,7 +169,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             await rs.ping()
         return rs
 
-    def unserialize_resource(self, resource_spec: Dict[str, Any]) -> RemoteResource:
+    def unserialize_resource(self, resource_spec: dict[str, Any]) -> RemoteResource:
         """
         Unserializes resource into a RemoteResource object bound with current backend
 
@@ -191,7 +192,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         # Register new task
         await self.register_task(task)
 
-    async def register_task(self, task: Task, pipe: Optional[Pipeline] = None) -> None:
+    async def register_task(self, task: Task, pipe: Pipeline | None = None) -> None:
         """
         Register or update task in Redis.
 
@@ -202,7 +203,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         await rs.set(f"{KARTON_TASK_NAMESPACE}:{task.uid}", task.serialize())
 
     async def set_task_status(
-        self, task: Task, status: TaskState, pipe: Optional[Pipeline] = None
+        self, task: Task, status: TaskState, pipe: Pipeline | None = None
     ) -> None:
         """
         Extends :meth:`KartonAsyncBackendProtocol.set_task_status` with a
@@ -216,7 +217,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
 
     async def register_bind(
         self, bind: KartonBind, bind_backend: bool = True
-    ) -> Optional[KartonBind]:
+    ) -> KartonBind | None:
         """
         Extends :meth:`KartonAsyncBackendProtocol.register_bind` with a
         Direct-backend-only ``bind_backend`` argument.
@@ -255,7 +256,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         await self.redis.rpush(KARTON_TASKS_QUEUE, task.uid)
 
     async def consume_queues(
-        self, queues: Union[str, List[str]], timeout: int = 0
+        self, queues: str | list[str], timeout: int = 0
     ) -> tuple[str, str] | None:
         """
         Get item from queues (ordered from the most to the least prioritized)
@@ -269,7 +270,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             tuple[str, str] | None, await self.redis.blpop(queues, timeout=timeout)
         )
 
-    async def get_task(self, task_uid: str) -> Optional[Task]:
+    async def get_task(self, task_uid: str) -> Task | None:
         """
         Get task object with given identifier
 
@@ -285,7 +286,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
 
     async def consume_routed_task(
         self, identity: str, timeout: int = 5, bind_id: str | None = None
-    ) -> Optional[Task]:
+    ) -> Task | None:
         """
         Extends :meth:`KartonAsyncBackendProtocol.consume_routed_task` with a
         Direct-backend-only ``bind_id`` argument.
@@ -318,11 +319,11 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         )
         if not item:
             return None
-        queue, data = item
+        _queue, data = item
         return await self.get_task(data)
 
     async def increment_metrics(
-        self, metric: KartonMetrics, identity: str, pipe: Optional[Pipeline] = None
+        self, metric: KartonMetrics, identity: str, pipe: Pipeline | None = None
     ) -> None:
         """
         Extends :meth:`KartonAsyncBackendProtocol.increment_metrics` with a
@@ -336,7 +337,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
     async def upload_resource(
         self,
         resource: LocalResource,
-        content: Union[bytes, IO[bytes]],
+        content: bytes | IO[bytes],
     ) -> None:
         if resource.bucket is None:
             raise RuntimeError(
@@ -380,7 +381,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
 
     async def produce_log(
         self,
-        log_record: Dict[str, Any],
+        log_record: dict[str, Any],
         logger_name: str,
         level: str,
     ) -> bool:
@@ -394,9 +395,9 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
     async def consume_log(
         self,
         timeout: int = 5,
-        logger_filter: Optional[str] = None,
-        level: Optional[str] = None,
-    ) -> AsyncIterator[Optional[Dict[str, Any]]]:
+        logger_filter: str | None = None,
+        level: str | None = None,
+    ) -> AsyncIterator[dict[str, Any] | None]:
         async with self.redis.pubsub() as pubsub:
             await pubsub.psubscribe(self._log_channel(logger_filter, level))
             while pubsub.subscribed:

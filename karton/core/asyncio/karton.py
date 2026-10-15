@@ -5,7 +5,7 @@ import sys
 import time
 import traceback
 from asyncio import CancelledError
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from karton.core import query
 from karton.core.__version__ import __version__
@@ -55,8 +55,8 @@ class Producer(KartonAsyncBase):
     def __init__(
         self,
         identity: str,
-        config: Optional[Config] = None,
-        backend: Optional[KartonAsyncBackendProtocol] = None,
+        config: Config | None = None,
+        backend: KartonAsyncBackendProtocol | None = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -109,17 +109,17 @@ class Consumer(KartonAsyncServiceBase):
                         gathered from queue and processed asynchronously.
     """
 
-    filters: List[Dict[str, Any]] = []
+    filters: list[dict[str, Any]] = []
     persistent: bool = True
-    version: Optional[str] = None
+    version: str | None = None
     task_timeout = None
-    concurrency_limit: Optional[int] = 1
+    concurrency_limit: int | None = 1
 
     def __init__(
         self,
-        config: Optional[Config] = None,
-        identity: Optional[str] = None,
-        backend: Optional[KartonAsyncBackendProtocol] = None,
+        config: Config | None = None,
+        identity: str | None = None,
+        backend: KartonAsyncBackendProtocol | None = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -140,7 +140,7 @@ class Consumer(KartonAsyncServiceBase):
             "karton", "concurrency_limit", self.concurrency_limit
         )
 
-        self.concurrency_semaphore: Optional[asyncio.Semaphore] = None
+        self.concurrency_semaphore: asyncio.Semaphore | None = None
         if self.concurrency_limit is not None:
             self.concurrency_semaphore = asyncio.BoundedSemaphore(
                 self.concurrency_limit
@@ -170,7 +170,7 @@ class Consumer(KartonAsyncServiceBase):
                     # asyncio.timeout is Py3.11+
                     async with asyncio.timeout(self.task_timeout):
                         await self.process(task)
-                except asyncio.TimeoutError as e:
+                except TimeoutError as e:
                     raise TaskTimeoutError from e
             else:
                 await self.process(task)
@@ -305,7 +305,7 @@ class Consumer(KartonAsyncServiceBase):
         for task_filter in self.filters:
             self.log.info("Binding on: %s", task_filter)
 
-        concurrent_tasks: List[asyncio.Task] = []
+        concurrent_tasks: list[asyncio.Task] = []
 
         try:
             while True:
@@ -326,7 +326,7 @@ class Consumer(KartonAsyncServiceBase):
                         self.concurrency_semaphore.release()
                 # Garbage collection and exception propagation
                 # for finished concurrent tasks
-                unfinished_tasks: List[asyncio.Task] = []
+                unfinished_tasks: list[asyncio.Task] = []
                 for coro_task in concurrent_tasks:
                     if coro_task.done():
                         # Propagate possible unhandled exception
@@ -353,8 +353,8 @@ class Karton(Consumer, Producer):
 
     def __init__(
         self,
-        config: Optional[Config] = None,
-        identity: Optional[str] = None,
-        backend: Optional[KartonAsyncBackendProtocol] = None,
+        config: Config | None = None,
+        identity: str | None = None,
+        backend: KartonAsyncBackendProtocol | None = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)

@@ -1,15 +1,14 @@
 import pytest
-
 from shared import (
     BACKENDS,
     wait_for_event,
-    wait_for_task_state,
     wait_for_routed_tasks,
+    wait_for_task_state,
 )
 
 from karton.core import Producer, Task
-from karton.core.task import TaskState
 from karton.core.backend import KartonBackend
+from karton.core.task import TaskState
 
 
 @pytest.mark.parametrize("service_backend", BACKENDS)

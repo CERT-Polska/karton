@@ -4,15 +4,10 @@ import logging
 import random
 import threading
 from asyncio import AbstractEventLoop
+from collections.abc import AsyncGenerator, AsyncIterator, Coroutine, Iterator
 from typing import (
     Any,
-    AsyncGenerator,
-    AsyncIterator,
-    Coroutine,
-    Iterator,
     Protocol,
-    Type,
-    TypeVar,
 )
 
 from websockets.asyncio.client import ClientConnection, connect
@@ -61,7 +56,6 @@ def make_gateway_error(error_response: ErrorResponse) -> GatewayError:
 
 
 class SessionInitiator(Protocol):
-
     async def __call__(
         self,
         gateway_client: "AsyncGatewayClient",
@@ -274,12 +268,10 @@ class AsyncGatewayClient:
         finally:
             await self._return_connection(connection)
 
-    async def recv[
-        ResponseT: ResponseType
-    ](
+    async def recv[ResponseT: ResponseType](
         self,
         connection: ClientConnection,
-        expected_response: Type[ResponseT],
+        expected_response: type[ResponseT],
     ) -> ResponseT:
         async with asyncio.timeout(self.response_timeout):
             data = await connection.recv()
@@ -297,9 +289,11 @@ class AsyncGatewayClient:
         data = request.model_dump_json()
         await connection.send(data)
 
-    async def make_request[
-        ResponseT: ResponseType
-    ](self, request: RequestType, expected_response: Type[ResponseT],) -> ResponseT:
+    async def make_request[ResponseT: ResponseType](
+        self,
+        request: RequestType,
+        expected_response: type[ResponseT],
+    ) -> ResponseT:
         retry_state = RetryState(
             max_retries=self.retries,
             base_timeout=self.retry_base_timeout,
@@ -340,12 +334,10 @@ class AsyncGatewayClient:
             )
             await asyncio.sleep(delay)
 
-    async def make_streaming_request[
-        ResponseT: ResponseType
-    ](
+    async def make_streaming_request[ResponseT: ResponseType](
         self,
         request: RequestType,
-        expected_response: Type[ResponseT],
+        expected_response: type[ResponseT],
     ) -> AsyncGenerator[ResponseT, None]:
         retry_state = RetryState(
             max_retries=self.retries,
@@ -386,7 +378,6 @@ class AsyncGatewayClient:
 _loop_ready: threading.Event = threading.Event()
 _loop: asyncio.AbstractEventLoop | None = None
 _thread: threading.Thread | None = None
-_T = TypeVar("_T")
 
 
 def _start_event_loop() -> None:
@@ -408,13 +399,13 @@ def _get_threaded_event_loop() -> AbstractEventLoop:
     return _loop
 
 
-def run_async(coro: Coroutine[Any, Any, _T]) -> _T:
+def run_async[T](coro: Coroutine[Any, Any, T]) -> T:
     loop = _get_threaded_event_loop()
     future = asyncio.run_coroutine_threadsafe(coro, loop)
     return future.result()
 
 
-def iter_async(async_iterable: AsyncGenerator[_T, None]) -> Iterator[_T]:
+def iter_async[T](async_iterable: AsyncGenerator[T, None]) -> Iterator[T]:
     try:
         while True:
             try:
@@ -452,9 +443,11 @@ class SyncGatewayClient:
     def close(self) -> None:
         return run_async(self._async_client.close())
 
-    def make_request[
-        ResponseT: ResponseType
-    ](self, request: RequestType, expected_response: Type[ResponseT],) -> ResponseT:
+    def make_request[ResponseT: ResponseType](
+        self,
+        request: RequestType,
+        expected_response: type[ResponseT],
+    ) -> ResponseT:
         return run_async(
             self._async_client.make_request(
                 request,
@@ -462,15 +455,11 @@ class SyncGatewayClient:
             )
         )
 
-    def make_streaming_request[
-        ResponseT: ResponseType
-    ](
+    def make_streaming_request[ResponseT: ResponseType](
         self,
         request: RequestType,
-        expected_response: Type[ResponseT],
-    ) -> Iterator[
-        ResponseT
-    ]:
+        expected_response: type[ResponseT],
+    ) -> Iterator[ResponseT]:
         return iter_async(
             self._async_client.make_streaming_request(
                 request,

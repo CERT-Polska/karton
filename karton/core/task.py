@@ -3,17 +3,12 @@ import json
 import time
 import uuid
 import warnings
+from collections.abc import Callable, Iterator
 from contextvars import ContextVar
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
-    Dict,
-    Iterator,
-    List,
     Optional,
-    Tuple,
-    Union,
 )
 
 from . import query
@@ -21,7 +16,7 @@ from .resource import RemoteResource, ResourceBase
 from .utils import recursive_iter, recursive_iter_with_keys, recursive_map
 
 if TYPE_CHECKING:
-    from .backend import KartonBackendProtocol  # noqa
+    from .backend import KartonBackendProtocol
 
 import orjson
 
@@ -59,7 +54,7 @@ def root_uid_from_task_uid(uid: str) -> str:
     return uid.split("}:")[0][1:]
 
 
-class Task(object):
+class Task:
     """
     Task representation with headers and resources.
 
@@ -85,37 +80,37 @@ class Task(object):
     """
 
     __slots__ = (
-        "uid",
-        "root_uid",
-        "orig_uid",
-        "parent_uid",
+        "_headers_persistent_keys",
+        "_parent_token",
+        "_token",
         "error",
         "headers",
-        "status",
         "last_update",
-        "priority",
+        "orig_uid",
+        "parent_uid",
         "payload",
         "payload_persistent",
-        "_headers_persistent_keys",
-        "_token",
-        "_parent_token",
+        "priority",
+        "root_uid",
+        "status",
+        "uid",
     )
 
     def __init__(
         self,
-        headers: Dict[str, Any],
-        payload: Optional[Dict[str, Any]] = None,
-        headers_persistent: Optional[Dict[str, Any]] = None,
-        payload_persistent: Optional[Dict[str, Any]] = None,
-        priority: Optional[TaskPriority] = None,
-        parent_uid: Optional[str] = None,
-        root_uid: Optional[str] = None,
-        orig_uid: Optional[str] = None,
-        uid: Optional[str] = None,
-        error: Optional[List[str]] = None,
-        _status: Optional[TaskState] = None,
-        _last_update: Optional[float] = None,
-        _token: Optional[str] = None,
+        headers: dict[str, Any],
+        payload: dict[str, Any] | None = None,
+        headers_persistent: dict[str, Any] | None = None,
+        payload_persistent: dict[str, Any] | None = None,
+        priority: TaskPriority | None = None,
+        parent_uid: str | None = None,
+        root_uid: str | None = None,
+        orig_uid: str | None = None,
+        uid: str | None = None,
+        error: list[str] | None = None,
+        _status: TaskState | None = None,
+        _last_update: float | None = None,
+        _token: str | None = None,
     ) -> None:
         payload = payload or {}
         payload_persistent = payload_persistent or {}
@@ -157,15 +152,15 @@ class Task(object):
         self.payload = dict(payload)
         self.payload_persistent = dict(payload_persistent)
         # Bound tokens for KartonGatewayBackend
-        self._token: Optional[str] = _token
-        self._parent_token: Optional[str] = None
+        self._token: str | None = _token
+        self._parent_token: str | None = None
 
     @property
-    def headers_persistent(self) -> Dict[str, Any]:
+    def headers_persistent(self) -> dict[str, Any]:
         return {k: v for k, v in self.headers.items() if self.is_header_persistent(k)}
 
     @property
-    def receiver(self) -> Optional[str]:
+    def receiver(self) -> str | None:
         return self.headers.get("receiver")
 
     @property
@@ -173,11 +168,11 @@ class Task(object):
         return self.fquid_to_uid(self.uid)
 
     @property
-    def token(self) -> Optional[str]:
+    def token(self) -> str | None:
         return self._token
 
     @property
-    def parent_token(self) -> Optional[str]:
+    def parent_token(self) -> str | None:
         return self._parent_token
 
     @staticmethod
@@ -223,7 +218,7 @@ class Task(object):
         )
         return new_task
 
-    def derive_task(self, headers: Dict[str, Any]) -> "Task":
+    def derive_task(self, headers: dict[str, Any]) -> "Task":
         """
         Creates copy of task with different headers,
         useful for proxying resource with added metadata.
@@ -266,7 +261,7 @@ class Task(object):
         )
         return new_task
 
-    def matches_filters(self, filters: List[Dict[str, Any]]) -> bool:
+    def matches_filters(self, filters: list[dict[str, Any]]) -> bool:
         """Check if a task matches the given filters"""
         return query.convert(filters).match(self.headers)
 
@@ -309,7 +304,7 @@ class Task(object):
             other_task._headers_persistent_keys
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         Transform task data into dictionary
         :return: Task data dictionary
@@ -352,7 +347,7 @@ class Task(object):
             "error": self.error,
         }
 
-    def serialize(self, indent: Optional[int] = None) -> str:
+    def serialize(self, indent: int | None = None) -> str:
         """
         Serialize task data into JSON string
         :param indent: Indent to use while serializing
@@ -366,7 +361,7 @@ class Task(object):
             sort_keys=True,
         )
 
-    def walk_payload_bags(self) -> Iterator[Tuple[Dict[str, Any], str, Any]]:
+    def walk_payload_bags(self) -> Iterator[tuple[dict[str, Any], str, Any]]:
         """
         Iterate over all payload bags and direct payloads contained in them
 
@@ -378,7 +373,7 @@ class Task(object):
             for key, value in payload_bag.items():
                 yield payload_bag, key, value
 
-    def walk_payload_items(self) -> Iterator[Tuple[str, Any]]:
+    def walk_payload_items(self) -> Iterator[tuple[str, Any]]:
         """
         Iterate recursively over all payload items
 
@@ -417,11 +412,11 @@ class Task(object):
 
     @staticmethod
     def unserialize(
-        data: Union[str, bytes],
+        data: str | bytes,
         backend: Optional["KartonBackendProtocol"] = None,
         parse_resources: bool = True,
-        resource_unserializer: Optional[Callable[[Dict], Any]] = None,
-        task_token: Optional[str] = None,
+        resource_unserializer: Callable[[dict], Any] | None = None,
+        task_token: str | None = None,
     ) -> "Task":
         """
         Unserialize Task instance from JSON string

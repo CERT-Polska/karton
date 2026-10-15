@@ -1,4 +1,5 @@
-from typing import IO, Any, AsyncIterator, Protocol
+from collections.abc import AsyncIterator
+from typing import IO, Any, Protocol
 
 from karton.core.asyncio.resource import LocalResource, RemoteResource
 from karton.core.backend import KartonBind, KartonMetrics

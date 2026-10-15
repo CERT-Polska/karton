@@ -1,19 +1,18 @@
 import functools
 import itertools
 import signal
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
-from typing import Any, Callable, Iterator, Sequence, Tuple, TypeVar
+from typing import Any
 
 from .exceptions import HardShutdownInterrupt, TaskTimeoutError
 
-T = TypeVar("T")
 
-
-def chunks(seq: Sequence[T], size: int) -> Iterator[Sequence[T]]:
+def chunks[T](seq: Sequence[T], size: int) -> Iterator[Sequence[T]]:
     return (seq[pos : pos + size] for pos in range(0, len(seq), size))
 
 
-def chunks_iter(seq: Iterator[T], size: int) -> Iterator[Sequence[T]]:
+def chunks_iter[T](seq: Iterator[T], size: int) -> Iterator[Sequence[T]]:
     # We need to ensure that seq is iterator, so this method works correctly
     it = iter(seq)
     while True:
@@ -39,7 +38,7 @@ def recursive_iter(obj: Any) -> Iterator[Any]:
         yield obj
 
 
-def recursive_iter_with_keys(obj: Any, name: str = "") -> Iterator[Tuple[str, Any]]:
+def recursive_iter_with_keys(obj: Any, name: str = "") -> Iterator[tuple[str, Any]]:
     """
     Yields (path, value) tuples recursively from nested list/dict structures
 

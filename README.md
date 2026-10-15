@@ -32,35 +32,40 @@ To use karton you have to provide class that inherits from Karton.
 ```python
 from karton.core import Karton, Task, Resource
 
+
 class GenericUnpacker(Karton):
     """
     Performs sample unpacking
     """
+
     identity = "karton.generic-unpacker"
     filters = [
         {
-            "type": "sample",
-            "kind": "runnable",
+            "type": "sample", 
+            "kind": "runnable", 
             "platform": "win32"
         }
     ]
 
     def process(self, task: Task) -> None:
         # Get sample object
-        packed_sample = task.get_resource('sample')
+        packed_sample = task.get_resource("sample")
         # Log with self.log
         self.log.info(f"Hi {packed_sample.name}, let me analyze you!")
         ...
         # Send our results for further processing or reporting
         task = Task(
             {
-               "type": "sample",
-               "kind": "raw"
-            }, payload = {
-               "parent": packed_sample,
-               "sample": Resource(filename, unpacked)
-            })
+                "type": "sample", 
+                "kind": "raw"
+            },
+            payload={
+                "parent": packed_sample, 
+                "sample": Resource(filename, unpacked)
+            },
+        )
         self.send_task(task)
+
 
 if __name__ == "__main__":
     GenericUnpacker.main()

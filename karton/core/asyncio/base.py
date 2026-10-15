@@ -2,7 +2,7 @@ import abc
 import asyncio
 import signal
 from asyncio import CancelledError
-from typing import Optional, Protocol
+from typing import Protocol
 
 from karton.core import Task
 from karton.core.backend import KartonServiceInfo
@@ -34,15 +34,15 @@ class KartonAsyncBase(abc.ABC, ConfigMixin, LoggingMixin):
     #: Karton service identity
     identity: str = ""
     #: Karton service version
-    version: Optional[str] = None
+    version: str | None = None
     backend: KartonAsyncBackendProtocol
     _backend_factory: KartonAsyncBackendFactory = staticmethod(get_backend)
 
     def __init__(
         self,
-        config: Optional[Config] = None,
-        identity: Optional[str] = None,
-        backend: Optional[KartonAsyncBackendProtocol] = None,
+        config: Config | None = None,
+        identity: str | None = None,
+        backend: KartonAsyncBackendProtocol | None = None,
     ) -> None:
         ConfigMixin.__init__(self, config, identity)
 
@@ -61,11 +61,11 @@ class KartonAsyncBase(abc.ABC, ConfigMixin, LoggingMixin):
         await self.backend.connect()
 
     @property
-    def current_task(self) -> Optional[Task]:
+    def current_task(self) -> Task | None:
         return get_current_task()
 
     @current_task.setter
-    def current_task(self, task: Optional[Task]):
+    def current_task(self, task: Task | None):
         set_current_task(task)
 
 
@@ -83,9 +83,9 @@ class KartonAsyncServiceBase(KartonAsyncBase):
 
     def __init__(
         self,
-        config: Optional[Config] = None,
-        identity: Optional[str] = None,
-        backend: Optional[KartonAsyncBackendProtocol] = None,
+        config: Config | None = None,
+        identity: str | None = None,
+        backend: KartonAsyncBackendProtocol | None = None,
     ) -> None:
         super().__init__(
             config=config,
@@ -93,7 +93,7 @@ class KartonAsyncServiceBase(KartonAsyncBase):
             backend=backend,
         )
         self.setup_logger()
-        self._loop_coro: Optional[asyncio.Task] = None
+        self._loop_coro: asyncio.Task | None = None
 
     def _do_shutdown(self) -> None:
         self.log.info("Got signal, shutting down...")

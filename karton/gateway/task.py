@@ -2,7 +2,8 @@ import dataclasses
 import datetime
 import enum
 import uuid
-from typing import Any, Callable, TypedDict
+from collections.abc import Callable
+from typing import Any, TypedDict
 
 import jwt
 from pydantic import ValidationError
@@ -62,7 +63,7 @@ def parse_task_token(
             )
         return TaskTokenInfo(task_uid=task_uid, resources=token_data["resources"])
     except jwt.InvalidTokenError as e:
-        raise InvalidTaskTokenError(f"Invalid task token: {type(e)} - {str(e)}")
+        raise InvalidTaskTokenError(f"Invalid task token: {type(e)} - {e!s}")
 
 
 def make_task_token(
@@ -71,7 +72,7 @@ def make_task_token(
     audience: str,
     scope: TaskTokenScope,
 ) -> str:
-    issued_at = datetime.datetime.now(datetime.timezone.utc)
+    issued_at = datetime.datetime.now(datetime.UTC)
     payload = {
         "sub": f"karton.task:{task_token_info.task_uid}",
         "exp": issued_at + datetime.timedelta(days=1),

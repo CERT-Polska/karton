@@ -1,7 +1,6 @@
 import argparse
 import json
 import time
-from typing import List, Optional
 
 from karton.core import query
 from karton.core.__version__ import __version__
@@ -34,7 +33,7 @@ class SystemService(KartonServiceBase):
     TASK_CRASHED_TIMEOUT = 3 * 24 * 3600
     TASK_TRACKING_TTL = 30 * 24 * 3600
 
-    def __init__(self, config: Optional[Config]) -> None:
+    def __init__(self, config: Config | None) -> None:
         super().__init__(config=config)
         self.gc_interval = self.config.getint("system", "gc_interval", self.GC_INTERVAL)
         self.task_dispatched_timeout = self.config.getint(
@@ -213,8 +212,10 @@ class SystemService(KartonServiceBase):
             ]
             for task in to_crash:
                 task.error = [
-                    "This task was STARTED too long (TASK_STARTED_TIMEOUT), "
-                    "so status was changes to CRASHED."
+                    (
+                        "This task was STARTED too long (TASK_STARTED_TIMEOUT), "
+                        "so status was changes to CRASHED."
+                    )
                 ]
                 self.backend.set_task_status(task, TaskState.CRASHED)
             self.backend.increment_metrics_list(
@@ -236,7 +237,7 @@ class SystemService(KartonServiceBase):
                 self.log.exception("GC: Exception during garbage collection")
             self.last_gc_trigger = time.time()
 
-    def route_task(self, task: Task, binds: List[KartonBind]) -> None:
+    def route_task(self, task: Task, binds: list[KartonBind]) -> None:
         # Performs routing of task
         self.log.info("[%s] Processing task %s", task.root_uid, task.task_uid)
         # if enabled, store the producer-task relationship in redis for task tracking
@@ -267,7 +268,7 @@ class SystemService(KartonServiceBase):
                 )
         pipe.execute()
 
-    def handle_tasks(self, task_uids: List[str]) -> None:
+    def handle_tasks(self, task_uids: list[str]) -> None:
         tasks = self.backend.get_tasks(task_uids)
         binds = self.backend.get_binds()
         for task in tasks:
@@ -282,7 +283,7 @@ class SystemService(KartonServiceBase):
             # Directly update the unrouted task status to be finished
         self.backend.register_tasks(tasks)
 
-    def handle_operations(self, bodies: List[str]) -> None:
+    def handle_operations(self, bodies: list[str]) -> None:
         """
         Left for backwards compatibility with Karton <=4.3.0.
         Earlier versions delegate task status change to karton.system.

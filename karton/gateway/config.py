@@ -1,5 +1,4 @@
 import pathlib
-from typing import List
 
 import jwt
 from pydantic import BaseModel, ConfigDict, Field
@@ -13,7 +12,7 @@ class GatewayServerConfig(BaseModel):
     secret_key: str = Field(..., min_length=32)
     auth_required: bool
     jwks: jwt.PyJWKSet | None
-    allowed_foreign_buckets: List[str]
+    allowed_foreign_buckets: list[str]
 
 
 def get_gateway_config(config: Config) -> GatewayServerConfig:

@@ -1,8 +1,8 @@
 import pytest
+from shared import BACKENDS, wait_for_event
+
 from karton.core import Producer, Task
 from karton.core.backend import KartonBackend
-
-from shared import BACKENDS, wait_for_event
 
 
 @pytest.mark.parametrize("service_backend", BACKENDS)

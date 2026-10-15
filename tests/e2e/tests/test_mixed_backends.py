@@ -10,11 +10,11 @@ result tasks are consumed through the gateway verifier's ``consume_routed_task``
 and ``consume_log`` methods. No direct Redis/S3 access is used for inspection,
 so these tests work in a gateway-only deployment.
 """
-from hashlib import sha256
+
 import os
+from hashlib import sha256
 
 import pytest
-
 from shared import wait_for_event, wait_for_result
 
 from karton.core import Producer, Task

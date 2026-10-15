@@ -7,13 +7,30 @@ on:
     branches:
       - master
 jobs:
-  lint:
+  lint-ruff:
     runs-on: ubuntu-latest
     steps:
-      - uses: CERT-Polska/lint-python-action@v2
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - uses: astral-sh/ruff-action@v4.1.0
         with:
-          source: karton/
-          python-version: 3.12
+          version: 0.17.0
+      - run: ruff check
+      - run: ruff format --check --diff
+  lint-types:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install requirements
+        run: pip install -r requirements.txt -r requirements.gateway.txt
+      - name: Install mypy and botocore-stubs
+        run: pip install mypy==2.4.0 botocore-stubs
+      - run: mypy karton
   unittest:
     runs-on: ubuntu-latest
     strategy:

@@ -5,12 +5,12 @@ from .karton import Consumer, Karton, Producer
 from .resource import LocalResource, RemoteResource, Resource
 
 __all__ = [
-    "Karton",
-    "Producer",
-    "Consumer",
-    "Task",
     "Config",
+    "Consumer",
+    "Karton",
     "LocalResource",
-    "Resource",
+    "Producer",
     "RemoteResource",
+    "Resource",
+    "Task",
 ]

@@ -2,8 +2,9 @@ import contextlib
 import logging
 import time
 import urllib.parse
+from collections.abc import Callable, Iterator
 from io import BytesIO
-from typing import IO, Any, Callable, Iterator, cast
+from typing import IO, Any, cast
 
 import httpx2
 
@@ -155,7 +156,7 @@ def override_presigned_url(presigned_url: str, override_host: str) -> tuple[str,
 
 
 def serialize_resources(
-    payload: dict[str, Any]
+    payload: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[ResourceIdentifier, LocalResourceBase]]:
     local_resources: dict[ResourceIdentifier, LocalResourceBase] = {}
 
@@ -389,8 +390,7 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
         with self._get_download_stream(resource) as response:
             response.raise_for_status()
             with open(path, "wb") as f:
-                for chunk in response.iter_bytes():
-                    f.write(chunk)
+                f.writelines(response.iter_bytes())
 
     def produce_log(
         self, log_record: dict[str, Any], logger_name: str, level: str

@@ -14,7 +14,7 @@ class BadRequestError(KartonGatewayError):
         if validation_error is None:
             super().__init__(message)
         else:
-            super().__init__(f"{message} ({str(validation_error)})")
+            super().__init__(f"{message} ({validation_error!s})")
 
 
 class BadCredentialsError(KartonGatewayError):

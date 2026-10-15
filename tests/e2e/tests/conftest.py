@@ -4,6 +4,8 @@ import sys
 from time import sleep, time
 
 import pytest
+
+from karton.core import Config, Producer
 from karton.core.__version__ import __version__
 from karton.core.backend import (
     KartonBackend,
@@ -12,7 +14,6 @@ from karton.core.backend import (
     KartonServiceInfo,
     get_backend,
 )
-from karton.core import Producer, Config
 
 # Ensure service_runner is importable in spawned children.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -62,15 +63,17 @@ def gateway_verifier() -> KartonBackendProtocol:
     config.set("gateway", "url", "ws://gateway:8000/gateway")
     service_info = KartonServiceInfo.create(identity="karton.test-verifier")
     backend = get_backend(config, service_info=service_info)
-    backend.register_bind(KartonBind(
-        identity="karton.test-verifier",
-        info=None,
-        version=__version__,
-        filters=[{"type": "verify-result"}],
-        persistent=False,
-        service_version=None,
-        is_async=False,
-    ))
+    backend.register_bind(
+        KartonBind(
+            identity="karton.test-verifier",
+            info=None,
+            version=__version__,
+            filters=[{"type": "verify-result"}],
+            persistent=False,
+            service_version=None,
+            is_async=False,
+        )
+    )
     yield backend
     backend.close()
 
@@ -86,7 +89,7 @@ def services(event_queue: mp.Queue, backend: KartonBackend):
     Start all test service subprocesses, wait for their binds to register
     in Redis, then yield. Terminates on teardown.
     """
-    from service_runner import ALL_SERVICE_SPECS, start_service, _service_identity
+    from service_runner import ALL_SERVICE_SPECS, _service_identity, start_service
 
     processes = []
     for backend_type, instance in ALL_SERVICE_SPECS:

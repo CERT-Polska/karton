@@ -5,14 +5,15 @@ import shutil
 import tempfile
 import uuid
 import zipfile
+from collections.abc import Iterator
 from io import BytesIO
-from typing import IO, TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Union, cast
+from typing import IO, TYPE_CHECKING, Any, Optional, cast
 
 if TYPE_CHECKING:
     from .backend import KartonBackendProtocol
 
 
-class ResourceBase(object):
+class ResourceBase:
     """
     Base resource class, contains the basic logic of both remote and
     local resources. If you're not implementing your own resource metatypes
@@ -34,15 +35,15 @@ class ResourceBase(object):
     def __init__(
         self,
         name: str,
-        content: Optional[Union[str, bytes]] = None,
-        path: Optional[str] = None,
-        bucket: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        sha256: Optional[str] = None,
-        fd: Optional[IO[bytes]] = None,
-        _uid: Optional[str] = None,
-        _size: Optional[int] = None,
-        _flags: Optional[List[str]] = None,
+        content: str | bytes | None = None,
+        path: str | None = None,
+        bucket: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        sha256: str | None = None,
+        fd: IO[bytes] | None = None,
+        _uid: str | None = None,
+        _size: int | None = None,
+        _flags: list[str] | None = None,
     ) -> None:
         self.name = name
         self.bucket = bucket
@@ -52,15 +53,13 @@ class ResourceBase(object):
 
         calculate_hash = sha256 is None
 
-        self._content: Optional[bytes] = None
+        self._content: bytes | None = None
 
         if content and path:
             raise ValueError("Can't set both path and content for resource")
         if path:
             if not os.path.isfile(path):
-                raise IOError(
-                    "Path {path} doesn't exist or is not a file".format(path=path)
-                )
+                raise OSError(f"Path {path} doesn't exist or is not a file")
             if calculate_hash:
                 sha256_hash = hashlib.sha256()
                 with open(path, "rb") as f:
@@ -129,7 +128,7 @@ class ResourceBase(object):
         return cast(int, self._size)
 
     @property
-    def sha256(self) -> Optional[str]:
+    def sha256(self) -> str | None:
         """
         Resource sha256
 
@@ -137,7 +136,7 @@ class ResourceBase(object):
         """
         return self.metadata.get("sha256")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         # Internal serialization method
         return {
             "uid": self.uid,
@@ -154,14 +153,14 @@ class LocalResourceBase(ResourceBase):
     def __init__(
         self,
         name: str,
-        content: Optional[Union[str, bytes]] = None,
-        path: Optional[str] = None,
-        bucket: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        uid: Optional[str] = None,
-        sha256: Optional[str] = None,
-        fd: Optional[IO[bytes]] = None,
-        _flags: Optional[List[str]] = None,
+        content: str | bytes | None = None,
+        path: str | None = None,
+        bucket: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        uid: str | None = None,
+        sha256: str | None = None,
+        fd: IO[bytes] | None = None,
+        _flags: list[str] | None = None,
         _close_fd: bool = False,
     ) -> None:
         if len(list(filter(None, [path, content, fd]))) != 1:
@@ -180,7 +179,7 @@ class LocalResourceBase(ResourceBase):
         )
         self.fd = fd
         self._close_fd = _close_fd
-        self._upload_url: Optional[str] = None
+        self._upload_url: str | None = None
 
     def bind_upload_url(self, url: str) -> None:
         """
@@ -241,9 +240,9 @@ class LocalResourceBase(ResourceBase):
         directory_path: str,
         compression: int = zipfile.ZIP_DEFLATED,
         in_memory: bool = False,
-        bucket: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        uid: Optional[str] = None,
+        bucket: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        uid: str | None = None,
     ) -> "LocalResourceBase":
         """
         Resource extension, allowing to pass whole directory as a zipped resource.
@@ -398,16 +397,16 @@ class RemoteResource(ResourceBase):
     def __init__(
         self,
         name: str,
-        bucket: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        uid: Optional[str] = None,
-        size: Optional[int] = None,
+        bucket: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        uid: str | None = None,
+        size: int | None = None,
         backend: Optional["KartonBackendProtocol"] = None,
-        sha256: Optional[str] = None,
-        _flags: Optional[List[str]] = None,
-        _download_url: Optional[str] = None,
+        sha256: str | None = None,
+        _flags: list[str] | None = None,
+        _download_url: str | None = None,
     ) -> None:
-        super(RemoteResource, self).__init__(
+        super().__init__(
             name,
             bucket=bucket,
             metadata=metadata,
@@ -436,9 +435,9 @@ class RemoteResource(ResourceBase):
     @classmethod
     def from_dict(
         cls,
-        dict: Dict[str, Any],
+        dict: dict[str, Any],
         backend: Optional["KartonBackendProtocol"],
-        download_url: Optional[str] = None,
+        download_url: str | None = None,
     ) -> "RemoteResource":
         """
         Internal deserialization method for remote resources
@@ -501,10 +500,8 @@ class RemoteResource(ResourceBase):
         """
         if self.backend is None:
             raise RuntimeError(
-                (
-                    "Resource object can't be downloaded because it's not bound to "
-                    "the backend"
-                )
+                "Resource object can't be downloaded because it's not bound to "
+                "the backend"
             )
         self._content = self.backend.download_resource(self)
         return self._content
@@ -526,10 +523,8 @@ class RemoteResource(ResourceBase):
         """
         if self.backend is None:
             raise RuntimeError(
-                (
-                    "Resource object can't be downloaded because it's not bound to "
-                    "the backend"
-                )
+                "Resource object can't be downloaded because it's not bound to "
+                "the backend"
             )
         self.backend.download_resource_to_file(self, path)
 

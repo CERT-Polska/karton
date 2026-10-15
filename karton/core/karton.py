@@ -7,7 +7,8 @@ import argparse
 import sys
 import time
 import traceback
-from typing import Any, Callable, Dict, List, Optional, Tuple, cast
+from collections.abc import Callable
+from typing import Any, cast
 
 from . import query
 from .__version__ import __version__
@@ -55,8 +56,8 @@ class Producer(KartonBase):
     def __init__(
         self,
         identity: str,
-        config: Optional[Config] = None,
-        backend: Optional[KartonBackendProtocol] = None,
+        config: Config | None = None,
+        backend: KartonBackendProtocol | None = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -94,7 +95,7 @@ class Producer(KartonBase):
         except BaseException:
             try:
                 self.backend.set_task_status(task, TaskState.FINISHED)
-            except Exception:
+            except Exception:  # noqa: S110
                 # This is our good will that shouldn't interfere with
                 # original exception handling, especially in case of
                 # BaseException which could be masked with Exception
@@ -118,16 +119,16 @@ class Consumer(KartonServiceBase):
                          Set 0 for unlimited, and None for using global value
     """
 
-    filters: List[Dict[str, Any]] = []
+    filters: list[dict[str, Any]] = []
     persistent: bool = True
-    version: Optional[str] = None
-    task_timeout: Optional[int] = None
+    version: str | None = None
+    task_timeout: int | None = None
 
     def __init__(
         self,
-        config: Optional[Config] = None,
-        identity: Optional[str] = None,
-        backend: Optional[KartonBackendProtocol] = None,
+        config: Config | None = None,
+        identity: str | None = None,
+        backend: KartonBackendProtocol | None = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -144,11 +145,11 @@ class Consumer(KartonServiceBase):
         if self.task_timeout is None:
             self.task_timeout = self.config.getint("karton", "task_timeout")
 
-        self._pre_hooks: List[Tuple[Optional[str], Callable[[Task], None]]] = []
-        self._post_hooks: List[
-            Tuple[
-                Optional[str],
-                Callable[[Task, Optional[BaseException]], None],
+        self._pre_hooks: list[tuple[str | None, Callable[[Task], None]]] = []
+        self._post_hooks: list[
+            tuple[
+                str | None,
+                Callable[[Task, BaseException | None], None],
             ]
         ] = []
 
@@ -272,7 +273,7 @@ class Consumer(KartonServiceBase):
         )
 
     def add_pre_hook(
-        self, callback: Callable[[Task], None], name: Optional[str] = None
+        self, callback: Callable[[Task], None], name: str | None = None
     ) -> None:
         """
         Add a function to be called before processing each task.
@@ -285,8 +286,8 @@ class Consumer(KartonServiceBase):
 
     def add_post_hook(
         self,
-        callback: Callable[[Task, Optional[BaseException]], None],
-        name: Optional[str] = None,
+        callback: Callable[[Task, BaseException | None], None],
+        name: str | None = None,
     ) -> None:
         """
         Add a function to be called after processing each task.
@@ -314,7 +315,7 @@ class Consumer(KartonServiceBase):
                 else:
                     self.log.exception("Pre-hook failed")
 
-    def _run_post_hooks(self, exception: Optional[BaseException]) -> None:
+    def _run_post_hooks(self, exception: BaseException | None) -> None:
         """
         Run registered postprocessing hooks
 
@@ -387,23 +388,23 @@ class LogConsumer(KartonServiceBase):
     #: Supports Redis Pub/Sub glob patterns, e.g. ``"karton.*"`` matches all
     #: ``karton.*`` services. Otherwise an exact logger name (e.g.
     #: ``"karton.classifier"``).
-    logger_filter: Optional[str] = None
+    logger_filter: str | None = None
 
     #: Filter logs by uppercase log level name (e.g. ``"INFO"``). ``None``
     #: (default) matches all levels. Case-insensitive. Exact match, not a
     #: threshold - ``"INFO"`` does not include ``"WARNING"`` or higher.
-    level: Optional[str] = None
+    level: str | None = None
 
     def __init__(
         self,
-        config: Optional[Config] = None,
-        identity: Optional[str] = None,
-        backend: Optional[KartonBackendProtocol] = None,
+        config: Config | None = None,
+        identity: str | None = None,
+        backend: KartonBackendProtocol | None = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
     @abc.abstractmethod
-    def process_log(self, event: Dict[str, Any]) -> None:
+    def process_log(self, event: dict[str, Any]) -> None:
         """
         The core log handler that should be overwritten in implemented log handlers
 
@@ -448,9 +449,9 @@ class Karton(Consumer, Producer):
 
     def __init__(
         self,
-        config: Optional[Config] = None,
-        identity: Optional[str] = None,
-        backend: Optional[KartonBackendProtocol] = None,
+        config: Config | None = None,
+        identity: str | None = None,
+        backend: KartonBackendProtocol | None = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
 
@@ -467,7 +468,7 @@ class Karton(Consumer, Producer):
         self._send_signaling_status_task("task_begin")
 
     def _send_signaling_status_task_end(
-        self, task: Task, ex: Optional[BaseException]
+        self, task: Task, ex: BaseException | None
     ) -> None:
         """Send a begin status signaling task.
 

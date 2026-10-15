@@ -1,6 +1,7 @@
-from .reverser_karton import ReverserKarton
-from karton.core import Task, Resource
+from karton.core import Resource, Task
 from karton.core.test import KartonTestCase
+
+from .reverser_karton import ReverserKarton
 
 
 class ReverserKartonTestCase(KartonTestCase):
@@ -19,21 +20,22 @@ class ReverserKartonTestCase(KartonTestCase):
         output_sample = Resource("sample.txt", input_data[::-1])
 
         # prepare a fake test task that matches the production format
-        task = Task({
-            "type": "reverse-task",
-        }, payload={
-            "file": input_sample
-        })
+        task = Task(
+            {
+                "type": "reverse-task",
+            },
+            payload={"file": input_sample},
+        )
 
         # dry-run the fake task on the wrapped karton system
         results = self.run_task(task)
 
         # prepare a expected output task and check if it matches the one produced
-        expected_task = Task({
-            "origin": "karton.reverser",
-            "type": "reverse-result"
-        }, payload={
-            "file": output_sample,
-        })
+        expected_task = Task(
+            {"origin": "karton.reverser", "type": "reverse-result"},
+            payload={
+                "file": output_sample,
+            },
+        )
 
         self.assertTasksEqual(results, [expected_task])
