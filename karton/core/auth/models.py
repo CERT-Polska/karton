@@ -93,6 +93,7 @@ type AllowedOperation = (
 
 
 class AuthClaims(BaseModel):
+    """List of operations requested by a Karton service."""
     identity: str
     allowed_operations: list[AllowedOperation]
 
