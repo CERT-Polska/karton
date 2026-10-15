@@ -79,7 +79,7 @@ Good example is Karton System:
  [system]       enable_router                     Enable task routing. Routing can be turned off if you want to use dedicated Karton System instance for GC.
  [system]       crash_started_tasks_on_timeout    Enable crashing started tasks when task_started_timeout is reached instead of finishing them (introduced in v5.6.0).
  [system]       enable_null_version_deletion      Enable deletion of "null" version from S3, which is needed in some S3 providers (e.g. MinIO) to correctly remove resources when versioning is suspended (introduced in v5.6.1)
-============   ================================  ================================================================================================================================================================================
+============   ===============================  ================================================================================================================================================================================
 
 All settings can be set using command-line.
 
