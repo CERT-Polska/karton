@@ -22,7 +22,7 @@ from karton.core.backend.direct import (
     KARTON_TASKS_QUEUE,
     KartonBackendBase,
 )
-from karton.core.exceptions import BindExpiredError
+from karton.core.exceptions import BindExpiredError, HeartbeatExpiredError
 from karton.core.resource import LocalResource as SyncLocalResource
 from karton.core.task import TaskState
 
@@ -466,8 +466,8 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             expires_after,
         )
         if not success:
-            raise RuntimeError(
-                "Heartbeat prematurely expired because it wasn't refreshed in time."
+            raise HeartbeatExpiredError(
+                "Heartbeat prematurely expired because it wasn't refreshed on time."
             )
 
     async def unregister_service(
