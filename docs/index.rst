@@ -5,20 +5,21 @@
 
 Welcome to Karton's documentation!
 ==================================
-Karton is a library made for analysis backend orchestration.
-Allows you to build flexible malware analysis pipelines and attach new Karton Services with ease.
 
-This is achieved by combining powers of a few existing solutions, karton just glues them together and allows you to have some sane amount of abstraction over them.
+Karton is a library made for analysis backend orchestration. Allows you to build flexible malware analysis pipelines and attach new Karton Services with ease.
+
+This is achieved by combining powers of a few existing solutions, Karton just glues them together and allows you to have some sane amount of abstraction over them.
 
 Karton ecosystem consists of:
 
 - `Redis <https://www.redis.io/>`_ - store used for message exchange between Karton subsystems
 
 - Temporary object storage compatible with Amazon S3 API, holds all the heavy objects (aka Resources) like samples, analyses or memory dumps.
-  The recommended one is `MinIO <https://github.com/minio/minio>`_.
+  The recommended one is `Silo <https://github.com/pgsty/silo>`_ although Karton should work well with any S3-compatible backend.
 
+- Task routing and data exchange is achieved with the help of **Karton-System** - core of the Karton, which routes the tasks and keeps everything in order (task lifecycle, garbage collection etc.)
 
-Task routing and data exchange is achieved with the help of **Karton-System** - core of the Karton, which routes the tasks and keeps everything in order (task lifecycle, garbage collection etc.)
+- Access to the queues is provided by **Karton Gateway** - a secure Websocket/HTTP-based interface that brokers task queues and resources for Karton services, replacing direct Redis access. Resources are exchanged through S3 presigned URLs, and the Gateway is the primary backend going forward. See :doc:`gateway` for details.
 
 .. code-block:: python
 
@@ -69,6 +70,7 @@ Task routing and data exchange is achieved with the help of **Karton-System** - 
    task_headers_payloads
    service_configuration
    advanced_concepts
+   gateway
    unit_tests
    asyncio
    karton_api
