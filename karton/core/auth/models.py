@@ -100,6 +100,8 @@ class AuthClaims(BaseModel):
 
 @dataclass(frozen=True)
 class VerifiedGrant:
+    """List of operations granted to the Karton service.
+    Contains operations requested and subsequently verified by the gateway."""
     claims: AuthClaims
     expires_at: int | None
     token_id: str
