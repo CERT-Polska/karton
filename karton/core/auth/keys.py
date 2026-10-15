@@ -71,7 +71,6 @@ def get_jwk_from_public_key(public_key: ec.EllipticCurvePublicKey) -> dict[str, 
     Parameters based on https://www.rfc-editor.org/info/rfc7517/#section-4
 
     :param public_key: ECDSA P-256 public key
-
     """
     params = get_base_jwk_from_public_key(public_key)
     kid = get_jwk_thumbprint(public_key)
