@@ -1,8 +1,9 @@
 import contextlib
 import logging
 import time
+from collections.abc import AsyncIterator
 from io import BytesIO
-from typing import IO, Any, AsyncIterator, cast
+from typing import IO, Any, cast
 
 import httpx2
 

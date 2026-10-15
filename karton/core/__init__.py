@@ -4,13 +4,13 @@ from .resource import LocalResource, RemoteResource, Resource
 from .task import Task
 
 __all__ = [
-    "Karton",
-    "Producer",
-    "Consumer",
-    "Task",
-    "LogConsumer",
     "Config",
+    "Consumer",
+    "Karton",
     "LocalResource",
-    "Resource",
+    "LogConsumer",
+    "Producer",
     "RemoteResource",
+    "Resource",
+    "Task",
 ]

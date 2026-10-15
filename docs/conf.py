@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Configuration file for the Sphinx documentation builder.
 #
@@ -17,7 +16,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath("../.."))
 
-from karton.core.__version__ import __version__  # noqa: E402
+from karton.core.__version__ import __version__
 
 # -- Project information -----------------------------------------------------
 
@@ -49,7 +48,7 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.ifconfig",
     "sphinx.ext.viewcode",
-    "sphinx_rtd_theme"
+    "sphinx_rtd_theme",
 ]
 
 # Add any paths that contain templates here, relative to this directory.

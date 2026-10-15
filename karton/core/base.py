@@ -5,7 +5,7 @@ import os
 import textwrap
 import uuid
 from contextlib import contextmanager
-from typing import Optional, Protocol, Union, cast
+from typing import Protocol, cast
 
 from .__version__ import __version__
 from .backend import KartonBackendProtocol, KartonServiceInfo, get_backend
@@ -25,10 +25,10 @@ class ConfigMixin:
     """
 
     identity: str
-    version: Optional[str]
+    version: str | None
 
     def __init__(
-        self, config: Optional[Config] = None, identity: Optional[str] = None
+        self, config: Config | None = None, identity: str | None = None
     ) -> None:
         self.config = config or Config()
         self.enable_publish_log: bool = self.config.getboolean(
@@ -105,7 +105,7 @@ class ConfigMixin:
         )
 
     @classmethod
-    def karton_from_args(cls, args: Optional[argparse.Namespace] = None):
+    def karton_from_args(cls, args: argparse.Namespace | None = None):
         """
         Returns Karton instance configured using configuration files
         and provided arguments
@@ -137,7 +137,7 @@ class LoggingMixin:
         self._log_handler = log_handler
         self._log_format = log_format
 
-    def setup_logger(self, level: Optional[Union[str, int]] = None) -> None:
+    def setup_logger(self, level: str | int | None = None) -> None:
         """
         Setup logger for Karton service (StreamHandler and `karton.logs` handler)
 
@@ -151,7 +151,7 @@ class LoggingMixin:
             level = self.config.get("logging", "level", logging.INFO)
 
         if isinstance(level, str) and level.isdigit():
-            log_level: Union[str, int] = int(level)
+            log_level: str | int = int(level)
         else:
             log_level = level
 
@@ -228,15 +228,15 @@ class KartonBase(abc.ABC, ConfigMixin, LoggingMixin):
     #: Karton service identity
     identity: str = ""
     #: Karton service version
-    version: Optional[str] = None
+    version: str | None = None
     backend: KartonBackendProtocol
     _backend_factory: KartonBackendFactory = staticmethod(get_backend)
 
     def __init__(
         self,
-        config: Optional[Config] = None,
-        identity: Optional[str] = None,
-        backend: Optional[KartonBackendProtocol] = None,
+        config: Config | None = None,
+        identity: str | None = None,
+        backend: KartonBackendProtocol | None = None,
     ) -> None:
         ConfigMixin.__init__(self, config, identity)
 
@@ -250,11 +250,11 @@ class KartonBase(abc.ABC, ConfigMixin, LoggingMixin):
         )
 
     @property
-    def current_task(self) -> Optional[Task]:
+    def current_task(self) -> Task | None:
         return get_current_task()
 
     @current_task.setter
-    def current_task(self, task: Optional[Task]):
+    def current_task(self, task: Task | None):
         set_current_task(task)
 
 
@@ -272,9 +272,9 @@ class KartonServiceBase(KartonBase):
 
     def __init__(
         self,
-        config: Optional[Config] = None,
-        identity: Optional[str] = None,
-        backend: Optional[KartonBackendProtocol] = None,
+        config: Config | None = None,
+        identity: str | None = None,
+        backend: KartonBackendProtocol | None = None,
     ) -> None:
         super().__init__(
             config=config,

@@ -1,18 +1,19 @@
 import pytest
-
 from shared import (
     BACKENDS,
-    wait_for_task_state,
     wait_for_routed_tasks,
+    wait_for_task_state,
 )
 
-from karton.core import Producer, Consumer, Task, Config
-from karton.core.task import TaskState
+from karton.core import Producer, Task
 from karton.core.backend import KartonBackend
+from karton.core.task import TaskState
 
 
 @pytest.mark.parametrize("service_backend", BACKENDS)
-def test_simple_task(backend: KartonBackend, producer: Producer, services, service_backend: str):
+def test_simple_task(
+    backend: KartonBackend, producer: Producer, services, service_backend: str
+):
     task = Task(
         headers={
             "instance": "first",
@@ -68,4 +69,4 @@ def test_multiple_routing(
     )
 
     routed_tasks = backend.get_tasks([x.uid for x in routed_tasks])
-    assert all((x.status == TaskState.FINISHED for x in routed_tasks))
+    assert all(x.status == TaskState.FINISHED for x in routed_tasks)

@@ -1,7 +1,6 @@
 import fnmatch
 import re
 from collections.abc import Mapping, Sequence
-from typing import Dict, Type
 
 # Source code adopted from https://github.com/kapouille/mongoquery
 # Original licenced under "The Unlicense" license.
@@ -10,10 +9,8 @@ from typing import Dict, Type
 class QueryError(Exception):
     """Query error exception"""
 
-    pass
 
-
-class _Undefined(object):
+class _Undefined:
     pass
 
 
@@ -22,7 +19,7 @@ def is_non_string_sequence(entry):
     return isinstance(entry, Sequence) and not isinstance(entry, str)
 
 
-class Query(object):
+class Query:
     """The Query class is used to match an object against a MongoDB-like query"""
 
     def __init__(self, definition, _type_coercion=False):
@@ -145,9 +142,12 @@ class Query(object):
     def _in(condition, entry):
         if is_non_string_sequence(condition):
             for elem in condition:
-                if is_non_string_sequence(entry) and elem in entry:
-                    return True
-                elif not is_non_string_sequence(entry) and elem == entry:
+                if (
+                    is_non_string_sequence(entry)
+                    and elem in entry
+                    or not is_non_string_sequence(entry)
+                    and elem == entry
+                ):
                     return True
             return False
         else:
@@ -195,7 +195,7 @@ class Query(object):
 
     @staticmethod
     def _type(condition, entry):
-        bson_type: Dict[int, Type] = {
+        bson_type: dict[int, type] = {
             1: float,
             2: str,
             3: Mapping,
@@ -232,10 +232,8 @@ class Query(object):
 
         if condition == "number":
             return any(
-                [
-                    isinstance(entry, bson_type[bson_alias[alias]])
-                    for alias in ["double", "int", "long"]
-                ]
+                isinstance(entry, bson_type[bson_alias[alias]])
+                for alias in ["double", "int", "long"]
             )
 
         # resolves bson alias, or keeps original condition value

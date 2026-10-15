@@ -2,10 +2,10 @@ import configparser
 import os
 import re
 import warnings
-from typing import Any, Dict, List, Optional, cast, overload
+from typing import Any, cast, overload
 
 
-class Config(object):
+class Config:
     """
     Simple config loader.
 
@@ -35,19 +35,19 @@ class Config(object):
     ]
 
     def __init__(
-        self, path: Optional[str] = None, check_sections: Optional[bool] = True
+        self, path: str | None = None, check_sections: bool | None = True
     ) -> None:
-        self._config: Dict[str, Dict[str, Any]] = {}
+        self._config: dict[str, dict[str, Any]] = {}
 
         path_from_env = os.getenv("KARTON_CONFIG_FILE")
         if path_from_env:
             if not os.path.isfile(path_from_env):
-                raise IOError(f"Configuration file not found in {path_from_env}")
+                raise OSError(f"Configuration file not found in {path_from_env}")
             self.SEARCH_PATHS = self.SEARCH_PATHS + [path_from_env]
 
         if path is not None:
             if not os.path.isfile(path):
-                raise IOError("Configuration file not found in " + path)
+                raise OSError("Configuration file not found in " + path)
             self.SEARCH_PATHS = self.SEARCH_PATHS + [path]
 
         self._load_from_file(self.SEARCH_PATHS)
@@ -99,7 +99,7 @@ class Config(object):
         self._config[section_name][option_name] = value
 
     def get(
-        self, section_name: str, option_name: str, fallback: Optional[Any] = None
+        self, section_name: str, option_name: str, fallback: Any | None = None
     ) -> Any:
         """
         Gets value from configuration or returns ``fallback`` (None by default)
@@ -121,24 +121,22 @@ class Config(object):
         """
         if section_name not in self._config:
             return False
-        if option_name not in self._config[section_name]:
-            return False
-        return True
+        return option_name in self._config[section_name]
 
     @overload
     def getint(self, section_name: str, option_name: str, fallback: int) -> int: ...
 
     @overload
-    def getint(self, section_name: str, option_name: str) -> Optional[int]: ...
+    def getint(self, section_name: str, option_name: str) -> int | None: ...
 
     @overload
     def getint(
-        self, section_name: str, option_name: str, fallback: Optional[int]
-    ) -> Optional[int]: ...
+        self, section_name: str, option_name: str, fallback: int | None
+    ) -> int | None: ...
 
     def getint(
-        self, section_name: str, option_name: str, fallback: Optional[int] = None
-    ) -> Optional[int]:
+        self, section_name: str, option_name: str, fallback: int | None = None
+    ) -> int | None:
         """
         Gets value from configuration or returns ``fallback`` (None by default)
         if value was not set. Value is coerced to int type.
@@ -154,11 +152,11 @@ class Config(object):
     ) -> bool: ...
 
     @overload
-    def getboolean(self, section_name: str, option_name: str) -> Optional[bool]: ...
+    def getboolean(self, section_name: str, option_name: str) -> bool | None: ...
 
     def getboolean(
-        self, section_name: str, option_name: str, fallback: Optional[bool] = None
-    ) -> Optional[bool]:
+        self, section_name: str, option_name: str, fallback: bool | None = None
+    ) -> bool | None:
         """
         Gets value from configuration or returns ``fallback`` (None by default)
         if value was not set. Value is coerced to bool type.
@@ -195,7 +193,7 @@ class Config(object):
             )
         self._config[section_name][option_name].append(value)
 
-    def load_from_dict(self, data: Dict[str, Dict[str, Any]]) -> None:
+    def load_from_dict(self, data: dict[str, dict[str, Any]]) -> None:
         """
         Updates configuration values from dictionary compatible with
         ``ConfigParser.read_dict``. Accepts value in native type, so you
@@ -218,7 +216,7 @@ class Config(object):
                     continue
                 self.set(section_name, option_name, value)
 
-    def _load_from_file(self, paths: List[str]) -> None:
+    def _load_from_file(self, paths: list[str]) -> None:
         """
         Function used for loading configuration items from karton.ini files
 
@@ -226,7 +224,7 @@ class Config(object):
         """
         config_file = configparser.ConfigParser()
         config_file.read(paths)
-        self.load_from_dict(cast(Dict[str, Dict[str, Any]], config_file))
+        self.load_from_dict(cast(dict[str, dict[str, Any]], config_file))
 
     def _load_from_env(self) -> None:
         """
@@ -247,6 +245,6 @@ class Config(object):
             key = key.lower()
             self.set(section, key, value)
 
-    def __getitem__(self, section) -> Dict[str, Any]:
+    def __getitem__(self, section) -> dict[str, Any]:
         """Gets a section named `section` from the config"""
         return self._config[section]

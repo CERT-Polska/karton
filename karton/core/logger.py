@@ -2,7 +2,8 @@ import logging
 import platform
 import traceback
 import warnings
-from typing import Any, Callable, Dict
+from collections.abc import Callable
+from typing import Any
 
 from .backend import KartonBackendProtocol
 from .task import get_current_task
@@ -27,7 +28,7 @@ class TaskContextFilter(logging.Filter):
 class LogLineFormatterMixin:
     format: Callable[[logging.LogRecord], str]
 
-    def prepare_log_line(self, record: logging.LogRecord) -> Dict[str, Any]:
+    def prepare_log_line(self, record: logging.LogRecord) -> dict[str, Any]:
         ignore_fields = [
             "args",
             "asctime",

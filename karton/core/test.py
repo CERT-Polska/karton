@@ -6,7 +6,7 @@ import hashlib
 import logging
 import unittest
 from collections import defaultdict
-from typing import Any, BinaryIO, Dict, List, Optional, Union, cast
+from typing import Any, BinaryIO, cast
 from unittest import mock
 
 from .backend import KartonBackend, KartonMetrics
@@ -27,9 +27,9 @@ class ConfigMock(Config):
 
 class BackendMock:
     def __init__(self) -> None:
-        self.produced_tasks: List[Task] = []
+        self.produced_tasks: list[Task] = []
         # A custom S3 system mock
-        self.buckets: Dict[str, Dict[str, bytes]] = defaultdict(dict)
+        self.buckets: dict[str, dict[str, bytes]] = defaultdict(dict)
 
     @property
     def default_bucket_name(self) -> str:
@@ -51,7 +51,7 @@ class BackendMock:
 
     def produce_log(
         self,
-        log_record: Dict[str, Any],
+        log_record: dict[str, Any],
         logger_name: str,
         level: str,
     ) -> bool:
@@ -69,8 +69,8 @@ class BackendMock:
     def upload_resource(
         self,
         resource: LocalResource,
-        content: Union[bytes, BinaryIO],
-        length: Optional[int] = None,
+        content: bytes | BinaryIO,
+        length: int | None = None,
     ) -> None:
         if resource.bucket is None:
             raise RuntimeError("Bucket should not be None")
@@ -143,7 +143,7 @@ class KartonTestCase(unittest.TestCase):
     kwargs = None
 
     def setUp(self) -> None:
-        kwargs: Dict[Any, Any] = self.kwargs or {}
+        kwargs: dict[Any, Any] = self.kwargs or {}
         if self.config is None:
             self.config = ConfigMock()
         self.backend = BackendMock()
@@ -181,12 +181,12 @@ class KartonTestCase(unittest.TestCase):
         """
         self.assertTrue(
             isinstance(resource, ResourceBase),
-            "Resource type mismatch in {}".format(resource_name),
+            f"Resource type mismatch in {resource_name}",
         )
         self.assertEqual(
             self.get_resource_sha256(resource),
             self.get_resource_sha256(expected),
-            "Resource content mismatch in {}".format(resource_name),
+            f"Resource content mismatch in {resource_name}",
         )
 
     def assertTaskEqual(self, task: Task, expected: Task) -> None:
@@ -203,8 +203,8 @@ class KartonTestCase(unittest.TestCase):
             expected.walk_payload_items(), key=lambda el: el[0]
         )
         self.assertSetEqual(
-            set(path for path, _ in task_payload_values),
-            set(path for path, _ in expected_payload_values),
+            {path for path, _ in task_payload_values},
+            {path for path, _ in expected_payload_values},
         )
         for task_payload, expected_payload in zip(
             task_payload_values, expected_payload_values
@@ -216,12 +216,12 @@ class KartonTestCase(unittest.TestCase):
             )  # If not true, there is something wrong with this test routine
             if not isinstance(task_value, ResourceBase):
                 self.assertEqual(
-                    task_value, expected_value, "Incorrect value of {}".format(task_key)
+                    task_value, expected_value, f"Incorrect value of {task_key}"
                 )
             else:
                 self.assertResourceEqual(task_value, expected_value, task_key)
 
-    def assertTasksEqual(self, tasks: List[Task], expected: List[Task]) -> None:
+    def assertTasksEqual(self, tasks: list[Task], expected: list[Task]) -> None:
         """
         Assert that two task lists are equal
 
@@ -264,7 +264,7 @@ class KartonTestCase(unittest.TestCase):
         task.transform_payload_bags(local_resource_to_remote)
         return task
 
-    def run_task(self, task: Task) -> List[Task]:
+    def run_task(self, task: Task) -> list[Task]:
         """
         Spawns task into tested Karton subsystem instance
 

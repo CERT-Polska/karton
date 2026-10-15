@@ -1,7 +1,7 @@
 import logging
 import sys
 import traceback
-from typing import TYPE_CHECKING, Protocol, Type, cast
+from typing import TYPE_CHECKING, Protocol, cast
 
 from fastapi import WebSocket
 
@@ -73,13 +73,13 @@ class RequestHandler[T: RequestType](Protocol):
     ) -> None: ...
 
 
-REQUEST_HANDLERS: dict[Type[RequestType], RequestHandler] = {}
+REQUEST_HANDLERS: dict[type[RequestType], RequestHandler] = {}
 
 
-def request_handler(request_type: Type[RequestType]):
-    def request_handler_inner[
-        T: RequestType
-    ](handler_fn: RequestHandler[T],) -> RequestHandler[T]:
+def request_handler(request_type: type[RequestType]):
+    def request_handler_inner[T: RequestType](
+        handler_fn: RequestHandler[T],
+    ) -> RequestHandler[T]:
         if request_type in REQUEST_HANDLERS:
             raise ValueError(
                 f"Handler for request type {request_type} is already defined"

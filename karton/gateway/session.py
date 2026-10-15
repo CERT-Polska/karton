@@ -1,9 +1,10 @@
 import asyncio
 import logging
 import random
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from time import time
-from typing import AsyncIterator, Self
+from typing import Self
 
 from fastapi import WebSocket
 from pydantic import ValidationError
@@ -67,7 +68,6 @@ def parse_auth_tokens(client_tokens: list[str]) -> list[VerifiedGrant]:
             verified_grants.append(verified_grant)
         except Exception as e:
             logger.warning("Client presented invalid token: %r", e)
-            pass
     return verified_grants
 
 

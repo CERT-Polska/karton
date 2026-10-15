@@ -83,7 +83,7 @@ def import_karton_class(dotted: str) -> type[KartonBase] | type[KartonAsyncBase]
     # framework's own base classes (anything under karton.core).
     module = importlib.import_module(dotted)
     framework_prefix = KartonBase.__module__.rsplit(".", 1)[0]
-    karton_classes: list[type[KartonBase] | type[KartonAsyncBase]] = []
+    karton_classes: list[type[KartonBase | KartonAsyncBase]] = []
     seen: set[int] = set()
     for _name, obj in inspect.getmembers(module, inspect.isclass):
         if id(obj) in seen:
@@ -293,7 +293,7 @@ def main() -> None:
     keypair_parser.add_argument(
         "--private-key",
         default=None,
-        help="Output path for the private key PEM " "(default: ~/.karton/private.pem)",
+        help="Output path for the private key PEM (default: ~/.karton/private.pem)",
     )
     keypair_parser.add_argument(
         "--jwks",
@@ -332,14 +332,13 @@ def main() -> None:
     issue_parser.add_argument(
         "--claims-file",
         default=None,
-        help="Path to an AuthClaims JSON file. "
-        "If omitted, claims are read from stdin",
+        help="Path to an AuthClaims JSON file. If omitted, claims are read from stdin",
     )
     issue_parser.set_defaults(func=cmd_issue)
 
     claims_parser = subparsers.add_parser(
         "claims",
-        help="Generate AuthClaims from a Karton class or explicit " "arguments",
+        help="Generate AuthClaims from a Karton class or explicit arguments",
     )
     claims_parser.add_argument(
         "karton",

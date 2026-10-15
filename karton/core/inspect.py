@@ -1,5 +1,4 @@
 from collections import defaultdict
-from typing import Dict, List, Optional
 
 from .backend import KartonBackend, KartonBind
 from .task import Task, TaskState
@@ -15,7 +14,7 @@ class KartonQueue:
     """
 
     def __init__(
-        self, bind: KartonBind, tasks: List[Task], state: "KartonState"
+        self, bind: KartonBind, tasks: list[Task], state: "KartonState"
     ) -> None:
         self.bind = bind
         self.tasks = tasks
@@ -36,7 +35,7 @@ class KartonQueue:
         )
 
     @property
-    def pending_tasks(self) -> List[Task]:
+    def pending_tasks(self) -> list[Task]:
         """Get queue pending tasks"""
         return [
             task
@@ -45,7 +44,7 @@ class KartonQueue:
         ]
 
     @property
-    def crashed_tasks(self) -> List[Task]:
+    def crashed_tasks(self) -> list[Task]:
         """Get queue crashed tasks"""
         return [task for task in self.tasks if task.status == TaskState.CRASHED]
 
@@ -59,7 +58,7 @@ class KartonAnalysis:
     :param state: :class:`KartonState` object to be used
     """
 
-    def __init__(self, root_uid: str, tasks: List[Task], state: "KartonState") -> None:
+    def __init__(self, root_uid: str, tasks: list[Task], state: "KartonState") -> None:
         self.root_uid = root_uid
         self.tasks = tasks
         self.state = state
@@ -75,7 +74,7 @@ class KartonAnalysis:
         return len(self.pending_tasks) == 0
 
     @property
-    def pending_tasks(self) -> List[Task]:
+    def pending_tasks(self) -> list[Task]:
         """Get analysis pending tasks"""
         return [
             task
@@ -84,19 +83,19 @@ class KartonAnalysis:
         ]
 
     @property
-    def pending_queues(self) -> Dict[str, KartonQueue]:
+    def pending_queues(self) -> dict[str, KartonQueue]:
         """Group analysis tasks by their queues"""
         return get_queues_for_tasks(self.tasks, self.state)
 
     @property
-    def crashed_tasks(self) -> List[Task]:
+    def crashed_tasks(self) -> list[Task]:
         """Get analysis crashed tasks"""
         return [task for task in self.tasks if task.status == TaskState.CRASHED]
 
 
 def get_queues_for_tasks(
-    tasks: List[Task], state: "KartonState"
-) -> Dict[str, KartonQueue]:
+    tasks: list[Task], state: "KartonState"
+) -> dict[str, KartonQueue]:
     """
     Group task objects by their queue name
 
@@ -137,13 +136,13 @@ class KartonState:
         self.replicas = backend.get_online_identities()
         self.parse_resources = parse_resources
 
-        self._tasks: Optional[List[Task]] = None
-        self._pending_tasks: Optional[List[Task]] = None
-        self._analyses: Optional[Dict[str, KartonAnalysis]] = None
-        self._queues: Optional[Dict[str, KartonQueue]] = None
+        self._tasks: list[Task] | None = None
+        self._pending_tasks: list[Task] | None = None
+        self._analyses: dict[str, KartonAnalysis] | None = None
+        self._queues: dict[str, KartonQueue] | None = None
 
     @property
-    def tasks(self) -> List[Task]:
+    def tasks(self) -> list[Task]:
         if self._tasks is None:
             self._tasks = self.backend.get_all_tasks(
                 parse_resources=self.parse_resources
@@ -151,7 +150,7 @@ class KartonState:
         return self._tasks
 
     @property
-    def pending_tasks(self) -> List[Task]:
+    def pending_tasks(self) -> list[Task]:
         if self._pending_tasks is None:
             self._pending_tasks = [
                 task
@@ -161,7 +160,7 @@ class KartonState:
         return self._pending_tasks
 
     @property
-    def analyses(self) -> Dict[str, KartonAnalysis]:
+    def analyses(self) -> dict[str, KartonAnalysis]:
         if self._analyses is None:
             # Tasks grouped by root_uid
             tasks_per_analysis = defaultdict(list)
@@ -176,11 +175,11 @@ class KartonState:
         return self._analyses
 
     @property
-    def queues(self) -> Dict[str, KartonQueue]:
+    def queues(self) -> dict[str, KartonQueue]:
         if self._queues is None:
             queues = get_queues_for_tasks(self.pending_tasks, self)
             # Present registered queues without tasks
-            for bind_name, bind in self.binds.items():
+            for bind_name in self.binds:
                 if bind_name not in queues:
                     queues[bind_name] = KartonQueue(
                         bind=self.binds[bind_name], tasks=[], state=self

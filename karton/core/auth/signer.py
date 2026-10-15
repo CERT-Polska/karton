@@ -49,7 +49,7 @@ def issue_auth_token(
     :return: JWT token string
     """
     kid = get_jwk_thumbprint_from_private_key(private_key)
-    issued_at = datetime.datetime.now(datetime.timezone.utc)
+    issued_at = datetime.datetime.now(datetime.UTC)
     payload = {
         "sub": claims.identity,
         "iss": issuer,

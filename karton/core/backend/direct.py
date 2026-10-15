@@ -5,17 +5,10 @@ import os
 import time
 import warnings
 from collections import defaultdict, namedtuple
+from collections.abc import Iterable, Iterator
 from typing import (
     IO,
     Any,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    Optional,
-    Set,
-    Tuple,
-    Union,
     cast,
 )
 
@@ -72,7 +65,7 @@ class KartonBackendBase:
         self.service_info = service_info
         # Bind is stored for expiration check done by consume_routed_task
         # Explicit expiration check is not required when using Karton Gateway
-        self._current_bind: Optional[KartonBind] = None
+        self._current_bind: KartonBind | None = None
 
     @property
     def identity(self) -> str | None:
@@ -89,7 +82,7 @@ class KartonBackendBase:
     def get_redis_configuration(
         config: Config,
         service_info: KartonServiceInfo,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         client_name = service_info.make_client_name()
 
         redis_url = config.get("redis", "url")
@@ -126,7 +119,7 @@ class KartonBackendBase:
         return f"karton.queue.{priority.value}:{identity}"
 
     @staticmethod
-    def get_queue_names(identity: str) -> List[str]:
+    def get_queue_names(identity: str) -> list[str]:
         """
         Return all Redis routed task queue names for given identity,
         ordered by priority (descending).
@@ -200,7 +193,7 @@ class KartonBackendBase:
         return unserialize_bind(identity, bind)
 
     @staticmethod
-    def unserialize_output(identity: str, output_data: Set[str]) -> KartonOutputs:
+    def unserialize_output(identity: str, output_data: set[str]) -> KartonOutputs:
         """
         Deserialize KartonOutputs object for given identity.
 
@@ -212,7 +205,7 @@ class KartonBackendBase:
         return KartonOutputs(identity=identity, outputs=output)
 
     @staticmethod
-    def _log_channel(logger_name: Optional[str], level: Optional[str]) -> str:
+    def _log_channel(logger_name: str | None, level: str | None) -> str:
         return ".".join(
             [KARTON_LOG_CHANNEL, (level or "*").lower(), logger_name or "*"]
         )
@@ -315,7 +308,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             redis.ping()
         return redis
 
-    def unserialize_resource(self, resource_spec: Dict[str, Any]) -> RemoteResource:
+    def unserialize_resource(self, resource_spec: dict[str, Any]) -> RemoteResource:
         """
         Unserializes resource into a RemoteResource object bound with current backend
 
@@ -336,7 +329,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             return None
         return self.unserialize_bind(identity, bind_data)
 
-    def get_binds(self) -> List[KartonBind]:
+    def get_binds(self) -> list[KartonBind]:
         """
         Get all binds registered in Redis
 
@@ -349,7 +342,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             ).items()
         ]
 
-    def register_bind(self, bind: KartonBind) -> Optional[KartonBind]:
+    def register_bind(self, bind: KartonBind) -> KartonBind | None:
         with self.redis.pipeline(transaction=True) as pipe:
             pipe.hget(KARTON_BINDS_HSET, bind.identity)
             pipe.hset(KARTON_BINDS_HSET, bind.identity, self.serialize_bind(bind))
@@ -378,7 +371,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             DeprecationWarning,
         )
 
-    def get_online_consumers(self) -> Dict[str, List[Dict[str, str]]]:
+    def get_online_consumers(self) -> dict[str, list[dict[str, str]]]:
         """
         Gets all online identities.
 
@@ -442,14 +435,14 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         for service in self._get_online_gateway_services():
             services[service] += 1
 
-        for service in services.keys():
+        for service in services:
             if service.instance_id is None:
                 for _ in range(services[service]):
                     yield service
             else:
                 yield service
 
-    def get_online_services(self, _legacy=True) -> List[KartonExternalServiceInfo]:
+    def get_online_services(self, _legacy=True) -> list[KartonExternalServiceInfo]:
         """
         Gets all online services providing extended service information.
 
@@ -488,21 +481,21 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             if service.karton_version is not None
         ]
 
-    def get_online_identities(self) -> Dict[str, List[KartonExternalServiceInfo]]:
+    def get_online_identities(self) -> dict[str, list[KartonExternalServiceInfo]]:
         """
         Returns a dictionary for all online identities with list of
         KartonServiceInfo of each instance
 
         :return: Dictionary {identity: [list of KartonServiceInfo objects]}
         """
-        identities: defaultdict[str, List[KartonExternalServiceInfo]] = defaultdict(
+        identities: defaultdict[str, list[KartonExternalServiceInfo]] = defaultdict(
             list
         )
         for service in self._get_online_services():
             identities[service.identity].append(service)
         return dict(identities)
 
-    def get_task(self, task_uid: str) -> Optional[Task]:
+    def get_task(self, task_uid: str) -> Task | None:
         """
         Get task object with given identifier
 
@@ -518,10 +511,10 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
 
     def get_tasks(
         self,
-        task_uid_list: List[str],
+        task_uid_list: list[str],
         chunk_size: int = 1000,
         parse_resources: bool = True,
-    ) -> List[Task]:
+    ) -> list[Task]:
         """
         Get multiple tasks for given identifier list
 
@@ -580,10 +573,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         :return: Iterator with task objects
         """
         return self._iter_tasks(
-            map(
-                lambda task_uid: f"{KARTON_TASK_NAMESPACE}:{task_uid}",
-                task_uid_list,
-            ),
+            (f"{KARTON_TASK_NAMESPACE}:{task_uid}" for task_uid in task_uid_list),
             chunk_size=chunk_size,
             parse_resources=parse_resources,
         )
@@ -608,7 +598,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
 
     def get_all_tasks(
         self, chunk_size: int = 1000, parse_resources: bool = True
-    ) -> List[Task]:
+    ) -> list[Task]:
         """
         Get all tasks registered in Redis
 
@@ -689,7 +679,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         # Register new task
         self.register_task(task)
 
-    def register_task(self, task: Task, pipe: Optional[Pipeline] = None) -> None:
+    def register_task(self, task: Task, pipe: Pipeline | None = None) -> None:
         """
         Register or update task in Redis.
 
@@ -702,7 +692,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         rs = pipe or self.redis
         rs.set(f"{KARTON_TASK_NAMESPACE}:{task.uid}", task.serialize())
 
-    def register_tasks(self, tasks: List[Task]) -> None:
+    def register_tasks(self, tasks: list[Task]) -> None:
         """
         Register or update multiple tasks in Redis.
         :param tasks: List of task objects
@@ -717,7 +707,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         self.redis.mset(taskmap)
 
     def set_task_status(
-        self, task: Task, status: TaskState, pipe: Optional[Pipeline] = None
+        self, task: Task, status: TaskState, pipe: Pipeline | None = None
     ) -> None:
         """
         Extends :meth:`KartonBackendProtocol.set_task_status` with a
@@ -758,7 +748,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         for chunk in chunks(keys, chunk_size):
             self.redis.delete(*chunk)
 
-    def get_task_queue(self, queue: str) -> List[Task]:
+    def get_task_queue(self, queue: str) -> list[Task]:
         """
         Return all tasks in provided queue
 
@@ -768,7 +758,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         task_uids = cast(list[str], self.redis.lrange(queue, 0, -1))
         return self.get_tasks(task_uids)
 
-    def get_task_ids_from_queue(self, queue: str) -> List[str]:
+    def get_task_ids_from_queue(self, queue: str) -> list[str]:
         """
         Return all task UIDs in a queue
 
@@ -785,7 +775,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         """
         self.redis.delete(*self.get_queue_names(identity))
 
-    def remove_task_queue(self, queue: str) -> List[Task]:
+    def remove_task_queue(self, queue: str) -> list[Task]:
         """
         Remove task queue with all contained tasks
 
@@ -801,7 +791,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         self.redis.rpush(KARTON_TASKS_QUEUE, task.uid)
 
     def produce_routed_task(
-        self, identity: str, task: Task, pipe: Optional[Pipeline] = None
+        self, identity: str, task: Task, pipe: Pipeline | None = None
     ) -> None:
         """
         Add given task to routed task queue of given identity
@@ -816,8 +806,8 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         rs.rpush(self.get_queue_name(identity, task.priority), task.uid)
 
     def consume_queues(
-        self, queues: Union[str, List[str]], timeout: int = 0
-    ) -> Optional[Tuple[str, str]]:
+        self, queues: str | list[str], timeout: int = 0
+    ) -> tuple[str, str] | None:
         """
         Get item from queues (ordered from the most to the least prioritized)
         If there are no items, wait until one appear.
@@ -829,7 +819,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         return cast(tuple[str, str] | None, self.redis.blpop(queues, timeout=timeout))
 
     def increment_multiple_metrics(
-        self, metric: KartonMetrics, increments: Dict[str, int]
+        self, metric: KartonMetrics, increments: dict[str, int]
     ) -> None:
         """
         Increments metrics for multiple identities by given value via single pipeline
@@ -842,7 +832,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             p.hincrby(metric.value, identity, increment)
         p.execute()
 
-    def consume_queues_batch(self, queue: str, max_count: int) -> List[str]:
+    def consume_queues_batch(self, queue: str, max_count: int) -> list[str]:
         """
         Get a batch of items from the queue
 
@@ -854,7 +844,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         p.ltrim(queue, max_count, -1)
         return p.execute()[0]
 
-    def consume_routed_task(self, identity: str, timeout: int = 5) -> Optional[Task]:
+    def consume_routed_task(self, identity: str, timeout: int = 5) -> Task | None:
         if self._current_bind is not None:
             current_bind = self.get_bind(identity)
             if current_bind != self._current_bind:
@@ -869,7 +859,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         )
         if not item:
             return None
-        queue, data = item
+        _queue, data = item
         return self.get_task(data)
 
     def restart_task(self, task: Task) -> Task:
@@ -897,7 +887,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
 
     def produce_log(
         self,
-        log_record: Dict[str, Any],
+        log_record: dict[str, Any],
         logger_name: str,
         level: str,
     ) -> bool:
@@ -910,7 +900,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
 
     def produce_logs(
         self,
-        log_records: List[Dict[str, Any]],
+        log_records: list[dict[str, Any]],
         logger_name: str,
         level: str,
     ) -> None:
@@ -930,9 +920,9 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
     def consume_log(
         self,
         timeout: int = 5,
-        logger_filter: Optional[str] = None,
-        level: Optional[str] = None,
-    ) -> Iterator[Optional[Dict[str, Any]]]:
+        logger_filter: str | None = None,
+        level: str | None = None,
+    ) -> Iterator[dict[str, Any] | None]:
         with self.redis.pubsub() as pubsub:
             pubsub.psubscribe(self._log_channel(logger_filter, level))
             while pubsub.subscribed:
@@ -950,7 +940,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
                     yield None
 
     def increment_metrics(
-        self, metric: KartonMetrics, identity: str, pipe: Optional[Pipeline] = None
+        self, metric: KartonMetrics, identity: str, pipe: Pipeline | None = None
     ) -> None:
         """
         Extends :meth:`KartonBackendProtocol.increment_metrics` with a
@@ -962,7 +952,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         rs.hincrby(metric.value, identity, 1)
 
     def increment_metrics_list(
-        self, metric: KartonMetrics, identities: List[str]
+        self, metric: KartonMetrics, identities: list[str]
     ) -> None:
         """
         Increments metrics for multiple identities via single pipeline
@@ -975,7 +965,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             p.hincrby(metric.value, identity, 1)
         p.execute()
 
-    def get_metrics(self, metric: KartonMetrics) -> Dict[str, int]:
+    def get_metrics(self, metric: KartonMetrics) -> dict[str, int]:
         """
         Get a {karton-identity: current-number-of-tasks} mapping for a given metric.
 
@@ -989,7 +979,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
     def upload_resource(
         self,
         resource: LocalResource,
-        content: Union[bytes, IO[bytes]],
+        content: bytes | IO[bytes],
     ) -> None:
         if resource.bucket is None:
             raise RuntimeError(
@@ -1009,7 +999,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         self,
         bucket: str,
         object_uid: str,
-        content: Union[bytes, IO[bytes]],
+        content: bytes | IO[bytes],
     ) -> None:
         """
         Upload resource object to underlying object storage (S3)
@@ -1095,21 +1085,21 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         """
         self.s3.download_file(Bucket=bucket, Key=object_uid, Filename=path)
 
-    def list_objects(self, bucket: str) -> List[str]:
+    def list_objects(self, bucket: str) -> list[str]:
         """
         List identifiers of stored resource objects
 
         :param bucket: Bucket name
         :return: List of object identifiers
         """
-        objs = list()
+        objs = []
         paginator = self.s3.get_paginator("list_objects_v2")
         for page in paginator.paginate(Bucket=bucket):
-            for obj in page.get("Contents", list()):
+            for obj in page.get("Contents", []):
                 objs.append(obj["Key"])
         return objs
 
-    def list_object_versions(self, bucket: str) -> Dict[str, List[str]]:
+    def list_object_versions(self, bucket: str) -> dict[str, list[str]]:
         """
         List version identifiers of stored resource objects
         :param bucket: Bucket name
@@ -1118,9 +1108,9 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         objs = defaultdict(list)
         paginator = self.s3.get_paginator("list_object_versions")
         for page in paginator.paginate(Bucket=bucket):
-            for obj in page.get("Versions", list()):
+            for obj in page.get("Versions", []):
                 objs[obj["Key"]].append(obj["VersionId"])
-            for obj in page.get("DeleteMarkers", list()):
+            for obj in page.get("DeleteMarkers", []):
                 objs[obj["Key"]].append(obj["VersionId"])
         return dict(objs)
 
@@ -1146,7 +1136,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
     def remove_object_versions(
         self,
         bucket: str,
-        object_versions: Dict[str, List[str]],
+        object_versions: dict[str, list[str]],
         explicit_version_null: bool = False,
     ) -> None:
         """
@@ -1192,11 +1182,11 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
                 if create:
                     self.s3.create_bucket(Bucket=bucket)
             else:
-                raise e
+                raise
         return False
 
     def log_identity_output(
-        self, identity: str, headers: Dict[str, Any], task_tracking_ttl: int
+        self, identity: str, headers: dict[str, Any], task_tracking_ttl: int
     ) -> None:
         """
         Store the type of task outputted for given producer to
@@ -1210,7 +1200,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         self.redis.sadd(f"{KARTON_OUTPUTS_NAMESPACE}:{identity}", json.dumps(headers))
         self.redis.expire(f"{KARTON_OUTPUTS_NAMESPACE}:{identity}", task_tracking_ttl)
 
-    def get_outputs(self) -> List[KartonOutputs]:
+    def get_outputs(self) -> list[KartonOutputs]:
         """
         Get a list of the output types for each karton.
 

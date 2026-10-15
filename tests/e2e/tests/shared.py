@@ -1,12 +1,10 @@
 import multiprocessing as mp
-import pytest
 from time import sleep, time
-from typing import Any, Optional
+from typing import Any
 
-from karton.core import Producer, Config, Task
+from karton.core import Task
 from karton.core.backend import KartonBackend, KartonBackendProtocol
 from karton.core.task import TaskState
-
 
 BACKENDS = ["sync", "async"]
 
@@ -40,9 +38,8 @@ def wait_for_event(
         except Exception:
             break
 
-        if (
-            event.get("event") == event_type
-            and all(event.get(k) == v for k, v in match.items())
+        if event.get("event") == event_type and all(
+            event.get(k) == v for k, v in match.items()
         ):
             for item in deferred:
                 event_queue.put(item)
@@ -66,7 +63,7 @@ def wait_for_task_state(
         task = backend.get_task(task_uid=task_uid)
 
         if task is None:
-            raise Exception(f"Task {task_uid} doesn't exist")
+            raise RuntimeError(f"Task {task_uid} doesn't exist")
 
         if task.status == state:
             return task
@@ -86,8 +83,7 @@ def wait_for_routed_tasks(
 
     analysis_tasks = list(backend.iter_task_tree(root_uid=routed_task.root_uid))
     routed_tasks = [
-        x for x in analysis_tasks
-        if x.receiver is not None and x.parent_uid is None
+        x for x in analysis_tasks if x.receiver is not None and x.parent_uid is None
     ]
 
     return routed_tasks

@@ -3,7 +3,7 @@ import logging
 import os.path
 import uuid
 from configparser import ConfigParser
-from typing import Any, Dict, List
+from typing import Any
 
 import boto3
 from redis import StrictRedis
@@ -27,7 +27,7 @@ cli_service_info = KartonServiceInfo(
 class CliLogger(LogConsumer):
     identity = "karton.cli-logger"
 
-    def process_log(self, event: Dict[str, Any]) -> Any:
+    def process_log(self, event: dict[str, Any]) -> Any:
         if event.get("type") == "log":
             level = event.get("levelname")
             name = event.get("name")
@@ -37,7 +37,7 @@ class CliLogger(LogConsumer):
 
 def get_user_option(prompt: str, default: str) -> str:
     user_input = input(f"{prompt}\n[{default}] ")
-    print("")  # just for style
+    print()  # just for style
     return user_input.strip() or default
 
 
@@ -72,7 +72,7 @@ def configuration_wizard(config_filename: str) -> None:
 
         except s3_client.exceptions.ClientError as e:
             if e.response["Error"]["Code"] != "404":
-                raise e
+                raise
 
         except Exception as e:
             log.info("Error while connecting to S3: %s", e, exc_info=True)
@@ -190,7 +190,7 @@ def delete_bind(config: Config, karton_name: str) -> None:
 
     class KartonDummy(Consumer):
         persistent = False
-        filters: List[Dict[str, Any]] = []
+        filters: list[dict[str, Any]] = []
 
         def process(self, task):
             pass
@@ -274,10 +274,8 @@ def main() -> None:
     except RuntimeError as e:
         log.error("Error while initializing the karton config: %s", e)
         log.error(
-            (
-                "Please correct the configuration file or run `karton configure` "
-                "to initialize it"
-            )
+            "Please correct the configuration file or run `karton configure` "
+            "to initialize it"
         )
         return
 

@@ -5,6 +5,7 @@ lifecycle events back to the pytest process via a multiprocessing queue.
 Replaces the 8 docker-compose test-service containers with in-process
 subprocesses managed by pytest fixtures.
 """
+
 import multiprocessing as mp
 import os
 import sys
@@ -83,29 +84,37 @@ def _sync_service_main(
         def process(self, task: Task) -> None:
             task_type = task.headers["type"]
             orig_uid = task.orig_uid or task.uid
-            event_queue.put({"event": "received", "uid": orig_uid, "identity": identity})
+            event_queue.put(
+                {"event": "received", "uid": orig_uid, "identity": identity}
+            )
 
             if task_type == "log-task":
                 self.log.info(task.headers["message"])
-                event_queue.put({
-                    "event": "logged",
-                    "uid": orig_uid,
-                    "identity": identity,
-                    "message": task.headers["message"],
-                })
+                event_queue.put(
+                    {
+                        "event": "logged",
+                        "uid": orig_uid,
+                        "identity": identity,
+                        "message": task.headers["message"],
+                    }
+                )
             elif task_type in ("sleep-task", "multiple-routed-task"):
                 if task_type == "multiple-routed-task":
-                    self.send_task(Task(
-                        headers={"type": "verify-result", "backend": backend_type},
-                    ))
+                    self.send_task(
+                        Task(
+                            headers={"type": "verify-result", "backend": backend_type},
+                        )
+                    )
                 _sleep(task.headers["duration"])
-                event_queue.put({
-                    "event": "finished",
-                    "uid": orig_uid,
-                    "identity": identity,
-                })
+                event_queue.put(
+                    {
+                        "event": "finished",
+                        "uid": orig_uid,
+                        "identity": identity,
+                    }
+                )
             elif task_type == "crash-task":
-                raise Exception(task.headers["error"])
+                raise RuntimeError(task.headers["error"])
             elif task_type == "timeout-task":
                 _sleep(self.task_timeout + 5)
             elif task_type == "verify-task":
@@ -115,27 +124,33 @@ def _sync_service_main(
                     if isinstance(resource, RemoteResource):
                         resource.download()
                     result_payload["sha256"] = resource.sha256
-                self.send_task(Task(
-                    headers={"type": "verify-result", "backend": backend_type},
-                    payload=result_payload,
-                ))
-                event_queue.put({
-                    "event": "verify_done",
-                    "uid": orig_uid,
-                    "identity": identity,
-                })
+                self.send_task(
+                    Task(
+                        headers={"type": "verify-result", "backend": backend_type},
+                        payload=result_payload,
+                    )
+                )
+                event_queue.put(
+                    {
+                        "event": "verify_done",
+                        "uid": orig_uid,
+                        "identity": identity,
+                    }
+                )
 
     service = TestService(config=config, identity=identity)
 
     def _crash_hook(task, exc):
         if exc is not None:
             orig_uid = task.orig_uid or task.uid
-            event_queue.put({
-                "event": "crashed",
-                "uid": orig_uid,
-                "identity": identity,
-                "error": str(exc) if exc else "",
-            })
+            event_queue.put(
+                {
+                    "event": "crashed",
+                    "uid": orig_uid,
+                    "identity": identity,
+                    "error": str(exc) if exc else "",
+                }
+            )
 
     service.add_post_hook(_crash_hook)
     service.loop()
@@ -168,35 +183,45 @@ def _async_service_main(
         async def process(self, task: Task) -> None:
             task_type = task.headers["type"]
             orig_uid = task.orig_uid or task.uid
-            event_queue.put({"event": "received", "uid": orig_uid, "identity": identity})
+            event_queue.put(
+                {"event": "received", "uid": orig_uid, "identity": identity}
+            )
 
             if task_type == "log-task":
                 self.log.info(task.headers["message"])
-                event_queue.put({
-                    "event": "logged",
-                    "uid": orig_uid,
-                    "identity": identity,
-                    "message": task.headers["message"],
-                })
+                event_queue.put(
+                    {
+                        "event": "logged",
+                        "uid": orig_uid,
+                        "identity": identity,
+                        "message": task.headers["message"],
+                    }
+                )
             elif task_type in ("sleep-task", "multiple-routed-task"):
                 if task_type == "multiple-routed-task":
-                    await self.send_task(Task(
-                        headers={"type": "verify-result", "backend": backend_type},
-                    ))
+                    await self.send_task(
+                        Task(
+                            headers={"type": "verify-result", "backend": backend_type},
+                        )
+                    )
                 await _asleep(task.headers["duration"])
-                event_queue.put({
-                    "event": "finished",
-                    "uid": orig_uid,
-                    "identity": identity,
-                })
+                event_queue.put(
+                    {
+                        "event": "finished",
+                        "uid": orig_uid,
+                        "identity": identity,
+                    }
+                )
             elif task_type == "crash-task":
-                event_queue.put({
-                    "event": "crashed",
-                    "uid": orig_uid,
-                    "identity": identity,
-                    "error": task.headers["error"],
-                })
-                raise Exception(task.headers["error"])
+                event_queue.put(
+                    {
+                        "event": "crashed",
+                        "uid": orig_uid,
+                        "identity": identity,
+                        "error": task.headers["error"],
+                    }
+                )
+                raise RuntimeError(task.headers["error"])
             elif task_type == "timeout-task":
                 await _asleep(self.task_timeout + 5)
             elif task_type == "verify-task":
@@ -206,15 +231,19 @@ def _async_service_main(
                     if isinstance(resource, RemoteResource):
                         await resource.download()
                     result_payload["sha256"] = resource.sha256
-                await self.send_task(Task(
-                    headers={"type": "verify-result", "backend": backend_type},
-                    payload=result_payload,
-                ))
-                event_queue.put({
-                    "event": "verify_done",
-                    "uid": orig_uid,
-                    "identity": identity,
-                })
+                await self.send_task(
+                    Task(
+                        headers={"type": "verify-result", "backend": backend_type},
+                        payload=result_payload,
+                    )
+                )
+                event_queue.put(
+                    {
+                        "event": "verify_done",
+                        "uid": orig_uid,
+                        "identity": identity,
+                    }
+                )
 
     async def _run():
         service = TestService(config=config, identity=identity)
@@ -257,7 +286,5 @@ def start_service(
 
 
 ALL_SERVICE_SPECS = [
-    (backend, instance)
-    for backend in ALL_BACKENDS
-    for instance in INSTANCES
+    (backend, instance) for backend in ALL_BACKENDS for instance in INSTANCES
 ]

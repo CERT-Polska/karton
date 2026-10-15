@@ -1,7 +1,8 @@
 import dataclasses
 import enum
 import uuid
-from typing import IO, Any, Iterator, Protocol, Self
+from collections.abc import Iterator
+from typing import IO, Any, Protocol, Self
 from urllib.parse import parse_qsl, urlencode
 
 from karton.core.__version__ import __version__
@@ -64,13 +65,11 @@ class KartonExternalServiceInfo:
         if "?" in client_name:
             identity, params_string = client_name.split("?", 1)
             # Filter out unknown params to not get crashed by future extensions
-            params = dict(
-                [
-                    (key, value)
-                    for key, value in parse_qsl(params_string)
-                    if key in included_keys
-                ]
-            )
+            params = {
+                key: value
+                for key, value in parse_qsl(params_string)
+                if key in included_keys
+            }
         else:
             identity = client_name
             params = {}

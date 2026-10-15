@@ -1,17 +1,17 @@
-from hashlib import sha256
 import os
+from hashlib import sha256
 
+import pytest
 from shared import (
     BACKENDS,
     wait_for_routed_tasks,
     wait_for_task_state,
 )
 
-import pytest
-from karton.core import Producer, Consumer, Task, Config
-from karton.core.task import TaskState
-from karton.core.resource import LocalResource, RemoteResource
+from karton.core import Producer, Task
 from karton.core.backend import KartonBackend
+from karton.core.resource import LocalResource, RemoteResource
+from karton.core.task import TaskState
 
 
 @pytest.mark.parametrize("service_backend", BACKENDS)

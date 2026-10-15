@@ -5,7 +5,7 @@ asyncio implementation of KartonLogHandler
 import asyncio
 import logging
 import platform
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from karton.core.logger import LogLineFormatterMixin
 
@@ -13,7 +13,7 @@ from .backend import KartonAsyncBackendProtocol
 
 HOSTNAME = platform.node()
 
-QueuedRecord = Optional[Tuple[Dict[str, Any], str]]
+type QueuedRecord = tuple[dict[str, Any], str] | None
 
 
 async def async_log_consumer(
@@ -36,7 +36,7 @@ class KartonAsyncLogHandler(logging.Handler, LogLineFormatterMixin):
 
     def __init__(self, backend: KartonAsyncBackendProtocol, channel: str) -> None:
         logging.Handler.__init__(self)
-        self._consumer: Optional[asyncio.Task] = None
+        self._consumer: asyncio.Task | None = None
         self._queue: asyncio.Queue[QueuedRecord] = asyncio.Queue()
         self._backend = backend
         self._channel = channel

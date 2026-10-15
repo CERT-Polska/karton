@@ -3,8 +3,9 @@ import os
 import shutil
 import tempfile
 import zipfile
+from collections.abc import AsyncIterator
 from io import BytesIO
-from typing import IO, TYPE_CHECKING, Any, AsyncIterator, Dict, List, Optional, Union
+from typing import IO, TYPE_CHECKING, Any, Optional
 
 from karton.core.resource import LocalResourceBase, ResourceBase
 
@@ -43,14 +44,14 @@ class LocalResource(LocalResourceBase):
     def __init__(
         self,
         name: str,
-        content: Optional[Union[str, bytes]] = None,
-        path: Optional[str] = None,
-        bucket: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        uid: Optional[str] = None,
-        sha256: Optional[str] = None,
-        fd: Optional[IO[bytes]] = None,
-        _flags: Optional[List[str]] = None,
+        content: str | bytes | None = None,
+        path: str | None = None,
+        bucket: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        uid: str | None = None,
+        sha256: str | None = None,
+        fd: IO[bytes] | None = None,
+        _flags: list[str] | None = None,
         _close_fd: bool = False,
     ) -> None:
         super().__init__(
@@ -138,16 +139,16 @@ class RemoteResource(ResourceBase):
     def __init__(
         self,
         name: str,
-        bucket: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        uid: Optional[str] = None,
-        size: Optional[int] = None,
+        bucket: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        uid: str | None = None,
+        size: int | None = None,
         backend: Optional["KartonAsyncBackendProtocol"] = None,
-        sha256: Optional[str] = None,
-        _flags: Optional[List[str]] = None,
-        _download_url: Optional[str] = None,
+        sha256: str | None = None,
+        _flags: list[str] | None = None,
+        _download_url: str | None = None,
     ) -> None:
-        super(RemoteResource, self).__init__(
+        super().__init__(
             name,
             bucket=bucket,
             metadata=metadata,
@@ -189,9 +190,9 @@ class RemoteResource(ResourceBase):
     @classmethod
     def from_dict(
         cls,
-        dict: Dict[str, Any],
+        dict: dict[str, Any],
         backend: Optional["KartonAsyncBackendProtocol"],
-        download_url: Optional[str] = None,
+        download_url: str | None = None,
     ) -> "RemoteResource":
         """
         Internal deserialization method for remote resources
@@ -243,10 +244,8 @@ class RemoteResource(ResourceBase):
         """
         if self.backend is None:
             raise RuntimeError(
-                (
-                    "Resource object can't be downloaded because it's not bound to "
-                    "the backend"
-                )
+                "Resource object can't be downloaded because it's not bound to "
+                "the backend"
             )
 
         self._content = await self.backend.download_resource(self)
@@ -269,10 +268,8 @@ class RemoteResource(ResourceBase):
         """
         if self.backend is None:
             raise RuntimeError(
-                (
-                    "Resource object can't be downloaded because it's not bound to "
-                    "the backend"
-                )
+                "Resource object can't be downloaded because it's not bound to "
+                "the backend"
             )
 
         await self.backend.download_resource_to_file(self, path)
