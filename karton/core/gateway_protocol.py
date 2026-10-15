@@ -39,7 +39,7 @@ class HelloRequestMessage(BaseModel):
     library_version: str
     instance_id: str
     service_version: str | None
-    password: str | None
+    auth_tokens: list[str] = Field(default_factory=list)
     close_on_idle: bool = False
 
 

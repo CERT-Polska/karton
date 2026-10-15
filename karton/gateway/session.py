@@ -1,14 +1,17 @@
 import asyncio
 import logging
 import random
-import secrets
 from contextlib import asynccontextmanager
+from time import time
+from typing import AsyncIterator, Self
 
 from fastapi import WebSocket
 from pydantic import ValidationError
 
 from karton.core.__version__ import __version__
 from karton.core.asyncio.backend import KartonServiceInfo
+from karton.core.auth.models import AllowedOperation, VerifiedGrant
+from karton.core.auth.verifier import decode_auth_token
 from karton.core.gateway_protocol import (
     HelloRequest,
     HelloResponse,
@@ -21,8 +24,10 @@ from .config import gateway_config
 from .errors import (
     BadCredentialsError,
     BadRequestError,
+    CredentialsExpiredError,
     KartonGatewayError,
     OperationTimeoutError,
+    UnauthorizedError,
 )
 from .messages import close_websocket, send_error, send_message, send_success
 from .operations import call_request_handler
@@ -36,14 +41,48 @@ IDLE_TIMEOUT = 30.0
 logger = logging.getLogger(__name__)
 
 
+def parse_auth_tokens(client_tokens: list[str]) -> list[VerifiedGrant]:
+    """
+    Parse and validate set of authorization tokens provided by client.
+
+    Returns list of VerifiedGrant objects for each valid token. This function
+    doesn't fail when any of the tokens is invalid - it is just not
+    included in the returned list.
+
+    Validation in this method checks whether token itself is correct and trustworthy.
+    Code that is using this method must still validate if claims in the token
+    are valid in a current context e.g. whether grant applies to the identity
+    provided by the client.
+
+    :param client_tokens: List of client-provided tokens
+    :return: List of VerifiedGrant objects for each valid token.
+    """
+    verified_grants = []
+    jwks = gateway_config.jwks
+    if not jwks:
+        raise RuntimeError("Bug: JWKS should not be empty here")
+    for client_token in client_tokens:
+        try:
+            verified_grant = decode_auth_token(client_token, jwks)
+            verified_grants.append(verified_grant)
+        except Exception as e:
+            logger.warning("Client presented invalid token: %r", e)
+            pass
+    return verified_grants
+
+
 class ClientSession:
     def __init__(
         self,
         service_info: KartonServiceInfo,
         close_on_idle: bool,
-    ):
+        auth_required: bool,
+        auth_grants: list[VerifiedGrant],
+    ) -> None:
         self.service_info = service_info
         self.close_on_idle = close_on_idle
+        self.auth_required = auth_required
+        self.auth_grants = auth_grants
 
     @property
     def identity(self) -> str:
@@ -52,7 +91,7 @@ class ClientSession:
         """
         return self.service_info.identity
 
-    async def _maintain_heartbeat(self, connection_id: str):
+    async def _maintain_heartbeat(self, connection_id: str) -> None:
         while True:
             await gateway_backend.heartbeat_service(
                 self.service_info, connection_id, expires_after=HEARTBEAT_HARD_TIMEOUT
@@ -61,6 +100,24 @@ class ClientSession:
             # for services that initiated connection from the start
             await asyncio.sleep(HEARTBEAT_BASE_INTERVAL + random.random())
 
+    def can_perform(self, operation: AllowedOperation) -> bool:
+        if not self.auth_required:
+            return True
+        now = time()
+        self.auth_grants = [
+            grant
+            for grant in self.auth_grants
+            if grant.expires_at is None or now < grant.expires_at
+        ]
+        if not self.auth_grants:
+            raise CredentialsExpiredError("No fresh credentials available")
+
+        for grant in self.auth_grants:
+            for op in grant.claims.allowed_operations:
+                if op.covers(operation):
+                    return True
+        raise UnauthorizedError(f"Operation '{operation.operation}' is not authorized")
+
     @classmethod
     @asynccontextmanager
     async def initiate_session(
@@ -68,7 +125,7 @@ class ClientSession:
         websocket: WebSocket,
         connection_id: str,
         timeout: float = INIT_SESSION_TIMEOUT,
-    ):
+    ) -> AsyncIterator[Self]:
         hello_message = HelloResponseMessage(server_version=__version__)
         hello_response = HelloResponse(message=hello_message)
         await send_message(websocket, hello_response)
@@ -77,13 +134,21 @@ class ClientSession:
             async with asyncio.timeout(timeout):
                 request_json = await websocket.receive_text()
                 hello_request = HelloRequest.model_validate_json(request_json)
-                if gateway_config.password is not None and (
-                    not hello_request.message.password
-                    or not secrets.compare_digest(
-                        hello_request.message.password, gateway_config.password
-                    )
-                ):
-                    raise BadCredentialsError("Client has provided wrong password")
+                if gateway_config.auth_required:
+                    valid_auth_grants = [
+                        grants
+                        for grants in parse_auth_tokens(
+                            hello_request.message.auth_tokens
+                        )
+                        if grants.claims.identity == hello_request.message.identity
+                    ]
+                    if not valid_auth_grants:
+                        raise BadCredentialsError(
+                            "Client has not provided valid authorization tokens "
+                            "for declared identity"
+                        )
+                else:
+                    valid_auth_grants = []
         except TimeoutError as exc:
             raise OperationTimeoutError(
                 "Client has not replied in required time"
@@ -100,6 +165,8 @@ class ClientSession:
         session = cls(
             service_info=service_info,
             close_on_idle=hello_request.message.close_on_idle,
+            auth_required=gateway_config.auth_required,
+            auth_grants=valid_auth_grants,
         )
         await gateway_backend.register_service(
             service_info, connection_id, HEARTBEAT_HARD_TIMEOUT

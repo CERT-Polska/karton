@@ -25,9 +25,10 @@ Repository = "https://github.com/CERT-Polska/karton"
 [project.scripts]
 karton-system = "karton.system:SystemService.main"
 karton = "karton.core.main:main"
+karton-auth = "karton.core.auth.cli:main"
 
 [tool.setuptools]
-packages = ["karton.core", "karton.core.asyncio", "karton.core.backend", "karton.core.asyncio.backend", "karton.system", "karton.gateway"]
+packages = ["karton.core", "karton.core.auth", "karton.core.asyncio", "karton.core.backend", "karton.core.asyncio.backend", "karton.system", "karton.gateway"]
 
 [tool.setuptools.dynamic]
 version = {attr = "karton.core.__version__.__version__"}
