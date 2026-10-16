@@ -36,8 +36,8 @@ from .base import (
     KartonExternalServiceInfo,
     KartonMetrics,
     KartonOutputs,
+    KartonQueueState,
     KartonServiceInfo,
-    QueueSummary,
     unserialize_bind,
 )
 
@@ -444,52 +444,10 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             else:
                 yield service
 
-    def get_online_services(self, _legacy=True) -> list[KartonExternalServiceInfo]:
-        """
-        Gets all online services providing extended service information.
-
-        This method stays compatible with <=5.10.0 and doesn't return information
-        about legacy consumers (without with_service_info) flag. It also nullifies
-        the instance_id to aggregate KartonServiceInfo objects by equality for
-        counting the number of instances. New code should not rely on that behavior.
-
-        This method will return complete information about services in >=6.0.0.
-        You can turn on the new behavior by enabling _legacy=True, although this
-        argument will be removed as well in future major version.
-
-        .. versionadded:: 5.1.0
-
-        :return: List of KartonServiceInfo objects
-        """
-        if not _legacy:
-            return list(self._get_online_services())
-
-        # Legacy users of this method doesn't expect two things:
-        # - that karton_version can be None in case of pre-5.10.0 consumers
-        # - that KartonServiceInfo are not equal per identity+version
-        #   but per instance (e.g. karton-dashboard)
-        #
-        # That loop removes instance_id and filters out services without
-        # karton_version
-        return [
-            KartonExternalServiceInfo(
-                identity=service.identity,
-                karton_version=service.karton_version,
-                service_version=service.service_version,
-                instance_id=None,
-                redis_client_info=service.redis_client_info,
-            )
-            for service in self._get_online_services()
-            if service.karton_version is not None
-        ]
+    def get_online_services(self) -> list[KartonExternalServiceInfo]:
+        return list(self._get_online_services())
 
     def get_online_identities(self) -> dict[str, list[KartonExternalServiceInfo]]:
-        """
-        Returns a dictionary for all online identities with list of
-        KartonServiceInfo of each instance
-
-        :return: Dictionary {identity: [list of KartonServiceInfo objects]}
-        """
         identities: defaultdict[str, list[KartonExternalServiceInfo]] = defaultdict(
             list
         )
@@ -1217,7 +1175,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             for identity in output_keys
         ]
 
-    def get_queues(self, parse_resources: bool = False) -> dict[str, QueueSummary]:
+    def get_queues(self, parse_resources: bool = False) -> dict[str, KartonQueueState]:
         """
         Get a summary of all queues and their task state.
 
@@ -1249,12 +1207,11 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             else:
                 pending_uids[receiver].append(task.uid)
 
-        queues: dict[str, QueueSummary] = {}
+        queues: dict[str, KartonQueueState] = {}
         for identity, bind in binds.items():
-            queues[identity] = QueueSummary(
+            queues[identity] = KartonQueueState(
                 bind=bind,
                 replicas=len(replicas.get(identity, [])),
-                tasks=tasks_per_queue.get(identity, []),
                 pending_task_uids=pending_uids.get(identity, []),
                 crashed_task_uids=crashed_uids.get(identity, []),
             )

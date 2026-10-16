@@ -5,8 +5,8 @@ from .base import (
     KartonBind,
     KartonMetrics,
     KartonOutputs,
+    KartonQueueState,
     KartonServiceInfo,
-    QueueSummary,
 )
 from .direct import KartonBackend
 from .gateway import KartonGatewayBackend
@@ -29,7 +29,7 @@ __all__ = [
     "KartonGatewayBackend",
     "KartonMetrics",
     "KartonOutputs",
+    "KartonQueueState",
     "KartonServiceInfo",
-    "QueueSummary",
     "get_backend",
 ]

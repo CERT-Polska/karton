@@ -19,6 +19,17 @@ from karton.core.gateway_client import (
     OperationTimeoutError,
     SyncGatewayClient,
 )
+from karton.core.gateway_inspect_protocol import (
+    AnalysisView,
+    BatchTaskRequest,
+    BindView,
+    BulkRestartedTask,
+    ProducerOutput,
+    QueueView,
+    RestartedTask,
+    ServiceInfoView,
+    TaskView,
+)
 from karton.core.gateway_protocol import (
     BindRequest,
     BindRequestMessage,
@@ -51,19 +62,8 @@ from karton.core.resource import (
     RemoteResource,
     ResourceBase,
 )
-from karton.core.rest_models import (
-    AnalysisView,
-    BatchTaskRequest,
-    BulkRestartedTask,
-    ProducerOutput,
-    QueueView,
-    RestartedTask,
-    ServiceInfo,
-    TaskView,
-)
-from karton.core.rest_models import Bind as BindView
 from karton.core.task import Task, TaskPriority, TaskState, root_uid_from_task_uid
-from karton.core.utils import recursive_map
+from karton.core.utils import chunks, recursive_map
 
 from .base import (
     KartonBackendProtocol,
@@ -71,8 +71,8 @@ from .base import (
     KartonExternalServiceInfo,
     KartonMetrics,
     KartonOutputs,
+    KartonQueueState,
     KartonServiceInfo,
-    QueueSummary,
 )
 
 logger = logging.getLogger(__name__)
@@ -503,7 +503,7 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
 
     @staticmethod
     def _service_info_from_view(
-        view: ServiceInfo,
+        view: ServiceInfoView,
     ) -> list[KartonExternalServiceInfo]:
         return [
             KartonExternalServiceInfo(
@@ -529,15 +529,11 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
         response.raise_for_status()
         return self._bind_from_view(BindView.model_validate_json(response.content))
 
-    def get_online_services(
-        self, _legacy: bool = True
-    ) -> list[KartonExternalServiceInfo]:
+    def get_online_services(self) -> list[KartonExternalServiceInfo]:
         response = self._http_client.get("/services")
         response.raise_for_status()
         services: list[KartonExternalServiceInfo] = []
-        for s in TypeAdapter(list[ServiceInfo]).validate_json(response.content):
-            if _legacy and s.karton_version is None:
-                continue
+        for s in TypeAdapter(list[ServiceInfoView]).validate_json(response.content):
             services.extend(self._service_info_from_view(s))
         return services
 
@@ -545,16 +541,16 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
         response = self._http_client.get("/services")
         response.raise_for_status()
         identities: dict[str, list[KartonExternalServiceInfo]] = defaultdict(list)
-        for s in TypeAdapter(list[ServiceInfo]).validate_json(response.content):
+        for s in TypeAdapter(list[ServiceInfoView]).validate_json(response.content):
             identities[s.identity].extend(self._service_info_from_view(s))
         return dict(identities)
 
-    def get_queues(self, parse_resources: bool = False) -> dict[str, QueueSummary]:
+    def get_queues(self, parse_resources: bool = False) -> dict[str, KartonQueueState]:
         response = self._http_client.get("/queues")
         response.raise_for_status()
         raw = TypeAdapter(dict[str, QueueView]).validate_json(response.content)
         return {
-            identity: QueueSummary(
+            identity: KartonQueueState(
                 bind=KartonBind(
                     identity=qv.identity,
                     info=qv.info,
@@ -565,7 +561,6 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
                     is_async=qv.is_async,
                 ),
                 replicas=qv.replicas,
-                tasks=None,
                 pending_task_uids=qv.pending_task_uids,
                 crashed_task_uids=qv.crashed_task_uids,
             )
@@ -575,13 +570,16 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
     def get_tasks(self, task_uids: list[str]) -> list[Task]:
         if not task_uids:
             return []
-        response = self._http_client.post(
-            "/tasks/batch",
-            json=BatchTaskRequest(uids=task_uids).model_dump(),
-        )
-        response.raise_for_status()
-        views = TypeAdapter(list[TaskView]).validate_json(response.content)
-        return [self._task_from_view(view) for view in views]
+        tasks: list[Task] = []
+        for chunk in chunks(task_uids, 10000):
+            response = self._http_client.post(
+                "/tasks/batch",
+                json=BatchTaskRequest(uids=list(chunk)).model_dump(),
+            )
+            response.raise_for_status()
+            views = TypeAdapter(list[TaskView]).validate_json(response.content)
+            tasks.extend(self._task_from_view(view) for view in views)
+        return tasks
 
     def get_analysis_tasks(self, root_uid: str) -> dict[str, list[Task]]:
         response = self._http_client.get(f"/analyses/{root_uid}")

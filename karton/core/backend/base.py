@@ -161,21 +161,13 @@ class KartonOutputs:
 
 
 @dataclasses.dataclass
-class QueueSummary:
+class KartonQueueState:
     """
-    Summary of a Karton queue state, returned by
-    :meth:`KartonBackendProtocol.get_queues`.
-
-    For the direct backend, ``tasks`` is pre-loaded with full Task objects so that
-    :class:`karton.core.inspect.KartonQueue` can filter them in-memory.
-
-    For the gateway backend, ``tasks`` is ``None`` — full task objects are fetched
-    lazily via :meth:`KartonBackendProtocol.get_tasks` on first access.
+    Karton queue state, returned by :meth:`KartonBackendProtocol.get_queues`.
     """
 
     bind: KartonBind
     replicas: int
-    tasks: list[Task] | None = None
     pending_task_uids: list[str] = dataclasses.field(default_factory=list)
     crashed_task_uids: list[str] = dataclasses.field(default_factory=list)
 
@@ -354,15 +346,12 @@ class KartonBackendProtocol(Protocol):
         :return: KartonBind object or None if not found
         """
 
-    def get_online_services(
-        self, _legacy: bool = True
-    ) -> list[KartonExternalServiceInfo]:
+    def get_online_services(self) -> list[KartonExternalServiceInfo]:
         """
         Get all online services providing extended service information.
 
-        :param _legacy: |
-            If True (default), returns services in a legacy-compatible format
-            (nullified instance_id, filtered to only those with karton_version).
+        .. versionadded:: 5.1.0
+
         :return: List of KartonExternalServiceInfo objects
         """
 
@@ -374,7 +363,7 @@ class KartonBackendProtocol(Protocol):
         :return: Dictionary {identity: [list of service info objects]}
         """
 
-    def get_queues(self, parse_resources: bool = False) -> dict[str, QueueSummary]:
+    def get_queues(self, parse_resources: bool = False) -> dict[str, KartonQueueState]:
         """
         Get a summary of all queues (binds) and their task state.
 

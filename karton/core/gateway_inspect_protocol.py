@@ -6,7 +6,7 @@ from karton.core.gateway_protocol import ResourceUrl
 from karton.core.task import TaskPriority, TaskState
 
 
-class Bind(BaseModel):
+class BindView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     identity: str
@@ -18,7 +18,7 @@ class Bind(BaseModel):
     is_async: bool
 
 
-class ServiceInfo(BaseModel):
+class ServiceInfoView(BaseModel):
     identity: str
     karton_version: str | None
     service_version: str | None

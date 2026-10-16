@@ -25,6 +25,7 @@ async def _build_queues() -> dict[str, QueueView]:
     pending_uids: dict[str, list[tuple[float, str]]] = defaultdict(list)
     crashed_uids: dict[str, list[tuple[float, str]]] = defaultdict(list)
 
+    # The future planned optimization here is to avoid task deserialization at all
     async for task in gateway_backend.iter_all_tasks(parse_resources=False):
         receiver = task.headers.get("receiver")
         if receiver is None or receiver not in binds:

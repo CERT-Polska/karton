@@ -1,13 +1,13 @@
-from karton.core.rest_models import (
+from karton.core.gateway_inspect_protocol import (
     AnalysisView,
     APIError,
     BatchTaskRequest,
-    Bind,
+    BindView,
     BulkRestartedTask,
     ProducerOutput,
     QueueView,
     RestartedTask,
-    ServiceInfo,
+    ServiceInfoView,
     TaskView,
 )
 
@@ -15,11 +15,11 @@ __all__ = [
     "APIError",
     "AnalysisView",
     "BatchTaskRequest",
-    "Bind",
+    "BindView",
     "BulkRestartedTask",
     "ProducerOutput",
     "QueueView",
     "RestartedTask",
-    "ServiceInfo",
+    "ServiceInfoView",
     "TaskView",
 ]
