@@ -12,7 +12,6 @@ from karton.gateway.rest.auth import (
     CanRestartTask,
 )
 from karton.gateway.rest.models import (
-    AnalysisView,
     BatchTaskRequest,
     RestartedTask,
     TaskView,
@@ -56,20 +55,6 @@ async def get_task_details(uid: str) -> TaskView:
         raise HTTPException(status_code=404, detail="Task doesn't exist")
     download_urls = await generate_resource_download_urls(task, _allowed_buckets())
     return TaskView(**task.to_dict(), download_urls=download_urls)
-
-
-@rest_api_router.get("/analyses/{uid}", dependencies=[Depends(CanInspectKarton)])
-async def get_analysis_details(uid: str) -> AnalysisView:
-    binds = {bind.identity for bind in await gateway_backend.get_binds()}
-    queues: dict[str, list[TaskView]] = {}
-    async for task in gateway_backend.iter_task_tree(uid):
-        if task.status == TaskState.FINISHED:
-            continue
-        receiver = task.headers.get("receiver")
-        if receiver is None or receiver not in binds:
-            continue
-        queues.setdefault(receiver, []).append(TaskView(**task.to_dict()))
-    return AnalysisView(uid=uid, queues=queues)
 
 
 @rest_api_router.post("/tasks/{uid}/restart", dependencies=[Depends(CanRestartTask)])

@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from .backend import KartonBackendProtocol, QueueSummary
+from .backend import KartonBackendProtocol, KartonBind
 from .task import Task, TaskState
 
 
@@ -12,15 +12,40 @@ class KartonQueue:
     :param state: :class:`KartonState` object to be used for lazy loading
     """
 
-    def __init__(self, summary: QueueSummary, state: "KartonState") -> None:
-        self.bind = summary.bind
+    def __init__(
+        self,
+        bind: KartonBind,
+        replicas: int,
+        state: "KartonState",
+        tasks: list[Task] | None = None,
+        pending_task_uids: list[str] | None = None,
+        crashed_task_uids: list[str] | None = None,
+    ) -> None:
+        self.bind = bind
+        self.replicas = replicas
         self.state = state
-        self._replicas = summary.replicas
-        self._tasks: list[Task] | None = summary.tasks
-        self.pending_task_uids = summary.pending_task_uids
-        self.crashed_task_uids = summary.crashed_task_uids
+        self.pending_task_uids: list[str] = pending_task_uids or []
+        self.crashed_task_uids: list[str] = crashed_task_uids or []
         self._pending_tasks: list[Task] | None = None
         self._crashed_tasks: list[Task] | None = None
+
+        if tasks is not None:
+            self._pending_tasks = self._filter_pending_tasks(tasks)
+            self._crashed_tasks = self._filter_crashed_tasks(tasks)
+            self.pending_task_uids = [task.uid for task in self._pending_tasks]
+            self.crashed_task_uids = [task.uid for task in self._crashed_tasks]
+
+    @staticmethod
+    def _filter_pending_tasks(tasks: list[Task]) -> list[Task]:
+        return [
+            task
+            for task in tasks
+            if task.status not in (TaskState.FINISHED, TaskState.CRASHED)
+        ]
+
+    @staticmethod
+    def _filter_crashed_tasks(tasks: list[Task]) -> list[Task]:
+        return [task for task in tasks if task.status == TaskState.CRASHED]
 
     @property
     def last_update(self) -> float:
@@ -30,7 +55,7 @@ class KartonQueue:
     @property
     def online_consumers_count(self) -> int:
         """Get number of consumers listening on this queue"""
-        return self._replicas
+        return self.replicas
 
     @property
     def tasks(self) -> list[Task]:
@@ -40,38 +65,30 @@ class KartonQueue:
         For the direct backend, tasks are pre-loaded. For the gateway
         backend, tasks are fetched lazily on first access.
         """
-        if self._tasks is not None:
-            return self._tasks
+        if self._pending_tasks is None and self._crashed_tasks is None:
+            # Load everything in one request
+            tasks = self.state.backend.get_tasks(
+                self.pending_task_uids + self.crashed_task_uids
+            )
+            self._pending_tasks = self._filter_pending_tasks(tasks)
+            self._crashed_tasks = self._filter_crashed_tasks(tasks)
+
         return self.pending_tasks + self.crashed_tasks
 
     @property
     def pending_tasks(self) -> list[Task]:
         """Get queue pending tasks"""
-        if self._tasks is not None:
-            return [
-                task
-                for task in self._tasks
-                if task.status not in (TaskState.FINISHED, TaskState.CRASHED)
-            ]
         if self._pending_tasks is None:
             tasks = self.state.backend.get_tasks(self.pending_task_uids)
-            self._pending_tasks = [
-                task
-                for task in tasks
-                if task.status not in (TaskState.FINISHED, TaskState.CRASHED)
-            ]
+            self._pending_tasks = self._filter_pending_tasks(tasks)
         return self._pending_tasks
 
     @property
     def crashed_tasks(self) -> list[Task]:
         """Get queue crashed tasks"""
-        if self._tasks is not None:
-            return [task for task in self._tasks if task.status == TaskState.CRASHED]
         if self._crashed_tasks is None:
             tasks = self.state.backend.get_tasks(self.crashed_task_uids)
-            self._crashed_tasks = [
-                task for task in tasks if task.status == TaskState.CRASHED
-            ]
+            self._crashed_tasks = self._filter_crashed_tasks(tasks)
         return self._crashed_tasks
 
 
@@ -143,12 +160,10 @@ def get_queues_for_tasks(
 
     return {
         queue_name: KartonQueue(
-            summary=QueueSummary(
-                bind=state.binds[queue_name],
-                replicas=len(state.replicas.get(queue_name, [])),
-                tasks=tasks,
-            ),
+            bind=state.binds[queue_name],
+            replicas=len(state.replicas.get(queue_name, [])),
             state=state,
+            tasks=tasks,
         )
         for queue_name, tasks in tasks_per_queue.items()
     }
@@ -189,10 +204,16 @@ class KartonState:
         are included with empty task lists.
         """
         if self._queues is None:
-            summaries = self.backend.get_queues(parse_resources=self.parse_resources)
+            queues_state = self.backend.get_queues(parse_resources=self.parse_resources)
             self._queues = {
-                identity: KartonQueue(summary=summary, state=self)
-                for identity, summary in summaries.items()
+                identity: KartonQueue(
+                    bind=queue_state.bind,
+                    replicas=queue_state.replicas,
+                    state=self,
+                    pending_task_uids=queue_state.pending_task_uids,
+                    crashed_task_uids=queue_state.crashed_task_uids,
+                )
+                for identity, queue_state in queues_state.items()
             }
         return self._queues
 

@@ -35,8 +35,8 @@ from .base import (
     KartonExternalServiceInfo,
     KartonMetrics,
     KartonOutputs,
+    KartonQueueState,
     KartonServiceInfo,
-    QueueSummary,
     unserialize_bind,
 )
 
@@ -433,20 +433,9 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
                 yield service
 
     def get_online_services(self) -> list[KartonExternalServiceInfo]:
-        """
-        Gets all online services providing extended service information.
-
-        :return: List of KartonServiceInfo objects
-        """
         return list(self._get_online_services())
 
     def get_online_identities(self) -> dict[str, list[KartonExternalServiceInfo]]:
-        """
-        Returns a dictionary for all online identities with list of
-        KartonServiceInfo of each instance
-
-        :return: Dictionary {identity: [list of KartonServiceInfo objects]}
-        """
         identities: defaultdict[str, list[KartonExternalServiceInfo]] = defaultdict(
             list
         )
@@ -1117,7 +1106,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             for identity in output_keys
         ]
 
-    def get_queues(self, parse_resources: bool = False) -> dict[str, QueueSummary]:
+    def get_queues(self, parse_resources: bool = False) -> dict[str, KartonQueueState]:
         """
         Get a summary of all queues and their task state.
 
@@ -1149,12 +1138,11 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             else:
                 pending_uids[receiver].append(task.uid)
 
-        queues: dict[str, QueueSummary] = {}
+        queues: dict[str, KartonQueueState] = {}
         for identity, bind in binds.items():
-            queues[identity] = QueueSummary(
+            queues[identity] = KartonQueueState(
                 bind=bind,
                 replicas=len(replicas.get(identity, [])),
-                tasks=tasks_per_queue.get(identity, []),
                 pending_task_uids=pending_uids.get(identity, []),
                 crashed_task_uids=crashed_uids.get(identity, []),
             )
