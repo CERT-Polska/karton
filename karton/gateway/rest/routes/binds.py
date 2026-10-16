@@ -8,23 +8,23 @@ from karton.gateway.rest.auth import (
     CanRemoveBind,
 )
 from karton.gateway.rest.models import (
-    Bind,
+    BindView,
 )
 
 from ._routers import rest_api_router
 
 
 @rest_api_router.get("/binds", dependencies=[Depends(CanInspectKarton)])
-async def get_binds() -> list[Bind]:
-    return [Bind.model_validate(bind) for bind in await gateway_backend.get_binds()]
+async def get_binds() -> list[BindView]:
+    return [BindView.model_validate(bind) for bind in await gateway_backend.get_binds()]
 
 
 @rest_api_router.get("/binds/{identity}", dependencies=[Depends(CanInspectKarton)])
-async def get_bind_details(identity: str) -> Bind:
+async def get_bind_details(identity: str) -> BindView:
     bind = await gateway_backend.get_bind(identity)
     if bind is None:
         raise HTTPException(status_code=404, detail="Bind doesn't exist")
-    return Bind.model_validate(bind)
+    return BindView.model_validate(bind)
 
 
 @rest_api_router.delete("/binds/{identity}", dependencies=[Depends(CanRemoveBind)])
