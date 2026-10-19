@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import time
-import warnings
 from collections import defaultdict, namedtuple
 from collections.abc import Iterable, Iterator
 from typing import (
@@ -25,7 +24,7 @@ from urllib3.response import HTTPResponse
 
 from karton.core.config import Config
 from karton.core.exceptions import BindExpiredError
-from karton.core.resource import LocalResource, RemoteResource
+from karton.core.resource import LocalResource, RemoteResource, ResourceData
 from karton.core.task import Task, TaskPriority, TaskState
 from karton.core.utils import chunks, chunks_iter
 
@@ -39,7 +38,6 @@ from .base import (
 )
 
 KARTON_TASKS_QUEUE = "karton.tasks"
-KARTON_OPERATIONS_QUEUE = "karton.operations"
 KARTON_LOG_CHANNEL = "karton.log"
 KARTON_BINDS_HSET = "karton.binds"
 KARTON_TASK_NAMESPACE = "karton.task"
@@ -308,7 +306,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             redis.ping()
         return redis
 
-    def unserialize_resource(self, resource_spec: dict[str, Any]) -> RemoteResource:
+    def unserialize_resource(self, resource_spec: ResourceData) -> RemoteResource:
         """
         Unserializes resource into a RemoteResource object bound with current backend
 
@@ -360,16 +358,6 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         :param identity: Identity to be unregistered
         """
         self.redis.hdel(KARTON_BINDS_HSET, identity)
-
-    def set_consumer_identity(self, _: str) -> None:
-        """
-        Sets identity for current Redis connection
-        """
-        warnings.warn(
-            "set_consumer_identity is deprecated and does nothing from v4.5.0. "
-            "Use identity constructor argument instead",
-            DeprecationWarning,
-        )
 
     def get_online_consumers(self) -> dict[str, list[dict[str, str]]]:
         """
@@ -442,44 +430,13 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             else:
                 yield service
 
-    def get_online_services(self, _legacy=True) -> list[KartonExternalServiceInfo]:
+    def get_online_services(self) -> list[KartonExternalServiceInfo]:
         """
         Gets all online services providing extended service information.
 
-        This method stays compatible with <=5.10.0 and doesn't return information
-        about legacy consumers (without with_service_info) flag. It also nullifies
-        the instance_id to aggregate KartonServiceInfo objects by equality for
-        counting the number of instances. New code should not rely on that behavior.
-
-        This method will return complete information about services in >=6.0.0.
-        You can turn on the new behavior by enabling _legacy=True, although this
-        argument will be removed as well in future major version.
-
-        .. versionadded:: 5.1.0
-
         :return: List of KartonServiceInfo objects
         """
-        if not _legacy:
-            return list(self._get_online_services())
-
-        # Legacy users of this method doesn't expect two things:
-        # - that karton_version can be None in case of pre-5.10.0 consumers
-        # - that KartonServiceInfo are not equal per identity+version
-        #   but per instance (e.g. karton-dashboard)
-        #
-        # That loop removes instance_id and filters out services without
-        # karton_version
-        return [
-            KartonExternalServiceInfo(
-                identity=service.identity,
-                karton_version=service.karton_version,
-                service_version=service.service_version,
-                instance_id=None,
-                redis_client_info=service.redis_client_info,
-            )
-            for service in self._get_online_services()
-            if service.karton_version is not None
-        ]
+        return list(self._get_online_services())
 
     def get_online_identities(self) -> dict[str, list[KartonExternalServiceInfo]]:
         """
@@ -532,8 +489,9 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         return [
             Task.unserialize(
                 task_data,
-                parse_resources=parse_resources,
-                resource_unserializer=self.unserialize_resource,
+                resource_unserializer=self.unserialize_resource
+                if parse_resources
+                else None,
             )
             for chunk in keys
             for task_data in self.redis.mget(chunk)
@@ -550,8 +508,9 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             yield from (
                 Task.unserialize(
                     task_data,
-                    parse_resources=parse_resources,
-                    resource_unserializer=self.unserialize_resource,
+                    resource_unserializer=self.unserialize_resource
+                    if parse_resources
+                    else None,
                 )
                 for task_data in self.redis.mget(chunk)
                 if task_data is not None
@@ -635,8 +594,9 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
                 (
                     Task.unserialize(
                         task_data,
-                        parse_resources=parse_resources,
-                        resource_unserializer=self.unserialize_resource,
+                        resource_unserializer=self.unserialize_resource
+                        if parse_resources
+                        else None,
                     )
                     for task_data in self.redis.mget(chunk)
                     if task_data is not None
@@ -995,38 +955,6 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         with open(path, "rb") as f:
             self.upload_resource(resource, f)
 
-    def upload_object(
-        self,
-        bucket: str,
-        object_uid: str,
-        content: bytes | IO[bytes],
-    ) -> None:
-        """
-        Upload resource object to underlying object storage (S3)
-
-        .. deprecated:: 5.10.0
-           Use :py:meth:`upload_resource` instead
-
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
-        :param content: Object content as bytes or file-like stream
-        """
-        self.s3.put_object(Bucket=bucket, Key=object_uid, Body=content)
-
-    def upload_object_from_file(self, bucket: str, object_uid: str, path: str) -> None:
-        """
-        Upload resource object file to underlying object storage
-
-        .. deprecated:: 5.10.0
-           Use :py:meth:`upload_resource_from_file` instead
-
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
-        :param path: Path to the object content
-        """
-        with open(path, "rb") as f:
-            self.s3.put_object(Bucket=bucket, Key=object_uid, Body=f)
-
     def get_object(self, bucket: str, object_uid: str) -> HTTPResponse:
         """
         Get resource object stream with the content.
@@ -1056,34 +984,6 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
                 "Resource object can't be downloaded because its bucket is not set"
             )
         self.s3.download_file(Bucket=resource.bucket, Key=resource.uid, Filename=path)
-
-    def download_object(self, bucket: str, object_uid: str) -> bytes:
-        """
-        Download resource object from object storage.
-
-        .. deprecated:: 5.10.0
-           Use :py:meth:`download_resource` instead
-
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
-        :return: Content bytes
-        """
-        with self.s3.get_object(Bucket=bucket, Key=object_uid)["Body"] as f:
-            ret = f.read()
-        return ret
-
-    def download_object_to_file(self, bucket: str, object_uid: str, path: str) -> None:
-        """
-        Download resource object from object storage to file
-
-        .. deprecated:: 5.10.0
-           Use :py:meth:`download_resource_to_file` instead
-
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
-        :param path: Target file path
-        """
-        self.s3.download_file(Bucket=bucket, Key=object_uid, Filename=path)
 
     def list_objects(self, bucket: str) -> list[str]:
         """

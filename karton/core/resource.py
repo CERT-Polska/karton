@@ -7,10 +7,23 @@ import uuid
 import zipfile
 from collections.abc import Iterator
 from io import BytesIO
-from typing import IO, TYPE_CHECKING, Any, Optional, cast
+from typing import IO, TYPE_CHECKING, Any, Optional, TypedDict, cast
 
 if TYPE_CHECKING:
     from .backend import KartonBackendProtocol
+
+
+class ResourceData(TypedDict):
+    """
+    Serialized resource reference representation for use in serialized task
+    """
+
+    uid: str
+    name: str
+    bucket: str | None
+    size: int
+    metadata: dict[str, Any]
+    sha256: str | None
 
 
 class ResourceBase:
@@ -27,10 +40,7 @@ class ResourceBase:
     :param metadata: Resource metadata
     :param sha256: Resource sha256 hash
     :param _uid: Alternative S3 resource id
-    :param _flags: Resource flags
     """
-
-    DIRECTORY_FLAG = "Directory"
 
     def __init__(
         self,
@@ -43,13 +53,10 @@ class ResourceBase:
         fd: IO[bytes] | None = None,
         _uid: str | None = None,
         _size: int | None = None,
-        _flags: list[str] | None = None,
     ) -> None:
         self.name = name
         self.bucket = bucket
         self.metadata = metadata or {}
-        # the sha256 identifier can be passed as an argument or inside the metadata
-        sha256 = sha256 or self.metadata.get("sha256")
 
         calculate_hash = sha256 is None
 
@@ -87,13 +94,11 @@ class ResourceBase:
                 sha256 = hashlib.sha256(self._content).hexdigest()
 
         # Empty Resource is possible here (e.g. RemoteResource)
-        self.metadata["sha256"] = sha256
+        self.sha256 = sha256
 
         self._uid = _uid or str(uuid.uuid4())
         self._path = path
         self._size = _size
-        # Flags needed by 3.x.x Karton services
-        self._flags = _flags or []
 
     @property
     def uid(self) -> str:
@@ -127,15 +132,6 @@ class ResourceBase:
                 self._size = len(self._content)
         return cast(int, self._size)
 
-    @property
-    def sha256(self) -> str | None:
-        """
-        Resource sha256
-
-        :return: Hexencoded resource SHA256 hash
-        """
-        return self.metadata.get("sha256")
-
     def to_dict(self) -> dict[str, Any]:
         # Internal serialization method
         return {
@@ -144,7 +140,6 @@ class ResourceBase:
             "bucket": self.bucket,
             "size": self.size,
             "metadata": self.metadata,
-            "flags": self._flags,
             "sha256": self.sha256,
         }
 
@@ -160,7 +155,6 @@ class LocalResourceBase(ResourceBase):
         uid: str | None = None,
         sha256: str | None = None,
         fd: IO[bytes] | None = None,
-        _flags: list[str] | None = None,
         _close_fd: bool = False,
     ) -> None:
         if len(list(filter(None, [path, content, fd]))) != 1:
@@ -175,7 +169,6 @@ class LocalResourceBase(ResourceBase):
             sha256=sha256,
             fd=fd,
             _uid=uid,
-            _flags=_flags,
         )
         self.fd = fd
         self._close_fd = _close_fd
@@ -277,9 +270,6 @@ class LocalResourceBase(ResourceBase):
         # Ensure out_stream is not closed and seeked to the first byte
         assert not out_stream.closed
         out_stream.seek(0, os.SEEK_SET)
-        # Flag is required by Karton 3.x.x services to recognize that resource
-        # as DirectoryResource
-        flags = [ResourceBase.DIRECTORY_FLAG]
 
         if in_memory:
             return cls(
@@ -288,7 +278,6 @@ class LocalResourceBase(ResourceBase):
                 bucket=bucket,
                 metadata=metadata,
                 uid=uid,
-                _flags=flags,
             )
         else:
             return cls(
@@ -297,7 +286,6 @@ class LocalResourceBase(ResourceBase):
                 bucket=bucket,
                 metadata=metadata,
                 uid=uid,
-                _flags=flags,
                 _close_fd=True,
             )
 
@@ -326,7 +314,6 @@ class LocalResource(LocalResourceBase):
     :param uid: Alternative S3 resource id
     :param sha256: Resource sha256 hash
     :param fd: Seekable file descriptor
-    :param _flags: Resource flags
     :param _close_fd: Close file descriptor after upload (default: False)
     """
 
@@ -390,7 +377,6 @@ class RemoteResource(ResourceBase):
     :param size: Resource size
     :param backend: :py:meth:`KartonBackend` to bind to this resource
     :param sha256: Resource sha256 hash
-    :param _flags: Resource flags
     :param _download_url: Resource download URL
     """
 
@@ -403,7 +389,6 @@ class RemoteResource(ResourceBase):
         size: int | None = None,
         backend: Optional["KartonBackendProtocol"] = None,
         sha256: str | None = None,
-        _flags: list[str] | None = None,
         _download_url: str | None = None,
     ) -> None:
         super().__init__(
@@ -413,7 +398,6 @@ class RemoteResource(ResourceBase):
             sha256=sha256,
             _uid=uid,
             _size=size,
-            _flags=_flags,
         )
         self.backend = backend
         self._download_url = _download_url
@@ -435,7 +419,7 @@ class RemoteResource(ResourceBase):
     @classmethod
     def from_dict(
         cls,
-        dict: dict[str, Any],
+        dict: ResourceData,
         backend: Optional["KartonBackendProtocol"],
         download_url: str | None = None,
     ) -> "RemoteResource":
@@ -449,19 +433,14 @@ class RemoteResource(ResourceBase):
 
         :meta private:
         """
-        # Backwards compatibility
-        metadata = dict.get("metadata", {})
-        if "sha256" in dict:
-            metadata["sha256"] = dict["sha256"]
-
         return cls(
             name=dict["name"],
-            metadata=metadata,
+            metadata=dict["metadata"],
             bucket=dict["bucket"],
             uid=dict["uid"],
-            size=dict.get("size"),  # Backwards compatibility (2.x.x)
+            size=dict["size"],
+            sha256=dict["sha256"],
             backend=backend,
-            _flags=dict.get("flags"),  # Backwards compatibility (3.x.x)
             _download_url=download_url,
         )
 
