@@ -431,13 +431,23 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
     def _get_download_stream(
         self, resource: RemoteResource
     ) -> contextlib.AbstractContextManager[httpx2.Response]:
+        timeout = self.gateway_response_timeout
         if self.gateway_s3_hostname_override is not None:
             host, download_url = override_presigned_url(
                 resource.download_url, self.gateway_s3_hostname_override
             )
-            return httpx2.stream("GET", download_url, headers={"Host": host})
+            return httpx2.stream(
+                "GET", download_url, headers={"Host": host}, timeout=timeout
+            )
         else:
-            return httpx2.stream("GET", resource.download_url)
+            return httpx2.stream("GET", resource.download_url, timeout=timeout)
+
+    def iter_download_resource(
+        self, resource: RemoteResource, chunk_size: int = 64 * 1024
+    ) -> Iterator[bytes]:
+        with self._get_download_stream(resource) as response:
+            response.raise_for_status()
+            yield from response.iter_bytes(chunk_size)
 
     def download_resource(self, resource: RemoteResource) -> bytes:
         with self._get_download_stream(resource) as response:
@@ -617,8 +627,8 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
             raise RuntimeError(f"Restarted task {new_uid} not found")
         return new_task
 
-    def cancel_task(self, task_uid: str) -> None:
-        response = self._http_client.post(f"/tasks/{task_uid}/cancel")
+    def cancel_task(self, task: Task) -> None:
+        response = self._http_client.post(f"/tasks/{task.uid}/cancel")
         response.raise_for_status()
 
     def restart_queue_tasks(
