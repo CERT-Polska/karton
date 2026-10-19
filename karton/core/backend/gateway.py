@@ -44,6 +44,7 @@ from karton.core.gateway_protocol import (
     LogResponse,
     LogSentResponse,
     NewTaskParameters,
+    ResourceUrl,
     SendLogRequest,
     SendLogRequestMessage,
     SendTaskRequest,
@@ -63,7 +64,13 @@ from karton.core.resource import (
     ResourceBase,
     ResourceData,
 )
-from karton.core.task import Task, TaskPriority, TaskState, root_uid_from_task_uid
+from karton.core.task import (
+    Task,
+    TaskPriority,
+    TaskState,
+    map_resource_data,
+    root_uid_from_task_uid,
+)
 from karton.core.utils import chunks, recursive_map
 
 from .base import (
@@ -349,6 +356,24 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
             expected_response=SuccessResponse,
         )
 
+    def _deserialize_resources[T](
+        self, payload: T, download_urls: list[ResourceUrl]
+    ) -> T:
+        grouped_download_urls: dict[ResourceIdentifier, str] = {
+            (spec.bucket, spec.uid): spec.url for spec in download_urls
+        }
+
+        def deserialize_resource(resource_data: ResourceData) -> RemoteResource:
+            return RemoteResource.from_dict(
+                resource_data,
+                backend=self,
+                download_url=grouped_download_urls[
+                    (resource_data["bucket"], resource_data["uid"])
+                ],
+            )
+
+        return map_resource_data(payload, mapper=deserialize_resource)
+
     def consume_routed_task(self, identity: str, timeout: int = 5) -> Task | None:
         if self._bind_id is None:
             raise RuntimeError("Bug: Tried to consume task without registering bind")
@@ -365,23 +390,11 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
             return None
         except GatewayBindExpiredError as e:
             raise BindExpiredError(e.message) from e
-        download_urls: dict[ResourceIdentifier, str] = {
-            (spec.bucket, spec.uid): spec.url for spec in response.message.download_urls
-        }
-
-        def deserialize_resource(resource_data: ResourceData) -> RemoteResource:
-            return RemoteResource.from_dict(
-                resource_data,
-                backend=self,
-                download_url=download_urls[
-                    (resource_data["bucket"], resource_data["uid"])
-                ],
-            )
 
         task_data = response.message.task
-        payload = deserialize_resources(task_data.payload, deserialize_resource)
-        payload_persistent = deserialize_resources(
-            task_data.payload_persistent, deserialize_resource
+        payload, payload_persistent = self._deserialize_resources(
+            (task_data.payload, task_data.payload_persistent),
+            response.message.download_urls,
         )
 
         return Task(
@@ -501,20 +514,23 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
         # This is no-op, Karton gateway manages all metrics
         return
 
-    @staticmethod
-    def _task_from_view(view: TaskView) -> Task:
+    def _task_from_view(self, view: TaskView) -> Task:
+        payload, payload_persistent = self._deserialize_resources(
+            (view.payload, view.payload_persistent), view.download_urls
+        )
+
         return Task(
             headers=view.headers,
             headers_persistent=view.headers_persistent,
-            payload=view.payload,
-            payload_persistent=view.payload_persistent,
-            priority=view.priority,
+            payload=payload,
+            payload_persistent=payload_persistent,
+            priority=TaskPriority(view.priority),
             parent_uid=view.parent_uid,
             root_uid=view.root_uid,
             orig_uid=view.orig_uid,
             uid=view.uid,
             error=view.error,
-            _status=view.status,
+            _status=TaskState(view.status),
             _last_update=view.last_update,
         )
 

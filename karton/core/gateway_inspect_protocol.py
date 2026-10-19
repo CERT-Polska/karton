@@ -3,7 +3,6 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from karton.core.gateway_protocol import ResourceUrl
-from karton.core.task import TaskPriority, TaskState
 
 
 class BindView(BaseModel):
@@ -44,8 +43,8 @@ class TaskView(BaseModel):
     root_uid: str
     parent_uid: str | None
     orig_uid: str | None
-    status: TaskState
-    priority: TaskPriority
+    status: str
+    priority: str
     last_update: float
     headers: dict[str, Any]
     headers_persistent: dict[str, Any]
