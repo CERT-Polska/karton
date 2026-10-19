@@ -44,6 +44,8 @@ async def get_tasks_batch(request: BatchTaskRequest) -> list[TaskView]:
     async for task in gateway_backend._iter_tasks(
         _key_iter(), chunk_size=1000, parse_resources=False
     ):
+        if task.status == TaskState.FINISHED:
+            continue
         tasks.append(task)
     return [TaskView(**task.to_dict()) for task in tasks]
 
@@ -51,17 +53,19 @@ async def get_tasks_batch(request: BatchTaskRequest) -> list[TaskView]:
 @rest_api_router.get("/tasks/{uid}", dependencies=[Depends(CanInspectKarton)])
 async def get_task_details(uid: str) -> TaskView:
     task = await gateway_backend.get_task(uid)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task doesn't exist")
-    download_urls = await generate_resource_download_urls(task, _allowed_buckets())
+    if task is None or task.status == TaskState.FINISHED:
+        raise HTTPException(status_code=404, detail="Task doesn't exist or is finished")
+    download_urls = await generate_resource_download_urls(
+        task, _allowed_buckets(), omit_disallowed_buckets=True
+    )
     return TaskView(**task.to_dict(), download_urls=download_urls)
 
 
 @rest_api_router.post("/tasks/{uid}/restart", dependencies=[Depends(CanRestartTask)])
 async def restart_task(uid: str) -> RestartedTask:
     task = await gateway_backend.get_task(uid)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task doesn't exist")
+    if task is None or task.status == TaskState.FINISHED:
+        raise HTTPException(status_code=404, detail="Task doesn't exist or is finished")
     new_task = await gateway_backend.restart_task(task)
     return RestartedTask(uid=new_task.uid)
 
@@ -69,7 +73,7 @@ async def restart_task(uid: str) -> RestartedTask:
 @rest_api_router.post("/tasks/{uid}/cancel", dependencies=[Depends(CanCancelTask)])
 async def cancel_task(uid: str) -> Response:
     task = await gateway_backend.get_task(uid)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task doesn't exist")
+    if task is None or task.status == TaskState.FINISHED:
+        raise HTTPException(status_code=404, detail="Task doesn't exist or is finished")
     await gateway_backend.set_task_status(task, TaskState.FINISHED)
     return Response(status_code=204)

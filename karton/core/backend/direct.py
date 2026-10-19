@@ -1169,10 +1169,9 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
     def cancel_task(self, task: Task) -> None:
         self.set_task_status(task, TaskState.FINISHED)
 
-    def restart_queue_tasks(
+    def restart_queue_crashed_tasks(
         self,
         identity: str,
-        status: Literal["crashed", "pending"] = "crashed",
     ) -> list[tuple[str, str]]:
         """
         Restart all tasks matching the given status in a queue.
@@ -1185,12 +1184,8 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         for task in self.iter_all_tasks(parse_resources=False):
             if task.headers.get("receiver") != identity:
                 continue
-            if status == "crashed":
-                if task.status != TaskState.CRASHED:
-                    continue
-            else:
-                if task.status in (TaskState.FINISHED, TaskState.CRASHED):
-                    continue
+            if task.status != TaskState.CRASHED:
+                continue
             new_task = self.restart_task(task)
             restarted.append((task.uid, new_task.uid))
         return restarted

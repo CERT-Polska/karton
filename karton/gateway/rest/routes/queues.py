@@ -98,9 +98,8 @@ async def get_queue_details(identity: str) -> QueueView:
 )
 async def restart_queue_tasks(
     identity: str,
-    status: Literal["crashed", "pending"] = "crashed",
 ) -> list[BulkRestartedTask]:
-    tasks = await _get_queue_tasks_by_status(identity, status)
+    tasks = await _get_queue_tasks_by_status(identity, "crashed")
     restarted: list[BulkRestartedTask] = []
     for task in tasks:
         new_task = await gateway_backend.restart_task(task)
