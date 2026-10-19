@@ -1,8 +1,5 @@
-from collections.abc import AsyncIterator
-
 from fastapi import Depends, HTTPException, Response
 
-from karton.core.backend.direct import KARTON_TASK_NAMESPACE
 from karton.core.task import Task, TaskState
 from karton.gateway.backend import gateway_backend
 from karton.gateway.config import gateway_config
@@ -36,13 +33,9 @@ async def get_tasks_batch(request: BatchTaskRequest) -> list[TaskView]:
             detail="Maximum number of task UIDs per request is 10000",
         )
 
-    async def _key_iter() -> AsyncIterator[str]:
-        for uid in request.uids:
-            yield f"{KARTON_TASK_NAMESPACE}:{uid}"
-
     tasks: list[Task] = []
-    async for task in gateway_backend._iter_tasks(
-        _key_iter(), chunk_size=1000, parse_resources=False
+    async for task in gateway_backend.iter_tasks(
+        request.uids, chunk_size=1000, parse_resources=False
     ):
         if task.status == TaskState.FINISHED:
             continue

@@ -3,7 +3,7 @@ import logging
 import os
 import time
 from collections import defaultdict
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterable
 from typing import IO, Any, cast
 
 import aioboto3
@@ -198,6 +198,33 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
                     if parse_resources
                     else None,
                 )
+
+    def iter_tasks(
+        self,
+        task_uid_list: Iterable[str],
+        chunk_size: int = 1000,
+        parse_resources: bool = True,
+    ) -> AsyncIterator[Task]:
+        """
+        Get multiple tasks for given identifier list as an iterator
+
+        :param task_uid_list: List of task fully-qualified identifiers
+        :param chunk_size: Size of chunks passed to the Redis MGET command
+        :param parse_resources: If set to False, resources are not parsed.
+            It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
+            to learn more.
+        :return: Iterator with task objects
+        """
+
+        async def _key_iter(uid_list: Iterable[str]) -> AsyncIterator[str]:
+            for uid in uid_list:
+                yield f"{KARTON_TASK_NAMESPACE}:{uid}"
+
+        return self._iter_tasks(
+            _key_iter(task_uid_list),
+            chunk_size=chunk_size,
+            parse_resources=parse_resources,
+        )
 
     def iter_all_tasks(
         self, chunk_size: int = 1000, parse_resources: bool = True

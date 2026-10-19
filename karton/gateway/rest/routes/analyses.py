@@ -17,7 +17,7 @@ from ._routers import rest_api_router
 async def get_analysis_details(uid: str) -> AnalysisView:
     binds = {bind.identity for bind in await gateway_backend.get_binds()}
     queues: dict[str, list[TaskView]] = {}
-    async for task in gateway_backend.iter_task_tree(uid):
+    async for task in gateway_backend.iter_task_tree(uid, parse_resources=False):
         if task.status == TaskState.FINISHED:
             continue
         receiver = task.headers.get("receiver")
