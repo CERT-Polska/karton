@@ -194,8 +194,9 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
                     continue
                 yield Task.unserialize(
                     task_data,
-                    parse_resources=parse_resources,
-                    resource_unserializer=self.unserialize_resource,
+                    resource_unserializer=self.unserialize_resource
+                    if parse_resources
+                    else None,
                 )
 
     def iter_all_tasks(
@@ -235,8 +236,9 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
                     continue
                 task = Task.unserialize(
                     task_data,
-                    parse_resources=parse_resources,
-                    resource_unserializer=self.unserialize_resource,
+                    resource_unserializer=self.unserialize_resource
+                    if parse_resources
+                    else None,
                 )
                 if task.root_uid == root_uid:
                     yield task
