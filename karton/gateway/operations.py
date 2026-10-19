@@ -13,7 +13,7 @@ from karton.core.auth.models import (
     RegisterBindOperation,
 )
 from karton.core.exceptions import BindExpiredError as KartonBindExpiredError
-from karton.core.task import Task, TaskState, root_uid_from_task_uid
+from karton.core.task import Task, TaskPriority, TaskState, root_uid_from_task_uid
 from karton.gateway.errors import BadRequestError, UnauthorizedError
 
 from .backend import gateway_backend
@@ -365,7 +365,7 @@ async def handle_get_task_request(
             payload=task_data["payload"],
             headers_persistent=task_data["headers_persistent"],
             payload_persistent=task_data["payload_persistent"],
-            priority=task_data["priority"],
+            priority=TaskPriority(task_data["priority"]),
         )
         task_response_message = TaskResponseMessage(
             task=incoming_task,

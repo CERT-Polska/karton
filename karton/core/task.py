@@ -6,19 +6,17 @@ import warnings
 from collections.abc import Callable, Iterator
 from contextvars import ContextVar
 from typing import (
-    TYPE_CHECKING,
     Any,
+    NotRequired,
     Optional,
+    TypedDict,
 )
 
-from . import query
-from .resource import RemoteResource, ResourceBase
-from .utils import recursive_iter, recursive_iter_with_keys, recursive_map
-
-if TYPE_CHECKING:
-    from .backend import KartonBackendProtocol
-
 import orjson
+
+from . import query
+from .resource import ResourceBase, ResourceData
+from .utils import recursive_iter, recursive_iter_with_keys, recursive_map
 
 current_task: ContextVar[Optional["Task"]] = ContextVar("current_task")
 
@@ -52,6 +50,37 @@ def root_uid_from_task_uid(uid: str) -> str:
     returns 12345678-1234-1234-1234-12345678abcd. Works only for 5.4.0+ UIDs
     """
     return uid.split("}:")[0][1:]
+
+
+def map_resource_data(obj: Any, mapper: Callable[[ResourceData], ResourceBase]) -> Any:
+    return recursive_map(
+        lambda el: (
+            mapper(el["__karton_resource__"])
+            if type(el) is dict and "__karton_resource__" in el
+            else el
+        ),
+        obj,
+    )
+
+
+class TaskData(TypedDict):
+    """
+    Serialized task representation, used for storing tasks in Redis collections
+    """
+
+    uid: str
+    root_uid: str
+    parent_uid: str | None
+    orig_uid: str | None
+    headers: dict[str, Any]
+    # NotRequired: compatibility with <5.2.0
+    headers_persistent: NotRequired[dict[str, Any]]
+    payload: dict[str, Any]
+    payload_persistent: dict[str, Any]
+    error: list[str] | None
+    priority: str
+    status: str
+    last_update: float
 
 
 class Task:
@@ -304,7 +333,7 @@ class Task:
             other_task._headers_persistent_keys
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> TaskData:
         """
         Transform task data into dictionary
         :return: Task data dictionary
@@ -411,27 +440,61 @@ class Task:
                 yield element
 
     @staticmethod
+    def from_dict(
+        data: TaskData,
+        resource_unserializer: Callable[[ResourceData], ResourceBase] | None = None,
+        task_token: str | None = None,
+    ) -> "Task":
+        """
+        Unserialize Task instance from dict representation
+
+        :param data: Task dict data
+        :param resource_unserializer: |
+            Resource factory used for deserialization of __karton_resource__
+            dictionary values. If None (default), resources are not deserialized.
+        :param task_token: |
+            Task token got from KartonGatewayBackend
+        :return: Unserialized Task object
+
+        :meta private:
+        """
+        # Compatibility with Karton <5.2.0
+        headers_persistent_fallback = data["payload_persistent"].get(
+            "__headers_persistent", None
+        )
+        headers_persistent = data.get("headers_persistent", headers_persistent_fallback)
+        payload, payload_persistent = data["payload"], data["payload_persistent"]
+        if resource_unserializer is not None:
+            payload, payload_persistent = map_resource_data(
+                (payload, payload_persistent), mapper=resource_unserializer
+            )
+
+        return Task(
+            data["headers"],
+            headers_persistent=headers_persistent,
+            uid=data["uid"],
+            root_uid=data["root_uid"],
+            parent_uid=data["parent_uid"],
+            orig_uid=data["orig_uid"],
+            payload=payload,
+            payload_persistent=payload_persistent,
+            error=data["error"],
+            priority=TaskPriority(data["priority"]),
+            _status=TaskState(data["status"]),
+            _last_update=data["last_update"],
+            _token=task_token,
+        )
+
+    @staticmethod
     def unserialize(
         data: str | bytes,
-        backend: Optional["KartonBackendProtocol"] = None,
-        parse_resources: bool = True,
-        resource_unserializer: Callable[[dict], Any] | None = None,
+        resource_unserializer: Callable[[ResourceData], ResourceBase] | None = None,
         task_token: str | None = None,
     ) -> "Task":
         """
         Unserialize Task instance from JSON string
 
         :param data: JSON-serialized task
-        :param backend: |
-            Backend instance to be bound to RemoteResource objects.
-            Deprecated: pass resource_unserializer instead.
-        :param parse_resources: |
-            If set to False (default is True), method doesn't
-            deserialize '__karton_resource__' entries, which speeds up deserialization
-            process. This flag is used mainly for multiple task processing e.g.
-            filtering based on status.
-            When resource deserialization is turned off, Task.unserialize will try
-            to use faster 3rd-party JSON parser (orjson).
         :param resource_unserializer: |
             Resource factory used for deserialization of __karton_resource__
             dictionary values.
@@ -441,65 +504,20 @@ class Task:
 
         :meta private:
         """
-
-        def unserialize_resources(value: Any) -> Any:
-            """
-            Transforms __karton_resource__ serialized entries into
-            RemoteResource object instances
-            """
-            if isinstance(value, dict) and "__karton_resource__" in value:
-                if resource_unserializer is None:
-                    return RemoteResource.from_dict(
-                        value["__karton_resource__"], backend
-                    )
-                else:
-                    return resource_unserializer(value["__karton_resource__"])
-            return value
-
         if not isinstance(data, str):
             data = data.decode("utf8")
 
-        if parse_resources:
-            task_data = json.loads(data, object_hook=unserialize_resources)
-        else:
-            try:
-                task_data = orjson.loads(data)
-            except orjson.JSONDecodeError:
-                # Fallback, in case orjson raises exception during loading
-                # This may happen for large numbers (too large for float)
-                task_data = json.loads(data, object_hook=unserialize_resources)
-
-        # Compatibility with Karton <5.2.0
-        headers_persistent_fallback = task_data["payload_persistent"].get(
-            "__headers_persistent", None
+        try:
+            task_data = orjson.loads(data)
+        except orjson.JSONDecodeError:
+            # Fallback, in case orjson raises exception during loading
+            # This may happen for large numbers (too large for float)
+            task_data = json.loads(data)
+        return Task.from_dict(
+            task_data,
+            resource_unserializer=resource_unserializer,
+            task_token=task_token,
         )
-        headers_persistent = task_data.get(
-            "headers_persistent", headers_persistent_fallback
-        )
-
-        task = Task(
-            task_data["headers"],
-            headers_persistent=headers_persistent,
-            uid=task_data["uid"],
-            root_uid=task_data["root_uid"],
-            parent_uid=task_data["parent_uid"],
-            # Compatibility with <= 3.x.x (get)
-            orig_uid=task_data.get("orig_uid", None),
-            payload=task_data["payload"],
-            payload_persistent=task_data["payload_persistent"],
-            # Compatibility with <= 3.x.x (get)
-            error=task_data.get("error"),
-            # Compatibility with <= 2.x.x (get)
-            priority=(
-                TaskPriority(task_data.get("priority"))
-                if "priority" in task_data
-                else TaskPriority.NORMAL
-            ),
-            _status=TaskState(task_data["status"]),
-            _last_update=task_data.get("last_update", None),
-            _token=task_token,
-        )
-        return task
 
     def __repr__(self) -> str:
         return self.serialize()

@@ -1,12 +1,10 @@
 import argparse
-import json
 import time
 
 from karton.core import query
 from karton.core.__version__ import __version__
 from karton.core.backend import KartonBind, KartonMetrics
 from karton.core.backend.direct import (
-    KARTON_OPERATIONS_QUEUE,
     KARTON_TASKS_QUEUE,
     KartonBackend,
 )
@@ -283,36 +281,11 @@ class SystemService(KartonServiceBase):
             # Directly update the unrouted task status to be finished
         self.backend.register_tasks(tasks)
 
-    def handle_operations(self, bodies: list[str]) -> None:
-        """
-        Left for backwards compatibility with Karton <=4.3.0.
-        Earlier versions delegate task status change to karton.system.
-        """
-        operation_bodies = []
-        tasks = []
-        for body in bodies:
-            operation_body = json.loads(body)
-            task = Task.unserialize(operation_body["task"])
-            new_status = TaskState(operation_body["status"])
-            if task.status != new_status:
-                task.last_update = time.time()
-                task.status = new_status
-                tasks.append(task)
-            operation_bodies.append(operation_body)
-
-        self.backend.register_tasks(tasks)
-        if self.enable_publish_log:
-            self.backend.produce_logs(
-                operation_bodies, logger_name=KARTON_OPERATIONS_QUEUE, level="INFO"
-            )
-
     def process_routing(self) -> None:
         # Order does matter! task dispatching must be before
         # karton.operations to avoid races. Timeout must be shorter
         # than self.gc_interval, but not too long allowing graceful shutdown
-        data = self.backend.consume_queues(
-            [KARTON_TASKS_QUEUE, KARTON_OPERATIONS_QUEUE], timeout=5
-        )
+        data = self.backend.consume_queues([KARTON_TASKS_QUEUE], timeout=5)
         if data:
             queue, body = data
             if not isinstance(body, str):
@@ -320,11 +293,6 @@ class SystemService(KartonServiceBase):
             if queue == KARTON_TASKS_QUEUE:
                 tasks = [body] + self.backend.consume_queues_batch(queue, max_count=100)
                 self.handle_tasks(tasks)
-            elif queue == KARTON_OPERATIONS_QUEUE:
-                bodies = [body] + self.backend.consume_queues_batch(
-                    queue, max_count=1000
-                )
-                self.handle_operations(bodies)
 
     def loop(self) -> None:
         self._log_config()

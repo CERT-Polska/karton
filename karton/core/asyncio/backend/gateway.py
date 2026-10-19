@@ -46,6 +46,7 @@ from karton.core.gateway_protocol import (
     TaskDeclaredResponse,
     TaskResponse,
 )
+from karton.core.resource import ResourceData
 from karton.core.task import Task, TaskPriority, TaskState, root_uid_from_task_uid
 
 from .base import KartonAsyncBackendProtocol
@@ -171,7 +172,7 @@ class KartonAsyncGatewayBackend(KartonGatewayBackendBase, KartonAsyncBackendProt
             (spec.bucket, spec.uid): spec.url for spec in response.message.download_urls
         }
 
-        def deserialize_resource(resource_data: dict[str, Any]) -> RemoteResource:
+        def deserialize_resource(resource_data: ResourceData) -> RemoteResource:
             return RemoteResource.from_dict(
                 resource_data,
                 backend=self,
