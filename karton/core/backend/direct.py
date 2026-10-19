@@ -21,7 +21,6 @@ from botocore.credentials import (
 from botocore.session import get_session
 from redis import AuthenticationError, Redis
 from redis.client import Pipeline
-from urllib3.response import HTTPResponse
 
 from karton.core.config import Config
 from karton.core.exceptions import BindExpiredError
@@ -946,19 +945,17 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         with open(path, "rb") as f:
             self.upload_resource(resource, f)
 
-    def get_object(self, bucket: str, object_uid: str) -> HTTPResponse:
-        """
-        Get resource object stream with the content.
+    def iter_download_resource(
+        self, resource: RemoteResource, chunk_size: int = 64 * 1024
+    ) -> Iterator[bytes]:
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be downloaded because its bucket is not set"
+            )
 
-        Returned response should be closed after use to release network resources.
-        To reuse the connection, it's required to call `response.release_conn()`
-        explicitly.
-
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
-        :return: Response object with content
-        """
-        return self.s3.get_object(Bucket=bucket, Key=object_uid)["Body"]
+        with self.s3.get_object(Bucket=resource.bucket, Key=resource.uid)["Body"] as f:
+            while chunk := f.read(chunk_size):
+                yield chunk
 
     def download_resource(self, resource: RemoteResource) -> bytes:
         if resource.bucket is None:
@@ -1169,15 +1166,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
 
         return dict(tasks_per_queue)
 
-    def cancel_task(self, task_uid: str) -> None:
-        """
-        Cancel a task by marking it as finished.
-
-        :param task_uid: Task identifier to cancel
-        """
-        task = self.get_task(task_uid)
-        if task is None:
-            raise RuntimeError(f"Task {task_uid} doesn't exist")
+    def cancel_task(self, task: Task) -> None:
         self.set_task_status(task, TaskState.FINISHED)
 
     def restart_queue_tasks(

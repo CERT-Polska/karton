@@ -277,6 +277,17 @@ class KartonBackendProtocol(Protocol):
         :param path: Path to the object content
         """
 
+    def iter_download_resource(
+        self, resource: RemoteResource, chunk_size: int = 64 * 1024
+    ) -> Iterator[bytes]:
+        """
+        Download resource object, yielding its content as chunks of bytes.
+
+        :param resource: Resource to download
+        :param chunk_size: Chunk size in bytes
+        :return: Iterator of content chunks
+        """
+
     def download_resource(self, resource: RemoteResource) -> bytes:
         """
         Download resource object from object storage.
@@ -434,14 +445,11 @@ class KartonBackendProtocol(Protocol):
         :return: The restarted (new) task object
         """
 
-    def cancel_task(self, task_uid: str) -> None:
+    def cancel_task(self, task: Task) -> None:
         """
         Cancel a task by marking it as finished.
 
-        Unlike :meth:`set_task_status`, this does not require a task token
-        and can be used on tasks obtained via inspection.
-
-        :param task_uid: Task identifier to cancel
+        :param task: Task to be cancelled
         """
 
     def restart_queue_tasks(
