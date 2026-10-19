@@ -12,7 +12,7 @@ def set_connection_id() -> str:
 
 
 def get_connection_id() -> str | None:
-    return __connection_id.get()
+    return __connection_id.get(None)
 
 
 class ConnectionLoggingFilter(logging.Filter):
