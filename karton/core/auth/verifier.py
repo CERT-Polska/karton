@@ -39,9 +39,11 @@ def decode_auth_token(
     if not header.get("kid"):
         raise InvalidTokenError("'kid' not found in provided authorization token")
     kid = header["kid"]
-    if kid not in jwk_set:
+    # Beware: PyJWKSet doesn't support __contains__ operator
+    try:
+        jwk = jwk_set[kid]
+    except KeyError:
         raise InvalidTokenError("Token is signed using unknown public key")
-    jwk = jwk_set[kid]
     payload = cast(
         JWTPayload,
         jwt.decode(
