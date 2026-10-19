@@ -367,9 +367,9 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
             return RemoteResource.from_dict(
                 resource_data,
                 backend=self,
-                download_url=grouped_download_urls[
-                    (resource_data["bucket"], resource_data["uid"])
-                ],
+                download_url=grouped_download_urls.get(
+                    (resource_data["bucket"], resource_data["uid"]), None
+                ),
             )
 
         return map_resource_data(payload, mapper=deserialize_resource)
@@ -647,14 +647,12 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
         response = self._http_client.post(f"/tasks/{task.uid}/cancel")
         response.raise_for_status()
 
-    def restart_queue_tasks(
+    def restart_queue_crashed_tasks(
         self,
         identity: str,
-        status: Literal["crashed", "pending"] = "crashed",
     ) -> list[tuple[str, str]]:
         response = self._http_client.post(
             f"/queues/{identity}/restart",
-            params={"status": status},
         )
         response.raise_for_status()
         restarted = TypeAdapter(list[BulkRestartedTask]).validate_json(response.content)

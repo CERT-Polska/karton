@@ -452,16 +452,14 @@ class KartonBackendProtocol(Protocol):
         :param task: Task to be cancelled
         """
 
-    def restart_queue_tasks(
+    def restart_queue_crashed_tasks(
         self,
         identity: str,
-        status: Literal["crashed", "pending"] = "crashed",
     ) -> list[tuple[str, str]]:
         """
-        Restart all tasks matching the given status in a queue.
+        Bulk restart all crashed tasks in a queue.
 
         :param identity: Karton service identity (queue name)
-        :param status: Which tasks to restart (``"crashed"`` or ``"pending"``)
         :return: List of ``(old_uid, new_uid)`` pairs for each restarted task
         """
 
@@ -471,7 +469,7 @@ class KartonBackendProtocol(Protocol):
         status: Literal["crashed", "pending"] = "crashed",
     ) -> None:
         """
-        Cancel all tasks matching the given status in a queue.
+        Bulk cancel all tasks matching the given status in a queue.
 
         :param identity: Karton service identity (queue name)
         :param status: Which tasks to cancel (``"crashed"`` or ``"pending"``)
