@@ -1,6 +1,5 @@
 from karton.core.gateway_inspect_protocol import (
     AnalysisView,
-    APIError,
     BatchTaskRequest,
     BindView,
     BulkRestartedTask,
@@ -13,7 +12,6 @@ from karton.core.gateway_inspect_protocol import (
 )
 
 __all__ = [
-    "APIError",
     "AnalysisView",
     "BatchTaskRequest",
     "BindView",
