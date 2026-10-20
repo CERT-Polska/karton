@@ -2,6 +2,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from karton.core.backend import KartonMetrics
 from karton.core.gateway_protocol import ResourceUrl
 
 
@@ -57,6 +58,10 @@ class TaskView(BaseModel):
 class AnalysisView(BaseModel):
     uid: str
     queues: dict[str, list[TaskView]]
+
+
+class MetricsView(BaseModel):
+    metrics: dict[KartonMetrics, dict[str, int]]
 
 
 class ProducerOutput(BaseModel):
