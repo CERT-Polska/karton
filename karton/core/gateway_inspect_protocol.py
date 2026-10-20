@@ -81,7 +81,3 @@ class BulkRestartedTask(BaseModel):
 
 class BatchTaskRequest(BaseModel):
     uids: list[str]
-
-
-class APIError(BaseModel):
-    error: str
