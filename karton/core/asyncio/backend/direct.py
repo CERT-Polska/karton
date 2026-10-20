@@ -601,6 +601,9 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             ).items()
         }
 
+    async def get_all_metrics(self) -> dict[KartonMetrics, dict[str, int]]:
+        return {metric: await self.get_metrics(metric) for metric in KartonMetrics}
+
     async def upload_resource(
         self,
         resource: LocalResource,

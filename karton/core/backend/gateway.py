@@ -24,6 +24,7 @@ from karton.core.gateway_inspect_protocol import (
     BatchTaskRequest,
     BindView,
     BulkRestartedTask,
+    MetricsView,
     ProducerOutput,
     QueueView,
     RestartedTask,
@@ -513,6 +514,11 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
     def increment_metrics(self, metric: KartonMetrics, identity: str) -> None:
         # This is no-op, Karton gateway manages all metrics
         return
+
+    def get_all_metrics(self) -> dict[KartonMetrics, dict[str, int]]:
+        response = self._http_client.get("/metrics")
+        response.raise_for_status()
+        return MetricsView.model_validate_json(response.content).metrics
 
     def _task_from_view(self, view: TaskView) -> Task:
         payload, payload_persistent = self._deserialize_resources(

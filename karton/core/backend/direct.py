@@ -916,15 +916,13 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         p.execute()
 
     def get_metrics(self, metric: KartonMetrics) -> dict[str, int]:
-        """
-        Get a {karton-identity: current-number-of-tasks} mapping for a given metric.
-
-        :param metric: Operation metric type
-        """
         return {
             k: int(v)
             for k, v in cast(dict[str, str], self.redis.hgetall(metric.value)).items()
         }
+
+    def get_all_metrics(self) -> dict[KartonMetrics, dict[str, int]]:
+        return {metric: self.get_metrics(metric) for metric in KartonMetrics}
 
     def upload_resource(
         self,

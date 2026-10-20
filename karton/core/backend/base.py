@@ -257,6 +257,11 @@ class KartonBackendProtocol(Protocol):
         :param identity: Related Karton service identity
         """
 
+    def get_all_metrics(self) -> dict[KartonMetrics, dict[str, int]]:
+        """
+        Get a {karton-identity: current-number-of-tasks} mapping for each metric.
+        """
+
     def upload_resource(
         self,
         resource: LocalResource,
