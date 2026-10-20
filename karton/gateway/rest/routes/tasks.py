@@ -37,8 +37,6 @@ async def get_tasks_batch(request: BatchTaskRequest) -> list[TaskView]:
     async for task in gateway_backend.iter_tasks(
         request.uids, chunk_size=1000, parse_resources=False
     ):
-        if task.status == TaskState.FINISHED:
-            continue
         tasks.append(task)
     return [TaskView(**task.to_dict()) for task in tasks]
 
@@ -46,8 +44,8 @@ async def get_tasks_batch(request: BatchTaskRequest) -> list[TaskView]:
 @rest_api_router.get("/tasks/{uid}", dependencies=[Depends(CanInspectKarton)])
 async def get_task_details(uid: str) -> TaskView:
     task = await gateway_backend.get_task(uid)
-    if task is None or task.status == TaskState.FINISHED:
-        raise HTTPException(status_code=404, detail="Task doesn't exist or is finished")
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task doesn't exist")
     download_urls = await generate_resource_download_urls(
         task, _allowed_buckets(), omit_disallowed_buckets=True
     )
@@ -59,6 +57,8 @@ async def restart_task(uid: str) -> RestartedTask:
     task = await gateway_backend.get_task(uid)
     if task is None or task.status == TaskState.FINISHED:
         raise HTTPException(status_code=404, detail="Task doesn't exist or is finished")
+    if task.status != TaskState.CRASHED:
+        raise HTTPException(status_code=409, detail="Task is not in CRASHED state")
     new_task = await gateway_backend.restart_task(task)
     return RestartedTask(uid=new_task.uid)
 

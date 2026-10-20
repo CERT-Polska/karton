@@ -22,7 +22,6 @@ class ServiceInfoView(BaseModel):
     identity: str
     karton_version: str | None
     service_version: str | None
-    instance_id: str | None
     active_replicas: int
 
 
