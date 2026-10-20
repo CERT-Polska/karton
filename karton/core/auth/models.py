@@ -105,7 +105,6 @@ class GetMetricsOperation(Operation):
     operation: Literal["get_metrics"] = "get_metrics"
 
 
-
 type AllowedOperation = (
     RegisterBindOperation
     | ConsumeTaskOperation

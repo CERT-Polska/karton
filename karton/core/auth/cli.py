@@ -17,12 +17,16 @@ from karton.core.asyncio.base import KartonAsyncBase
 from karton.core.auth.models import (
     AllowedOperation,
     AuthClaims,
+    CancelTaskOperation,
     ConsumeLogOperation,
     ConsumeTaskOperation,
     EnableDebugOperation,
+    GetMetricsOperation,
+    InspectKartonOperation,
     ProduceTaskOperation,
-    RegisterBindOperation, RemoveBindOperation, GetMetricsOperation,
-    RestartTaskOperation, InspectKartonOperation, CancelTaskOperation,
+    RegisterBindOperation,
+    RemoveBindOperation,
+    RestartTaskOperation,
 )
 from karton.core.auth.signer import generate_new_keypair, issue_auth_token
 from karton.core.auth.verifier import decode_auth_token
