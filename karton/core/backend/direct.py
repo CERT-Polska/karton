@@ -1102,22 +1102,9 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         ]
 
     def get_queues(self, parse_resources: bool = False) -> dict[str, KartonQueueState]:
-        """
-        Get a summary of all queues and their task state.
-
-        Streams all tasks from Redis via :meth:`iter_all_tasks` and groups
-        them by receiver. Full Task objects are pre-loaded in each
-        :class:`QueueSummary` for in-memory filtering by
-        :class:`karton.core.inspect.KartonQueue`.
-
-        :param parse_resources: If False (default), resources are not parsed
-            to speed up deserialization.
-        :return: Dictionary mapping queue identity to :class:`QueueSummary`
-        """
         binds = {bind.identity: bind for bind in self.get_binds()}
         replicas = self.get_online_identities()
 
-        tasks_per_queue: dict[str, list[Task]] = defaultdict(list)
         pending_uids: dict[str, list[str]] = defaultdict(list)
         crashed_uids: dict[str, list[str]] = defaultdict(list)
 
@@ -1127,7 +1114,6 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
                 continue
             if task.status == TaskState.FINISHED:
                 continue
-            tasks_per_queue[receiver].append(task)
             if task.status == TaskState.CRASHED:
                 crashed_uids[receiver].append(task.uid)
             else:

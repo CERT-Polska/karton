@@ -19,7 +19,6 @@ async def get_services() -> list[ServiceInfoView]:
             identity=identity,
             karton_version=karton_version,
             service_version=service_version,
-            instance_id=None,
             active_replicas=replicas,
         )
         for (identity, karton_version, service_version), replicas in counts.items()

@@ -252,6 +252,8 @@ async def generate_resource_download_urls(
             # Already processed
             continue
         if bucket not in allowed_buckets:
+            if omit_disallowed_buckets:
+                continue
             raise InvalidTaskError(
                 f"Task is referencing a bucket '{bucket}' "
                 f"but gateway server is not allowed to access it."

@@ -402,10 +402,8 @@ class KartonBackendProtocol(Protocol):
         """
         Get a summary of all queues (binds) and their task state.
 
-        For the direct backend, full Task objects are included in each
-        :class:`QueueSummary`. For the gateway backend, only task UIDs are
-        included and full tasks are fetched lazily.
-
+        :param parse_resources: If False (default), resources are not parsed
+            to speed up deserialization.
         :return: Dictionary mapping queue identity to :class:`QueueSummary`
         """
 
