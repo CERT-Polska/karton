@@ -1,7 +1,6 @@
 import abc
 import argparse
 import logging
-import os
 import textwrap
 import uuid
 from contextlib import contextmanager
@@ -9,6 +8,7 @@ from typing import Protocol, cast
 
 from .__version__ import __version__
 from .backend import KartonBackendProtocol, KartonServiceInfo, get_backend
+from .backend.base import make_debug_identity
 from .config import Config
 from .logger import KartonLogHandler, TaskContextFilter
 from .task import Task, get_current_task, set_current_task
@@ -45,16 +45,17 @@ class ConfigMixin:
             self.identity = identity_from_config
 
         self.debug = self.config.getboolean("karton", "debug", False)
+        self.instance_id = uuid.uuid4()
 
         if self.debug and self.identity:
-            self.identity += "-" + os.urandom(4).hex() + "-dev"
+            self.identity = make_debug_identity(self.identity, self.instance_id)
 
-        self.instance_id = str(uuid.uuid4())
         self.service_info = KartonServiceInfo(
             identity=self.identity,
             karton_version=__version__,
             service_version=self.version,
             instance_id=self.instance_id,
+            debug=self.debug,
         )
 
     @classmethod

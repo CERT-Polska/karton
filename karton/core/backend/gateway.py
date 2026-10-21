@@ -140,6 +140,7 @@ class KartonGatewayBackendBase:
                 service_version=self.service_info.service_version,
                 library_version=self.service_info.karton_version,
                 instance_id=self.service_info.instance_id,
+                debug=self.service_info.debug,
                 auth_tokens=self.gateway_auth_tokens,
                 close_on_idle=close_on_idle,
             )

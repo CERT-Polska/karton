@@ -1,3 +1,4 @@
+import uuid
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, RootModel
@@ -37,8 +38,9 @@ class HelloResponse(BaseModel):
 class HelloRequestMessage(BaseModel):
     identity: str = Field(..., min_length=1)
     library_version: str
-    instance_id: str
+    instance_id: uuid.UUID
     service_version: str | None
+    debug: bool
     auth_tokens: list[str] = Field(default_factory=list)
     close_on_idle: bool = False
 

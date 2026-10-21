@@ -11,10 +11,16 @@ from pydantic import ValidationError
 
 from karton.core.__version__ import __version__
 from karton.core.asyncio.backend import KartonServiceInfo
-from karton.core.auth.models import AllowedOperation, VerifiedGrant
+from karton.core.auth.models import (
+    AllowedOperation,
+    EnableDebugOperation,
+    VerifiedGrant,
+)
 from karton.core.auth.verifier import decode_auth_token
+from karton.core.backend.base import make_debug_identity
 from karton.core.gateway_protocol import (
     HelloRequest,
+    HelloRequestMessage,
     HelloResponse,
     HelloResponseMessage,
     Request,
@@ -123,6 +129,26 @@ class ClientSession:
                     return True
         raise UnauthorizedError(f"Operation '{operation.operation}' is not authorized")
 
+    @staticmethod
+    def is_grant_valid(
+        grant: VerifiedGrant, hello_message: HelloRequestMessage
+    ) -> bool:
+        if hello_message.debug:
+            for op in grant.claims.allowed_operations:
+                if op.covers(EnableDebugOperation()):
+                    break
+            else:
+                logger.warning(
+                    "Client tried to enable debug mode without proper authorization"
+                )
+                return False
+            grant_identity = make_debug_identity(
+                grant.claims.identity, hello_message.instance_id
+            )
+        else:
+            grant_identity = grant.claims.identity
+        return grant_identity == hello_message.identity
+
     @classmethod
     @asynccontextmanager
     async def initiate_session(
@@ -141,11 +167,11 @@ class ClientSession:
                 hello_request = HelloRequest.model_validate_json(request_json)
                 if gateway_config.auth_required:
                     valid_auth_grants = [
-                        grants
-                        for grants in parse_auth_tokens(
+                        grant
+                        for grant in parse_auth_tokens(
                             hello_request.message.auth_tokens
                         )
-                        if grants.claims.identity == hello_request.message.identity
+                        if ClientSession.is_grant_valid(grant, hello_request.message)
                     ]
                     if not valid_auth_grants:
                         raise BadCredentialsError(
@@ -166,6 +192,7 @@ class ClientSession:
             karton_version=hello_request.message.library_version,
             service_version=hello_request.message.service_version,
             instance_id=hello_request.message.instance_id,
+            debug=hello_request.message.debug,
         )
         session = cls(
             service_info=service_info,

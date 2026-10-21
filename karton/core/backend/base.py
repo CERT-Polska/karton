@@ -47,7 +47,8 @@ class KartonExternalServiceInfo:
     karton_version: str | None = None
     service_version: str | None = None
     # instance_id is required for services connecting to Karton Gateway
-    instance_id: str | None = None
+    instance_id: uuid.UUID | None = None
+    debug: bool = False
     # Extra information about Redis client
     redis_client_info: dict[str, str] | None = dataclasses.field(
         default=None, hash=False, compare=False, metadata={"serializable": False}
@@ -62,6 +63,7 @@ class KartonExternalServiceInfo:
             for field in dataclasses.fields(cls)
             if field.metadata.get("serializable", True)
         ]
+        params: dict[str, Any]
         if "?" in client_name:
             identity, params_string = client_name.split("?", 1)
             # Filter out unknown params to not get crashed by future extensions
@@ -73,6 +75,16 @@ class KartonExternalServiceInfo:
         else:
             identity = client_name
             params = {}
+
+        if "debug" in params and params["debug"] == "1":
+            params["debug"] = True
+
+        if "instance_id" in params:
+            try:
+                params["instance_id"] = uuid.UUID(params["instance_id"])
+            except ValueError:
+                del params["instance_id"]
+
         return KartonExternalServiceInfo(
             identity, redis_client_info=redis_client_info, **params
         )
@@ -85,9 +97,10 @@ class KartonServiceInfo:
     """
 
     identity: str
-    instance_id: str
+    instance_id: uuid.UUID
     karton_version: str = __version__
     service_version: str | None = None
+    debug: bool = False
 
     @classmethod
     def create(cls, identity: str, service_version: str | None = None) -> Self:
@@ -101,7 +114,7 @@ class KartonServiceInfo:
         """
         return cls(
             identity=identity,
-            instance_id=str(uuid.uuid4()),
+            instance_id=uuid.uuid4(),
             service_version=service_version,
         )
 
@@ -119,20 +132,26 @@ class KartonServiceInfo:
             )
 
     def make_client_name(self) -> str:
-        included_keys = [
-            field.name
-            for field in dataclasses.fields(self)
-            if field.metadata.get("serializable", True)
-        ]
-        params = {
-            k: v
-            for k, v in dataclasses.asdict(self).items()
-            if k in included_keys and v is not None
+        params: dict[str, str] = {
+            "instance_id": str(self.instance_id),
+            "karton_version": self.karton_version,
         }
+        if self.service_version is not None:
+            params["service_version"] = self.service_version
+        if self.debug:
+            params["debug"] = "1"
         if params:
             return f"{self.identity}?{urlencode(params)}"
         else:
             return self.identity
+
+
+def make_debug_identity(identity: str, instance_id: uuid.UUID) -> str:
+    """
+    Make debug identity bound to the instance id to create ephemeral task queue
+    for debugging purposes
+    """
+    return f"{identity}-{instance_id!s}-dev"
 
 
 def unserialize_bind(identity: str, bind: dict[str, Any]) -> KartonBind:
