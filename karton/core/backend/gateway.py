@@ -83,7 +83,10 @@ class KartonGatewayBackendBase:
             "gateway", "secondary_auth_tokens", ""
         ).split(",")
 
-        self.gateway_auth_tokens: list[str] = auth_tokens + secondary_auth_tokens
+        # Filter out empty tokens
+        self.gateway_auth_tokens: list[str] = [
+            token for token in auth_tokens + secondary_auth_tokens if token
+        ]
 
         self.gateway_retries = self.config.getint("gateway", "retries", 5)
         self.gateway_retry_base_timeout = self.config.getint(
