@@ -14,9 +14,7 @@ Producer services
     import logging
     from karton.core import Config, Producer, Task, Resource
 
-    config = Config("karton.ini")
-    producer = Producer(config)
-
+    producer = Producer(identity="karton.sample-producer")
     filename = sys.argv[1]
     with open(filename, "rb") as f:
         contents = f.read()
@@ -122,8 +120,7 @@ Finally, we need to run our module, we get this done with `loop` method, which b
 .. code-block:: python
 
     if __name__ == "__main__":
-        c = Reporter()
-        c.loop()
+        Reporter.main()
 
 
 Karton services (Producer + Consumer)
@@ -176,6 +173,9 @@ Full-blown example below.
             t = Task({"type": "sample"})
             t.add_resource("sample", Resource(filename, content))
             self.send_task(task)
+
+    if __name__ == "__main__":
+        SomeNameKarton.main()
 
 
 .. _example-consuming-logs:

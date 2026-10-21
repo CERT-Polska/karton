@@ -4,7 +4,7 @@ Getting started
 Installation
 ------------
 
-You can get the Karton framework from pip:
+You can get the Karton framework using pip:
 
 .. code-block:: console
 
@@ -12,13 +12,13 @@ You can get the Karton framework from pip:
 
 Or, if you're feeling adventurous, download the sources using git and install them manually.
 
-In addition to Karton core library, you'll also need to setup S3-compatible storage like `MinIO <https://docs.min.io/docs/minio-quickstart-guide.html>`_ and `Redis server <https://redis.io/topics/quickstart>`_.
+In addition to Karton core components, you'll also need to setup S3-compatible storage like `Silo <https://silo.pgsty.com/operations/deployments/installation/>`_ and `Redis server <https://redis.io/topics/quickstart>`_.
 
+Core system configuration
+-------------------------
 
-Configuration
--------------
-
-Each Karton subsystem needs a ``karton.ini`` file that contains the connection parameters for Redis and S3.
+Each Karton subsystem needs a ``karton.ini`` file that contains the configuration. Core systems operate directly on Redis and S3,
+and ``karton.ini`` defines connection parameters for these services.
 
 You can also use this file to store custom fields and use them e.g. by :ref:`extending-config`.
 
@@ -38,6 +38,31 @@ By default, the config class will look for the config file in several places, bu
 
 If everything was configured correctly, you should now be able to run the ``karton-system`` broker and get ``"Manager karton.system started"`` signaling that it was able to connect to Redis and S3 correctly.
 
+Karton System setup
+^^^^^^^^^^^^^^^^^^^
+
+Karton System is a task broker and garbage collector. It moves the tasks from the incoming task queue to the consumer queues
+and cleans up finished tasks and unreferenced S3 resources.
+
+TODO
+
+For production workflows, it is recommended to split the GC and routing into separate karton-system instances.
+
+Karton Gateway setup
+^^^^^^^^^^^^^^^^^^^^
+
+Karton Gateway is a HTTP/Websocket server that exposes Karton API for producers, consumers and other Karton services.
+
+It was implemented in v6.0.0 to avoid direct operations on the Redis database and provide secure, unified and future-proof interface.
+
+Gateway server requires additional ``karton.ini`` configuration section and installation of extra dependencies.
+
+TODO
+
+Service configuration
+---------------------
+
+TODO: Show gateway configuration and inform about legacy direct setup
 
 Docker Compose development setup
 --------------------------------

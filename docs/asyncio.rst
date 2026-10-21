@@ -20,7 +20,7 @@ from ``karton.core.asyncio`` package and use ``async def`` keyword in ``process(
     from karton.core.asyncio import Consumer, Task
 
     class FooBarConsumer(Consumer):
-        identity = "foobar-consumer"
+        identity = "karton.foobar-consumer"
         filters = [
             {
                 "type": "foobar"
@@ -49,7 +49,7 @@ Synchronous version of KartonBackend connects to the Redis/S3 in the Producer co
     import asyncio
     from karton.core.asyncio import Producer, Task
 
-    foo_producer = Producer(identity="foobar-producer")
+    foo_producer = Producer(identity="karton.foobar-producer")
 
     async def main():
         await foo_producer.connect()
@@ -74,7 +74,7 @@ tasks via ``concurrency_limit`` configuration argument.
     from karton.core.asyncio import Consumer, Task
 
     class FooBarConsumer(Consumer):
-        identity = "foobar-consumer"
+        identity = "karton.foobar-consumer"
         filters = [
             {
                 "type": "foobar"
