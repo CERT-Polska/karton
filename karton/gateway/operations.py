@@ -110,23 +110,15 @@ async def handle_bind_request(
     :param request: Parsed request object
     :param session: Client session that initiated the request
     """
-    if session.service_info.debug:
-        if request.message.persistent:
-            raise UnauthorizedError("Only non-persistent bind is allowed in debug mode")
-        # Don't check if persistence is allowed
-        session.can_perform(
-            RegisterBindOperation(
-                filters=request.message.filters,
-                persistent=None,
-            )
+    if session.service_info.debug and request.message.persistent:
+        raise UnauthorizedError("Only non-persistent bind is allowed in debug mode")
+
+    session.can_perform(
+        RegisterBindOperation(
+            filters=request.message.filters,
+            persistent=request.message.persistent,
         )
-    else:
-        session.can_perform(
-            RegisterBindOperation(
-                filters=request.message.filters,
-                persistent=request.message.persistent,
-            )
-        )
+    )
     bind = KartonBind(
         identity=session.service_info.identity,
         info=request.message.info,

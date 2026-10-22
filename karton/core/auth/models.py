@@ -17,7 +17,7 @@ class JWKSDict(TypedDict):
 class RegisterBindOperation(BaseModel):
     operation: Literal["register_bind"] = "register_bind"
     filters: list[dict[str, Any]]
-    persistent: bool | None  # If None, then any value is accepted
+    persistent: bool  # If None, then any value is accepted
 
     def covers(self, operation: "AllowedOperation") -> bool:
         """
@@ -28,11 +28,7 @@ class RegisterBindOperation(BaseModel):
         """
         if not isinstance(operation, RegisterBindOperation):
             return False
-        if (
-            operation.persistent is not None
-            and self.persistent is not None
-            and operation.persistent != self.persistent
-        ):
+        if operation.persistent != self.persistent:
             return False
         # Filters are considered equal if their JSON representation is equal
         # regardless of the position in the list.
