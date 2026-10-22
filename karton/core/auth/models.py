@@ -17,7 +17,7 @@ class JWKSDict(TypedDict):
 class RegisterBindOperation(BaseModel):
     operation: Literal["register_bind"] = "register_bind"
     filters: list[dict[str, Any]]
-    persistent: bool  # If None, then any value is accepted
+    persistent: bool
 
     def covers(self, operation: "AllowedOperation") -> bool:
         """
