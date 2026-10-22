@@ -14,6 +14,7 @@ from karton.core.auth.cli import (
     cmd_validate,
     dedup_and_sort_operations,
     parse_filters_args,
+    parse_register_bind_args,
     resolve_bind_persistence,
 )
 from karton.core.auth.models import (
@@ -91,6 +92,56 @@ class TestParseFiltersArgs(unittest.TestCase):
         # filter values as long as variants are objects
         filters = parse_filters_args(['[{"type": "t", "amount": 5}, {"x": [1, 2]}]'])
         self.assertEqual(filters, [{"type": "t", "amount": 5}, {"x": [1, 2]}])
+
+
+class TestParseRegisterBindArgs(unittest.TestCase):
+    def test_none(self):
+        self.assertEqual(parse_register_bind_args(None), [])
+
+    def test_empty_list(self):
+        self.assertEqual(parse_register_bind_args([]), [])
+
+    def test_single_bind(self):
+        operations = parse_register_bind_args(
+            ['{"filters": [{"type": "t"}], "persistent": true}']
+        )
+        self.assertEqual(
+            operations,
+            [RegisterBindOperation(filters=[{"type": "t"}], persistent=True)],
+        )
+
+    def test_multiple_binds(self):
+        operations = parse_register_bind_args(
+            [
+                '{"filters": [{"type": "a"}], "persistent": true}',
+                '{"filters": [{"type": "b"}], "persistent": false}',
+            ]
+        )
+        self.assertEqual(
+            operations,
+            [
+                RegisterBindOperation(filters=[{"type": "a"}], persistent=True),
+                RegisterBindOperation(filters=[{"type": "b"}], persistent=False),
+            ],
+        )
+
+    def test_invalid_json(self):
+        with self.assertRaises(ValueError):
+            parse_register_bind_args(["not json"])
+
+    def test_not_an_object(self):
+        with self.assertRaises(ValueError):
+            parse_register_bind_args(['["a"]'])
+
+    def test_missing_fields(self):
+        with self.assertRaises(ValueError):
+            parse_register_bind_args(['{"filters": [{"type": "t"}]}'])
+
+    def test_wrong_operation_type(self):
+        with self.assertRaises(ValueError):
+            parse_register_bind_args(
+                ['{"operation": "consume_task", "filters": [], "persistent": true}']
+            )
 
 
 class TestResolveBindPersistence(unittest.TestCase):
@@ -239,17 +290,35 @@ class TestClaimsWithKartonType(unittest.TestCase):
         with self.assertRaises(ValueError):
             claims_from_args(make_args(identity="k", karton_type="karton"))
 
-    def test_producer_rejects_filters(self):
-        with self.assertRaises(ValueError):
-            claims_from_args(
-                make_args(identity="p", karton_type="producer", filters=self.FILTERS)
-            )
+    def test_producer_accepts_filters(self):
+        # --filters is never rejected: it composes freely with every
+        # --karton-type instead of adding special-case bans
+        operations = self.operations_of(
+            identity="p", karton_type="producer", filters=self.FILTERS
+        )
+        self.assertEqual(
+            operations,
+            [
+                ProduceTaskOperation(foreign_buckets=[]),
+                RegisterBindOperation(
+                    filters=[{"type": "example.RawFeed"}], persistent=True
+                ),
+            ],
+        )
 
-    def test_logconsumer_rejects_filters(self):
-        with self.assertRaises(ValueError):
-            claims_from_args(
-                make_args(identity="l", karton_type="logconsumer", filters=self.FILTERS)
-            )
+    def test_logconsumer_accepts_filters(self):
+        operations = self.operations_of(
+            identity="l", karton_type="logconsumer", filters=self.FILTERS
+        )
+        self.assertEqual(
+            operations,
+            [
+                ConsumeLogOperation(),
+                RegisterBindOperation(
+                    filters=[{"type": "example.RawFeed"}], persistent=True
+                ),
+            ],
+        )
 
     def test_identity_required(self):
         with self.assertRaises(ValueError):
@@ -364,6 +433,12 @@ class TestClaimsExplicitFlags(unittest.TestCase):
     def test_filters_without_identity_error(self):
         with self.assertRaises(ValueError):
             claims_from_args(make_args(filters=['[{"type": "t"}]'], consume_task=True))
+
+    def test_invalid_register_bind_json_error(self):
+        # Malformed --register-bind JSON is reported as a friendly
+        # ValueError instead of a raw JSONDecodeError traceback
+        with self.assertRaises(ValueError):
+            claims_from_args(make_args(identity="x", register_bind=["not json"]))
 
 
 class TestValidateOutput(unittest.TestCase):

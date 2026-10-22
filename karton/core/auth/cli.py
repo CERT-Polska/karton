@@ -11,6 +11,7 @@ from typing import Any
 import jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
+from pydantic import ValidationError
 
 from karton.core.asyncio.base import KartonAsyncBase
 from karton.core.auth.models import (
@@ -25,8 +26,6 @@ from karton.core.auth.models import (
 from karton.core.auth.signer import generate_new_keypair, issue_auth_token
 from karton.core.auth.verifier import decode_auth_token
 from karton.core.base import KartonBase
-from karton.core.query import QueryError
-from karton.core.query import convert as convert_filters
 
 DEFAULT_KEYRING_DIR = Path.home() / ".karton"
 DEFAULT_PRIVATE_KEY_PATH = DEFAULT_KEYRING_DIR / "private.pem"
@@ -135,13 +134,6 @@ def parse_filters_args(raw_filters: list[str] | None) -> list[dict[str, Any]]:
         ):
             raise ValueError(f"--filters expects a JSON list of objects, got: {raw!r}")
         filters.extend(parsed)
-    if filters:
-        # Dummy conversion to make sure the filters are well-formed,
-        # in the same way Consumer.__init__ does.
-        try:
-            convert_filters(filters)
-        except QueryError as e:
-            raise ValueError(f"--filters are not well-formed: {e}") from e
     return filters
 
 
@@ -199,6 +191,25 @@ def dedup_and_sort_operations(
         seen.add(key)
         deduped.append(operation)
     return deduped
+
+
+def parse_register_bind_args(raw_binds: list[str] | None) -> list[AllowedOperation]:
+    """
+    Parse repeatable --register-bind arguments into register_bind operations.
+
+    Each argument must be a JSON object with 'filters' and 'persistent' fields,
+    e.g.: --register-bind '{"filters": [{"type": "example.RawFeed"}], "persistent": true}'
+
+    :param raw_binds: List of raw JSON strings provided via --register-bind
+    :return: List of register_bind operations
+    """
+    operations: list[AllowedOperation] = []
+    for raw in raw_binds or []:
+        try:
+            operations.append(RegisterBindOperation.model_validate_json(raw))
+        except ValidationError as e:
+            raise ValueError(f"--register-bind value is invalid: {raw!r} ({e})") from e
+    return operations
 
 
 def read_passphrase(provided: str | None, *, confirm: bool = False) -> str:
@@ -315,10 +326,6 @@ def claims_from_args(args: argparse.Namespace) -> AuthClaims:
             raise ValueError(
                 f"--karton-type {karton_type} requires at least one --filters JSON list"
             )
-        if raw_filters is not None and karton_type in ("producer", "logconsumer"):
-            raise ValueError(
-                f"--filters are not allowed with --karton-type {karton_type}"
-            )
     elif raw_filters is not None and not args.identity:
         raise ValueError("--identity is required when using --filters")
 
@@ -341,8 +348,7 @@ def claims_from_args(args: argparse.Namespace) -> AuthClaims:
         operations.extend(
             make_register_bind_operations(filters, persistent, non_persistent)
         )
-    for bind in args.register_bind or []:
-        operations.append(RegisterBindOperation.model_validate(json.loads(bind)))
+    operations.extend(parse_register_bind_args(args.register_bind))
     if wants_log:
         operations.append(ConsumeLogOperation())
     if args.debug:
@@ -542,10 +548,7 @@ def main() -> None:
         "--karton-type",
         default=None,
         choices=KARTON_TYPE_CHOICES,
-        help="Karton service type. Implies the typical set of operations: "
-        "'producer' allows producing tasks, 'consumer' allows registering binds "
-        "(requires --filters) and consuming tasks, 'karton' combines producer "
-        "and consumer, 'logconsumer' allows consume log",
+        help="Karton service type (lowercase name of the base class)",
     )
     claims_parser.add_argument(
         "--filters",
