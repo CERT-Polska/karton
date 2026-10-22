@@ -6,6 +6,7 @@ import json
 import socket
 import sys
 from pathlib import Path
+from typing import Any
 
 import jwt
 from cryptography.hazmat.primitives import serialization
@@ -17,16 +18,22 @@ from karton.core.auth.models import (
     AuthClaims,
     ConsumeLogOperation,
     ConsumeTaskOperation,
+    EnableDebugOperation,
     ProduceTaskOperation,
     RegisterBindOperation,
 )
 from karton.core.auth.signer import generate_new_keypair, issue_auth_token
 from karton.core.auth.verifier import decode_auth_token
 from karton.core.base import KartonBase
+from karton.core.query import QueryError
+from karton.core.query import convert as convert_filters
 
 DEFAULT_KEYRING_DIR = Path.home() / ".karton"
 DEFAULT_PRIVATE_KEY_PATH = DEFAULT_KEYRING_DIR / "private.pem"
 DEFAULT_JWKS_PATH = Path("jwks.json")
+
+# Service archetypes accepted by the --karton-type claims argument
+KARTON_TYPE_CHOICES = ("producer", "consumer", "karton", "logconsumer")
 
 
 def default_issuer() -> str:
@@ -105,6 +112,93 @@ def import_karton_class(dotted: str) -> type[KartonBase] | type[KartonAsyncBase]
             "Specify one using 'module:ClassName'"
         )
     return karton_classes[0]
+
+
+def parse_filters_args(raw_filters: list[str] | None) -> list[dict[str, Any]]:
+    """
+    Parse repeatable --filters arguments into a list of filter variants.
+
+    Each argument must be a JSON list of objects, e.g.:
+    --filters '[{"type": "example.RawFeed", "platform": ["linux"]}]'
+
+    :param raw_filters: List of raw JSON strings provided via --filters
+    :return: List of filter variant dictionaries
+    """
+    filters: list[dict[str, Any]] = []
+    for raw in raw_filters or []:
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"--filters value is not valid JSON: {raw!r} ({e})") from e
+        if not isinstance(parsed, list) or not all(
+            isinstance(variant, dict) for variant in parsed
+        ):
+            raise ValueError(f"--filters expects a JSON list of objects, got: {raw!r}")
+        filters.extend(parsed)
+    if filters:
+        # Dummy conversion to make sure the filters are well-formed,
+        # in the same way Consumer.__init__ does.
+        try:
+            convert_filters(filters)
+        except QueryError as e:
+            raise ValueError(f"--filters are not well-formed: {e}") from e
+    return filters
+
+
+def make_register_bind_operations(
+    filters: list[dict[str, Any]],
+    persistent: bool,
+    non_persistent: bool,
+) -> list[AllowedOperation]:
+    """Build RegisterBindOperation claims from filter variants and bind
+    persistence flags.
+
+    :param filters: Filter variants for the bind
+    :param persistent: Emit a persistent bind claim
+    :param non_persistent: Emit a non-persistent bind claim
+    :return: List of register_bind operations
+    """
+    operations: list[AllowedOperation] = []
+    if persistent:
+        operations.append(RegisterBindOperation(filters=filters, persistent=True))
+    if non_persistent:
+        operations.append(RegisterBindOperation(filters=filters, persistent=False))
+    return operations
+
+
+def resolve_bind_persistence(args: argparse.Namespace) -> tuple[bool, bool]:
+    """
+    Resolve which register_bind persistence variants are requested.
+
+    By default only a persistent bind claim is emitted. --non-persistent
+    or --debug replaces it with a non-persistent one. If --persistent is
+    also given, the persistent bind is added back alongside.
+
+    :return: (persistent, non_persistent) tuple of requested variants
+    """
+    non_persistent = args.non_persistent or args.debug
+    persistent = (not non_persistent) or args.persistent
+    return persistent, non_persistent
+
+
+def bind_flags_requested(args: argparse.Namespace) -> bool:
+    """Check whether any register_bind persistence flag was requested."""
+    return any([args.persistent, args.non_persistent, args.debug])
+
+
+def dedup_and_sort_operations(
+    operations: list[AllowedOperation],
+) -> list[AllowedOperation]:
+    """Deduplicate and sort operations into a deterministic order."""
+    seen: set[str] = set()
+    deduped: list[AllowedOperation] = []
+    for operation in sorted(operations, key=lambda op: op.operation):
+        key = operation.model_dump_json()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(operation)
+    return deduped
 
 
 def read_passphrase(provided: str | None, *, confirm: bool = False) -> str:
@@ -209,24 +303,87 @@ def cmd_issue(args: argparse.Namespace) -> None:
 
 
 def claims_from_args(args: argparse.Namespace) -> AuthClaims:
+    """Build AuthClaims from explicit CLI arguments."""
+    raw_filters = args.filters
+    filters = parse_filters_args(raw_filters)
+    karton_type = args.karton_type
+
+    if karton_type is not None:
+        if not args.identity:
+            raise ValueError("--identity is required when using --karton-type")
+        if karton_type in ("consumer", "karton") and raw_filters is None:
+            raise ValueError(
+                f"--karton-type {karton_type} requires at least one --filters JSON list"
+            )
+        if raw_filters is not None and karton_type in ("producer", "logconsumer"):
+            raise ValueError(
+                f"--filters are not allowed with --karton-type {karton_type}"
+            )
+    elif raw_filters is not None and not args.identity:
+        raise ValueError("--identity is required when using --filters")
+
+    foreign_buckets = sorted(set(args.foreign_buckets or []))
+    wants_produce = bool(args.produce_task or foreign_buckets)
+    wants_consume = bool(args.consume_task)
+    wants_log = bool(args.consume_log)
+    if karton_type is not None:
+        wants_produce = wants_produce or karton_type in ("producer", "karton")
+        wants_consume = wants_consume or karton_type in ("consumer", "karton")
+        wants_log = wants_log or karton_type == "logconsumer"
+
     operations: list[AllowedOperation] = []
-    foreign_buckets = args.foreign_buckets or []
-    if args.produce_task or foreign_buckets:
+    if wants_produce:
         operations.append(ProduceTaskOperation(foreign_buckets=foreign_buckets))
-    if args.consume_task:
+    if wants_consume:
         operations.append(ConsumeTaskOperation())
-    if args.register_bind is not None:
-        for bind in args.register_bind:
-            operations.append(RegisterBindOperation.model_validate(json.loads(bind)))
-    if args.consume_log:
+    if raw_filters is not None:
+        persistent, non_persistent = resolve_bind_persistence(args)
+        operations.extend(
+            make_register_bind_operations(filters, persistent, non_persistent)
+        )
+    for bind in args.register_bind or []:
+        operations.append(RegisterBindOperation.model_validate(json.loads(bind)))
+    if wants_log:
         operations.append(ConsumeLogOperation())
-    return AuthClaims(identity=args.identity, allowed_operations=operations)
+    if args.debug:
+        operations.append(EnableDebugOperation())
+
+    return AuthClaims(
+        identity=args.identity,
+        allowed_operations=dedup_and_sort_operations(operations),
+    )
 
 
 def cmd_claims(args: argparse.Namespace) -> None:
     if args.karton is not None:
+        validate_no_conflicting_args(args)
         karton_class = import_karton_class(args.karton)
         claims = get_claims_from_karton_class(karton_class)
+        if bind_flags_requested(args):
+            # Rebuild introspected bind claims with the requested
+            # persistence variants, keeping the class filters verbatim.
+            persistent, non_persistent = resolve_bind_persistence(args)
+            new_ops: list[AllowedOperation] = []
+            for op in claims.allowed_operations:
+                if isinstance(op, RegisterBindOperation):
+                    new_ops.extend(
+                        make_register_bind_operations(
+                            op.filters, persistent, non_persistent
+                        )
+                    )
+                else:
+                    new_ops.append(op)
+            claims = claims.model_copy(
+                update={"allowed_operations": dedup_and_sort_operations(new_ops)}
+            )
+        if args.debug:
+            claims = claims.model_copy(
+                update={
+                    "allowed_operations": dedup_and_sort_operations(
+                        [*claims.allowed_operations, EnableDebugOperation()]
+                    )
+                }
+            )
     elif args.identity is not None:
         claims = claims_from_args(args)
     else:
@@ -235,6 +392,34 @@ def cmd_claims(args: argparse.Namespace) -> None:
             "build AuthClaims from explicit arguments"
         )
     print(claims.model_dump_json(indent=2))
+
+
+def validate_no_conflicting_args(args: argparse.Namespace) -> None:
+    """Reject explicit-claims flags mixed with a positional module/class.
+
+    The module introspection derives operations from the class itself, so
+    operation-defining arguments would be either redundant or ambiguous.
+    """
+    conflicting = [
+        flag
+        for flag, value in (
+            ("--karton-type", args.karton_type),
+            ("--filters", args.filters),
+            ("--identity", args.identity),
+            ("--produce-task", args.produce_task),
+            ("--consume-task", args.consume_task),
+            ("--consume-log", args.consume_log),
+            ("--register-bind", args.register_bind),
+            ("--foreign-buckets", args.foreign_buckets),
+        )
+        if value
+    ]
+    if conflicting:
+        raise ValueError(
+            f"Cannot combine a Karton module/class specifier with "
+            f"{', '.join(conflicting)}. The operations are derived from the "
+            "class itself"
+        )
 
 
 def cmd_validate(args: argparse.Namespace) -> None:
@@ -253,22 +438,21 @@ def cmd_validate(args: argparse.Namespace) -> None:
     grant = decode_auth_token(token, jwk_set)
 
     unverified = jwt.decode_complete(token, options={"verify_signature": False})
-    header = unverified["header"]
     payload = unverified["payload"]
-
-    print("Header:")
-    print(json.dumps(header, indent=2))
-    print()
-    print("Standard claims:")
-    standard = {
+    standard_claims = {
         k: payload[k]
         for k in ("sub", "iss", "aud", "iat", "exp", "ver")
         if k in payload
     }
-    print(json.dumps(standard, indent=2, default=str))
-    print()
-    print("AuthClaims:")
-    print(grant.claims.model_dump_json(indent=2))
+
+    # Single JSON document: machine-readable (one parsable blob)
+    # and human-readable (indented, grouped by section)
+    report = {
+        "header": unverified["header"],
+        "standard_claims": standard_claims,
+        "claims": grant.claims.model_dump(mode="json"),
+    }
+    print(json.dumps(report, indent=2))
 
 
 def main() -> None:
@@ -353,6 +537,47 @@ def main() -> None:
         default=None,
         help="Karton service identity. Use this to build claims from explicit "
         "arguments instead of introspecting a Karton class",
+    )
+    claims_parser.add_argument(
+        "--karton-type",
+        default=None,
+        choices=KARTON_TYPE_CHOICES,
+        help="Karton service type. Implies the typical set of operations: "
+        "'producer' allows producing tasks, 'consumer' allows registering binds "
+        "(requires --filters) and consuming tasks, 'karton' combines producer "
+        "and consumer, 'logconsumer' allows consume log",
+    )
+    claims_parser.add_argument(
+        "--filters",
+        action="append",
+        default=None,
+        metavar="JSON_LIST",
+        help="Bind filters as JSON list of filter variants, e.g. "
+        '\'[{"type": "example.RawFeed"}]\'. '
+        "Required by --karton-type consumer/karton (an empty list or "
+        "'[{}]' is allowed). Repeatable, lists are concatenated",
+    )
+    claims_parser.add_argument(
+        "--persistent",
+        action="store_true",
+        default=False,
+        help="Emit a persistent register_bind claim. By default the bind is "
+        "persistent; this flag re-adds it alongside the non-persistent "
+        "bind requested by --non-persistent or --debug",
+    )
+    claims_parser.add_argument(
+        "--non-persistent",
+        action="store_true",
+        default=False,
+        help="Replace the persistent register_bind claim with a non-persistent one",
+    )
+    claims_parser.add_argument(
+        "--debug",
+        action="store_true",
+        default=False,
+        help="Allow the service to run in debug mode: adds enable_debug "
+        "and implies --non-persistent, as persistent binds are "
+        "rejected in debug mode",
     )
     claims_parser.add_argument(
         "--produce-task",

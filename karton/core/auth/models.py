@@ -14,12 +14,31 @@ class JWKSDict(TypedDict):
     keys: list[dict[str, str]]
 
 
-class RegisterBindOperation(BaseModel):
+class Operation(BaseModel):
+    """Base class for operation entitlements"""
+
+    operation: str
+
+    def covers(self, operation: "Operation") -> bool:
+        """
+        Checks if this entitlement allows the specified operation
+
+        Default implementation authorizes only operations of the same
+        type. Subclasses with additional constraints (e.g. filters or
+        buckets) must override this method to enforce them.
+
+        :param operation: Operation to be authorized
+        :return: True if operation is authorized by this entitlement, False otherwise
+        """
+        return isinstance(operation, self.__class__)
+
+
+class RegisterBindOperation(Operation):
     operation: Literal["register_bind"] = "register_bind"
     filters: list[dict[str, Any]]
     persistent: bool
 
-    def covers(self, operation: "AllowedOperation") -> bool:
+    def covers(self, operation: "Operation") -> bool:
         """
         Checks if this entitlement allows the specified operation
 
@@ -42,24 +61,15 @@ class RegisterBindOperation(BaseModel):
         return True
 
 
-class ConsumeTaskOperation(BaseModel):
+class ConsumeTaskOperation(Operation):
     operation: Literal["consume_task"] = "consume_task"
 
-    def covers(self, operation: "AllowedOperation") -> bool:
-        """
-        Checks if this entitlement allows the specified operation
 
-        :param operation: Operation to be authorized
-        :return: True if operation is authorized by this entitlement, False otherwise
-        """
-        return isinstance(operation, ConsumeTaskOperation)
-
-
-class ProduceTaskOperation(BaseModel):
+class ProduceTaskOperation(Operation):
     operation: Literal["produce_task"] = "produce_task"
     foreign_buckets: list[str] = Field(default_factory=list)
 
-    def covers(self, operation: "AllowedOperation") -> bool:
+    def covers(self, operation: "Operation") -> bool:
         """
         Checks if this entitlement allows the specified operation
 
@@ -71,30 +81,12 @@ class ProduceTaskOperation(BaseModel):
         ).issubset(self.foreign_buckets)
 
 
-class ConsumeLogOperation(BaseModel):
+class ConsumeLogOperation(Operation):
     operation: Literal["consume_log"] = "consume_log"
 
-    def covers(self, operation: "AllowedOperation") -> bool:
-        """
-        Checks if this entitlement allows the specified operation
 
-        :param operation: Operation to be authorized
-        :return: True if operation is authorized by this entitlement, False otherwise
-        """
-        return isinstance(operation, ConsumeLogOperation)
-
-
-class EnableDebugOperation(BaseModel):
+class EnableDebugOperation(Operation):
     operation: Literal["enable_debug"] = "enable_debug"
-
-    def covers(self, operation: "AllowedOperation") -> bool:
-        """
-        Checks if this entitlement allows the specified operation
-
-        :param operation: Operation to be authorized
-        :return: True if operation is authorized by this entitlement, False otherwise
-        """
-        return isinstance(operation, EnableDebugOperation)
 
 
 type AllowedOperation = (
