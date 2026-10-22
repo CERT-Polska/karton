@@ -84,11 +84,25 @@ class ConsumeLogOperation(BaseModel):
         return isinstance(operation, ConsumeLogOperation)
 
 
+class EnableDebugOperation(BaseModel):
+    operation: Literal["enable_debug"] = "enable_debug"
+
+    def covers(self, operation: "AllowedOperation") -> bool:
+        """
+        Checks if this entitlement allows the specified operation
+
+        :param operation: Operation to be authorized
+        :return: True if operation is authorized by this entitlement, False otherwise
+        """
+        return isinstance(operation, EnableDebugOperation)
+
+
 type AllowedOperation = (
     RegisterBindOperation
     | ConsumeTaskOperation
     | ProduceTaskOperation
     | ConsumeLogOperation
+    | EnableDebugOperation
 )
 
 

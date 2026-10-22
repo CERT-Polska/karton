@@ -1,7 +1,6 @@
 import argparse
 import logging
 import os.path
-import uuid
 from configparser import ConfigParser
 from typing import Any
 
@@ -17,10 +16,8 @@ from .karton import Consumer, LogConsumer
 
 log = logging.getLogger(__name__)
 
-cli_service_info = KartonServiceInfo(
-    identity="karton.cli",
-    service_version=__version__,
-    instance_id=str(uuid.uuid4()),
+cli_service_info = KartonServiceInfo.create(
+    identity="karton.cli", service_version=__version__
 )
 
 

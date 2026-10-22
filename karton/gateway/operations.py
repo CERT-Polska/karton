@@ -14,7 +14,7 @@ from karton.core.auth.models import (
 )
 from karton.core.exceptions import BindExpiredError as KartonBindExpiredError
 from karton.core.task import Task, TaskState, root_uid_from_task_uid
-from karton.gateway.errors import BadRequestError
+from karton.gateway.errors import BadRequestError, UnauthorizedError
 
 from .backend import gateway_backend
 from .config import gateway_config
@@ -110,6 +110,9 @@ async def handle_bind_request(
     :param request: Parsed request object
     :param session: Client session that initiated the request
     """
+    if session.service_info.debug and request.message.persistent:
+        raise UnauthorizedError("Only non-persistent bind is allowed in debug mode")
+
     session.can_perform(
         RegisterBindOperation(
             filters=request.message.filters,
