@@ -23,10 +23,6 @@ class Operation(BaseModel):
         """
         Checks if this entitlement allows the specified operation
 
-        Default implementation authorizes only operations of the same
-        type. Subclasses with additional constraints (e.g. filters or
-        buckets) must override this method to enforce them.
-
         :param operation: Operation to be authorized
         :return: True if operation is authorized by this entitlement, False otherwise
         """
