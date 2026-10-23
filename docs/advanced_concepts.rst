@@ -45,7 +45,7 @@ Each task is identified by a tuple of four identifiers:
 
 In order to better understand how those identifiers are inherited and passed between tasks take a look at the following example:
 
-.. image:: task-tree.sv
+.. image:: task-tree.svg
 
 
 Handling logging

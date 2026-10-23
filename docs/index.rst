@@ -12,14 +12,14 @@ This is achieved by combining powers of a few existing solutions, Karton just gl
 
 Karton ecosystem consists of:
 
-- `Redis <https://www.redis.io/>`_ - store used for message exchange between Karton subsystems
+- `Redis <https://redis.io/>`_ - store used for message exchange between Karton subsystems
 
 - Temporary object storage compatible with Amazon S3 API, holds all the heavy objects (aka Resources) like samples, analyses or memory dumps.
   The recommended one is `Silo <https://github.com/pgsty/silo>`_ although Karton should work well with any S3-compatible backend.
 
 - Task routing and data exchange is achieved with the help of **Karton-System** - core of the Karton, which routes the tasks and keeps everything in order (task lifecycle, garbage collection etc.)
 
-- Access to the queues is provided by **Karton Gateway** - a secure Websocket/HTTP-based interface that brokers task queues and resources for Karton services, replacing direct Redis access. Resources are exchanged through S3 presigned URLs, and the Gateway is the primary backend going forward. See :doc:`gateway` for details.
+- Access to the queues is provided by **Karton Gateway** - a secure Websocket/HTTP-based interface that brokers task queues and resources for Karton services, replacing direct Redis access. Resources are exchanged through S3 presigned URLs.
 
 .. code-block:: python
 
@@ -64,13 +64,13 @@ Karton ecosystem consists of:
    :maxdepth: 2
    :caption: Karton reference:
 
+   migrating_to_6.x
    breaking_changes
    getting_started
    service_examples
    task_headers_payloads
    service_configuration
    advanced_concepts
-   gateway
    unit_tests
    asyncio
    karton_api
