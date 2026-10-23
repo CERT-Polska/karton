@@ -228,12 +228,16 @@ async def generate_resource_upload_urls(
 async def generate_resource_download_urls(
     task: Task,
     allowed_buckets: list[str],
+    omit_disallowed_buckets: bool = False,
 ) -> list[ResourceUrl]:
     """
     Generates a list of presigned download URLs for an incoming task
 
     :param task: Task containing resources
     :param allowed_buckets: Allowed target buckets to use for resource download
+    :param omit_disallowed_buckets: |
+        If True (default is False), function just doesn't generate download URLs
+        for resources referencing disallowed buckets instead of raising InvalidTaskError.
     :return: List of ResourceUrl objects with presigned download URLs
     """
     resources = {}
@@ -248,6 +252,8 @@ async def generate_resource_download_urls(
             # Already processed
             continue
         if bucket not in allowed_buckets:
+            if omit_disallowed_buckets:
+                continue
             raise InvalidTaskError(
                 f"Task is referencing a bucket '{bucket}' "
                 f"but gateway server is not allowed to access it."

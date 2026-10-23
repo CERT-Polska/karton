@@ -3,11 +3,12 @@ import json
 import logging
 import os
 import time
-from collections import defaultdict, namedtuple
+from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from typing import (
     IO,
     Any,
+    Literal,
     cast,
 )
 
@@ -20,7 +21,6 @@ from botocore.credentials import (
 from botocore.session import get_session
 from redis import AuthenticationError, Redis
 from redis.client import Pipeline
-from urllib3.response import HTTPResponse
 
 from karton.core.config import Config
 from karton.core.exceptions import BindExpiredError
@@ -33,6 +33,8 @@ from .base import (
     KartonBind,
     KartonExternalServiceInfo,
     KartonMetrics,
+    KartonOutputs,
+    KartonQueueState,
     KartonServiceInfo,
     unserialize_bind,
 )
@@ -44,7 +46,6 @@ KARTON_TASK_NAMESPACE = "karton.task"
 KARTON_OUTPUTS_NAMESPACE = "karton.outputs"
 KARTON_SERVICES_NAMESPACE = "karton.services"
 
-KartonOutputs = namedtuple("KartonOutputs", ["identity", "outputs"])
 logger = logging.getLogger(__name__)
 
 
@@ -431,20 +432,9 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
                 yield service
 
     def get_online_services(self) -> list[KartonExternalServiceInfo]:
-        """
-        Gets all online services providing extended service information.
-
-        :return: List of KartonServiceInfo objects
-        """
         return list(self._get_online_services())
 
     def get_online_identities(self) -> dict[str, list[KartonExternalServiceInfo]]:
-        """
-        Returns a dictionary for all online identities with list of
-        KartonServiceInfo of each instance
-
-        :return: Dictionary {identity: [list of KartonServiceInfo objects]}
-        """
         identities: defaultdict[str, list[KartonExternalServiceInfo]] = defaultdict(
             list
         )
@@ -838,7 +828,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         new_task.orig_uid = task.orig_uid
         new_task.status = TaskState.SPAWNED
 
-        p = self.make_pipeline()
+        p = self.make_pipeline(transaction=True)
         self.register_task(new_task, pipe=p)
         self.produce_routed_task(new_task.headers["receiver"], new_task, pipe=p)
         self.set_task_status(task, status=TaskState.FINISHED, pipe=p)
@@ -926,15 +916,13 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         p.execute()
 
     def get_metrics(self, metric: KartonMetrics) -> dict[str, int]:
-        """
-        Get a {karton-identity: current-number-of-tasks} mapping for a given metric.
-
-        :param metric: Operation metric type
-        """
         return {
             k: int(v)
             for k, v in cast(dict[str, str], self.redis.hgetall(metric.value)).items()
         }
+
+    def get_all_metrics(self) -> dict[KartonMetrics, dict[str, int]]:
+        return {metric: self.get_metrics(metric) for metric in KartonMetrics}
 
     def upload_resource(
         self,
@@ -955,19 +943,17 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         with open(path, "rb") as f:
             self.upload_resource(resource, f)
 
-    def get_object(self, bucket: str, object_uid: str) -> HTTPResponse:
-        """
-        Get resource object stream with the content.
+    def iter_download_resource(
+        self, resource: RemoteResource, chunk_size: int = 64 * 1024
+    ) -> Iterator[bytes]:
+        if resource.bucket is None:
+            raise RuntimeError(
+                "Resource object can't be downloaded because its bucket is not set"
+            )
 
-        Returned response should be closed after use to release network resources.
-        To reuse the connection, it's required to call `response.release_conn()`
-        explicitly.
-
-        :param bucket: Bucket name
-        :param object_uid: Object identifier
-        :return: Response object with content
-        """
-        return self.s3.get_object(Bucket=bucket, Key=object_uid)["Body"]
+        with self.s3.get_object(Bucket=resource.bucket, Key=resource.uid)["Body"] as f:
+            while chunk := f.read(chunk_size):
+                yield chunk
 
     def download_resource(self, resource: RemoteResource) -> bytes:
         if resource.bucket is None:
@@ -1114,6 +1100,101 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             )
             for identity in output_keys
         ]
+
+    def get_queues(self, parse_resources: bool = False) -> dict[str, KartonQueueState]:
+        binds = {bind.identity: bind for bind in self.get_binds()}
+        replicas = self.get_online_identities()
+
+        pending_uids: dict[str, list[str]] = defaultdict(list)
+        crashed_uids: dict[str, list[str]] = defaultdict(list)
+
+        for task in self.iter_all_tasks(parse_resources=parse_resources):
+            receiver = task.headers.get("receiver")
+            if receiver is None or receiver not in binds:
+                continue
+            if task.status == TaskState.FINISHED:
+                continue
+            if task.status == TaskState.CRASHED:
+                crashed_uids[receiver].append(task.uid)
+            else:
+                pending_uids[receiver].append(task.uid)
+
+        queues: dict[str, KartonQueueState] = {}
+        for identity, bind in binds.items():
+            queues[identity] = KartonQueueState(
+                bind=bind,
+                replicas=len(replicas.get(identity, [])),
+                pending_task_uids=pending_uids.get(identity, []),
+                crashed_task_uids=crashed_uids.get(identity, []),
+            )
+        return queues
+
+    def get_analysis_tasks(self, root_uid: str) -> dict[str, list[Task]]:
+        """
+        Get all non-finished tasks belonging to the same analysis tree,
+        grouped by receiver queue.
+
+        :param root_uid: Root identifier of the analysis task tree
+        :return: Dictionary mapping receiver queue identity to list of tasks
+        """
+        binds = {bind.identity for bind in self.get_binds()}
+        tasks_per_queue: dict[str, list[Task]] = defaultdict(list)
+
+        for task in self.iter_task_tree(root_uid, parse_resources=False):
+            if task.status == TaskState.FINISHED:
+                continue
+            receiver = task.headers.get("receiver")
+            if receiver is None or receiver not in binds:
+                continue
+            tasks_per_queue[receiver].append(task)
+
+        return dict(tasks_per_queue)
+
+    def cancel_task(self, task: Task) -> None:
+        self.set_task_status(task, TaskState.FINISHED)
+
+    def restart_queue_crashed_tasks(
+        self,
+        identity: str,
+    ) -> list[tuple[str, str]]:
+        """
+        Restart all tasks matching the given status in a queue.
+
+        :param identity: Karton service identity (queue name)
+        :param status: Which tasks to restart (``"crashed"`` or ``"pending"``)
+        :return: List of ``(old_uid, new_uid)`` pairs for each restarted task
+        """
+        restarted: list[tuple[str, str]] = []
+        for task in self.iter_all_tasks(parse_resources=False):
+            if task.headers.get("receiver") != identity:
+                continue
+            if task.status != TaskState.CRASHED:
+                continue
+            new_task = self.restart_task(task)
+            restarted.append((task.uid, new_task.uid))
+        return restarted
+
+    def cancel_queue_tasks(
+        self,
+        identity: str,
+        status: Literal["crashed", "pending"] = "crashed",
+    ) -> None:
+        """
+        Cancel all tasks matching the given status in a queue.
+
+        :param identity: Karton service identity (queue name)
+        :param status: Which tasks to cancel (``"crashed"`` or ``"pending"``)
+        """
+        for task in self.iter_all_tasks(parse_resources=False):
+            if task.headers.get("receiver") != identity:
+                continue
+            if status == "crashed":
+                if task.status != TaskState.CRASHED:
+                    continue
+            else:
+                if task.status in (TaskState.FINISHED, TaskState.CRASHED):
+                    continue
+            self.set_task_status(task, TaskState.FINISHED)
 
     def make_pipeline(self, transaction: bool = False) -> Pipeline:
         return self.redis.pipeline(transaction=transaction)

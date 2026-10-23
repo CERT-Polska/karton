@@ -17,11 +17,16 @@ from karton.core.asyncio.base import KartonAsyncBase
 from karton.core.auth.models import (
     AllowedOperation,
     AuthClaims,
+    CancelTaskOperation,
     ConsumeLogOperation,
     ConsumeTaskOperation,
     EnableDebugOperation,
+    GetMetricsOperation,
+    InspectKartonOperation,
     ProduceTaskOperation,
     RegisterBindOperation,
+    RemoveBindOperation,
+    RestartTaskOperation,
 )
 from karton.core.auth.signer import generate_new_keypair, issue_auth_token
 from karton.core.auth.verifier import decode_auth_token
@@ -353,6 +358,16 @@ def claims_from_args(args: argparse.Namespace) -> AuthClaims:
         operations.append(ConsumeLogOperation())
     if args.debug:
         operations.append(EnableDebugOperation())
+    if args.inspect_karton:
+        operations.append(InspectKartonOperation())
+    if args.restart_task:
+        operations.append(RestartTaskOperation())
+    if args.cancel_task:
+        operations.append(CancelTaskOperation())
+    if args.remove_bind:
+        operations.append(RemoveBindOperation())
+    if args.get_metrics:
+        operations.append(GetMetricsOperation())
 
     return AuthClaims(
         identity=args.identity,
@@ -596,6 +611,31 @@ def main() -> None:
         "--consume-log",
         action="store_true",
         help="Allow the consume_log operation",
+    )
+    claims_parser.add_argument(
+        "--inspect-karton",
+        action="store_true",
+        help="Allow the inspect_karton operation",
+    )
+    claims_parser.add_argument(
+        "--restart-task",
+        action="store_true",
+        help="Allow the restart_task operation",
+    )
+    claims_parser.add_argument(
+        "--cancel-task",
+        action="store_true",
+        help="Allow the cancel_task operation",
+    )
+    claims_parser.add_argument(
+        "--remove-bind",
+        action="store_true",
+        help="Allow the remove_bind operation",
+    )
+    claims_parser.add_argument(
+        "--get-metrics",
+        action="store_true",
+        help="Allow the get_metrics operation",
     )
     claims_parser.add_argument(
         "--register-bind",

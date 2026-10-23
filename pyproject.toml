@@ -28,7 +28,7 @@ karton = "karton.core.main:main"
 karton-auth = "karton.core.auth.cli:main"
 
 [tool.setuptools]
-packages = ["karton.core", "karton.core.auth", "karton.core.asyncio", "karton.core.backend", "karton.core.asyncio.backend", "karton.system", "karton.gateway"]
+packages = ["karton.core", "karton.core.auth", "karton.core.asyncio", "karton.core.backend", "karton.core.asyncio.backend", "karton.system", "karton.gateway", "karton.gateway.rest", "karton.gateway.rest.routes"]
 
 [tool.setuptools.dynamic]
 version = {attr = "karton.core.__version__.__version__"}
@@ -47,6 +47,7 @@ extend-ignore = [
     "ASYNC230",
     "BLE001",
     "RUF012",
+    "SIM102",
     "SIM103",
     "SIM115",
     "TRY004",
