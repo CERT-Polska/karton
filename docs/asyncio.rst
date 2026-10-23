@@ -20,7 +20,7 @@ from ``karton.core.asyncio`` package and use ``async def`` keyword in ``process(
     from karton.core.asyncio import Consumer, Task
 
     class FooBarConsumer(Consumer):
-        identity = "foobar-consumer"
+        identity = "karton.foobar-consumer"
         filters = [
             {
                 "type": "foobar"
@@ -49,7 +49,7 @@ Synchronous version of KartonBackend connects to the Redis/S3 in the Producer co
     import asyncio
     from karton.core.asyncio import Producer, Task
 
-    foo_producer = Producer(identity="foobar-producer")
+    foo_producer = Producer(identity="karton.foobar-producer")
 
     async def main():
         await foo_producer.connect()
@@ -74,7 +74,7 @@ tasks via ``concurrency_limit`` configuration argument.
     from karton.core.asyncio import Consumer, Task
 
     class FooBarConsumer(Consumer):
-        identity = "foobar-consumer"
+        identity = "karton.foobar-consumer"
         filters = [
             {
                 "type": "foobar"
@@ -107,14 +107,6 @@ and handle the `asyncio.CancelledError <https://docs.python.org/3/library/asynci
 if they want to gracefully terminate their operations in case of ``SIGINT``/``SIGTERM`` or exceeded ``task_timeout``.
 
 Asynchronous Karton can't interrupt blocking/hanged operations.
-
-Known issues: reported number of replicas
------------------------------------------
-
-When using asyncio-based Karton consumers, be aware that the reported number of replicas may not accurately reflect
-the actual number of running consumer instances.
-
-This is due to how the Karton framework determines the replica count — it relies on counting active Redis connections.
 
 Missing features
 ----------------
