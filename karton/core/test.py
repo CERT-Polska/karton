@@ -258,7 +258,6 @@ class KartonTestCase(unittest.TestCase):
                 size=resource.size,
                 backend=backend,
                 sha256=resource.sha256,
-                _flags=resource._flags,
             )
 
         task.transform_payload_bags(local_resource_to_remote)

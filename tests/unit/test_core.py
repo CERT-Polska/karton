@@ -68,5 +68,5 @@ class TestTaskLargeNumber(unittest.TestCase):
                 "n": huge_n,
             },
         )
-        task = Task.unserialize(task.serialize(), parse_resources=False)
+        task = Task.unserialize(task.serialize())
         self.assertTrue(task.payload["n"] == huge_n)

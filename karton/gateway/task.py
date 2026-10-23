@@ -2,7 +2,6 @@ import dataclasses
 import datetime
 import enum
 import uuid
-from collections.abc import Callable
 from typing import Any, TypedDict
 
 import jwt
@@ -13,9 +12,8 @@ from karton.core.gateway_protocol import (
     ResourceUrl,
     ValidatedDeclaredResourceSpec,
 )
-from karton.core.resource import ResourceBase
-from karton.core.task import Task, TaskState
-from karton.core.utils import recursive_map
+from karton.core.resource import ResourceBase, ResourceData
+from karton.core.task import Task, TaskState, map_resource_data
 from karton.gateway.backend import gateway_backend
 from karton.gateway.errors import InvalidTaskError, InvalidTaskTokenError
 
@@ -85,17 +83,6 @@ def make_task_token(
     return jwt.encode(payload, secret_key, algorithm="HS256")
 
 
-def map_resources(obj: Any, mapper: Callable[[dict[str, Any]], Any]) -> Any:
-    return recursive_map(
-        lambda el: (
-            mapper(el["__karton_resource__"])
-            if type(el) is dict and "__karton_resource__" in el
-            else el
-        ),
-        obj,
-    )
-
-
 def is_resource_allowed(
     uid: str, bucket: str, allowed_parent_resources: list[AllowedResource]
 ):
@@ -126,7 +113,7 @@ def process_declared_task_resources(
     resources: dict[tuple[str, str], ValidatedDeclaredResourceSpec] = {}
     referenced_foreign_buckets: set[str] = set()
 
-    def process_resource(resource_data: dict[str, Any]) -> ResourceBase:
+    def process_resource(resource_data: ResourceData) -> ResourceBase:
         try:
             resource_spec = DeclaredResourceSpec.model_validate(resource_data)
         except ValidationError as e:
@@ -204,7 +191,7 @@ def process_declared_task_resources(
             bucket=validated_spec.bucket,
         )
 
-    transformed_payload_bags = map_resources(payload_bags, process_resource)
+    transformed_payload_bags = map_resource_data(payload_bags, process_resource)
     return (
         transformed_payload_bags,
         list(resources.values()),
