@@ -39,7 +39,7 @@ def direct_producer():
 def gateway_producer():
     config = Config(check_sections=False)
     config._config.clear()
-    config.set("gateway", "url", "ws://gateway:8000/gateway")
+    config.set("gateway", "url", "http://gateway:8000/")
     service_info = KartonServiceInfo.create(identity="test-producer-gateway")
     backend = get_backend(config, service_info=service_info)
     producer = Producer(
@@ -60,7 +60,7 @@ def gateway_verifier() -> KartonBackendProtocol:
     """
     config = Config(check_sections=False)
     config._config.clear()
-    config.set("gateway", "url", "ws://gateway:8000/gateway")
+    config.set("gateway", "url", "http://gateway:8000/")
     service_info = KartonServiceInfo.create(identity="karton.test-verifier")
     backend = get_backend(config, service_info=service_info)
     backend.register_bind(

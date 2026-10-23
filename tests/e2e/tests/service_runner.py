@@ -261,7 +261,7 @@ def start_service(
     identity = _service_identity(backend_type, instance)
 
     if backend_type.startswith("gateway-"):
-        config_dict = {"gateway": {"url": "ws://gateway:8000/gateway"}}
+        config_dict = {"gateway": {"url": "http://gateway:8000"}}
     else:
         config_dict = {
             "redis": {"host": "redis", "port": "6379"},

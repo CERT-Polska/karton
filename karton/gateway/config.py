@@ -9,7 +9,7 @@ from karton.core.config import Config
 
 class GatewayServerConfig(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    secret_key: str = Field(..., min_length=32)
+    secret_key: str = Field(..., min_length=64)
     auth_required: bool
     jwks: jwt.PyJWKSet | None
     allowed_foreign_buckets: list[str]
