@@ -68,7 +68,10 @@ class KartonGatewayBackendBase:
         self.config = config
         self.service_info = service_info
 
-        self.gateway_url = self.config.get("gateway", "url")
+        self.gateway_base_url = self.config.get("gateway", "url")
+        self.gateway_url, self.rest_url = self._derive_gateway_urls(
+            self.gateway_base_url
+        )
         self.gateway_s3_hostname_override = self.config.get(
             "gateway", "s3_hostname_override"
         )
@@ -100,6 +103,24 @@ class KartonGatewayBackendBase:
             "gateway", "response_timeout", 15
         )
         self._bind_id: str | None = None
+
+    @staticmethod
+    def _derive_gateway_urls(gateway_url: str) -> tuple[str, str]:
+        parsed = urllib.parse.urlparse(gateway_url)
+        if parsed.scheme == "http":
+            ws_scheme = "ws"
+        elif parsed.scheme == "https":
+            ws_scheme = "wss"
+        else:
+            raise ValueError(
+                f"Gateway URL must start with http or https scheme (found '{parsed.scheme}')."
+            )
+        path = parsed.path
+
+        rest_url = parsed._replace(path=path.rstrip("/") + "/api/v1")
+        ws_url = parsed._replace(scheme=ws_scheme, path=path.rstrip("/") + "/gateway")
+
+        return urllib.parse.urlunparse(ws_url), urllib.parse.urlunparse(rest_url)
 
     def _validate_local_resources(
         self, resources: dict[ResourceIdentifier, LocalResourceBase]
