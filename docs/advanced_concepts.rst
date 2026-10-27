@@ -48,10 +48,9 @@ In order to better understand how those identifiers are inherited and passed bet
 .. image:: task-tree.svg
 
 
-
 Handling logging
 ----------------
-By default, all systems inheriting from :py:meth:`karton.core.KartonBase` will have a custom :py:meth:`logging.Logger` instance exposed as :py:meth:`log`. It publishes all logged messages to a special PUBSUB key on the central Redis database.
+By default, all systems inheriting from :py:meth:`karton.core.KartonBase` will register a :py:meth:`logging.Logger` instance which is named after the identity and exposed as :py:meth:`log`. It publishes all logged messages to a special PUBSUB key on the central Redis database.
 
 In order to store the logs into a persistent storage like Splunk or Rsyslog you have to implement a service that will consume the log entries and send them to the final database, for an example of such service see :ref:`example-consuming-logs`.
 

@@ -335,7 +335,7 @@ Karton library includes a helper method for that kind of archives, called :func:
 
 Files contained in ``directory_path`` are stored under relative paths to the provided directory path. Default compression level is ``zipfile.ZIP_DEFLATED`` instead of ``zipfile.ZIP_STORED``.
 
-Directory resources are deserialized to the usual :class:`RemoteResource` objects but in contrary to the usual resources they can for example be extracted to directories using :func:`RemoteResource.extract_temporary`
+Directory resources are deserialized to the usual :class:`RemoteResource` objects but as they carry a ZIP file they can be extracted directly to the directory using :func:`RemoteResource.extract_temporary`
 
 .. code-block:: python
 
@@ -346,7 +346,7 @@ Directory resources are deserialized to the usual :class:`RemoteResource` object
             with dumps.extract_temporary() as dumps_path:
                 ...
 
-If we don't want to extract all files, we can work directly with :class:`zipfile.ZipFile` object, which will be internally downloaded from S3 to the temporary file using :py:meth:`RemoteResource.download_temporary_file` method.
+If you don't want to extract all files, you can work directly with :class:`zipfile.ZipFile` object, which after entering a ``zip_file()`` context manager will be internally downloaded from S3 to the temporary file using :py:meth:`RemoteResource.download_temporary_file` method.
 
 .. code-block:: python
 
@@ -364,7 +364,7 @@ More information about resources can be found in API documentation.
 Persistent payload
 ------------------
 
-Part of payload that is propagated to the whole task subtree. The common use-case is to keep information related not with single artifact but the whole analysis, so they're available everywhere even if not explicitly passed by the Karton Service.
+Persistent payloads are propagated to the whole task subtree. The common use-case is to keep information related not with single artifact but the whole analysis, so they're available everywhere even if not explicitly passed by the Karton Service.
 
 .. code-block:: python
 

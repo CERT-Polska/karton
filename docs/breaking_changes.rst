@@ -3,6 +3,8 @@ Breaking changes
 
 This chapter will describe significant changes introduced in major version releases of Karton. Versions before 4.0.0 were not officially released, so they have value only for internal purposes. Don't worry about it if you are a new user.
 
+.. _breaking-changes-6-0:
+
 What is changed in Karton 6.0.0
 -------------------------------
 
@@ -45,7 +47,7 @@ Configuration
 
       [gateway]
       url = ws://gateway.example.com:8000/gateway
-      password = ...
+      auth_tokens = ...
       ; optional:
       s3_hostname_override = gateway.example.com:9000
       retries = 5
@@ -59,9 +61,8 @@ Configuration
   .. code-block:: ini
 
       [gateway-server]
-      secret_key = ...    ; at least 32 characters
-      password = ...      ; at least 16 characters
-      allowed_buckets = bucket-one,bucket-two   ; comma-separated, not JSON
+      secret_key = ...    ; at least 64 characters
+      allowed_foreign_buckets = bucket-one,bucket-two   ; comma-separated, not JSON
 
 Backend and service identity
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
