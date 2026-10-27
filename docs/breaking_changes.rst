@@ -8,19 +8,19 @@ This chapter will describe significant changes introduced in major version relea
 What is changed in Karton 6.0.0
 -------------------------------
 
-As in the 5.x release: Karton-System and core services are still able to communicate with previous versions.
-Karton service code shouldn't require any changes to migrate to 6.x. The breaking changes are internal,
-so they may require attention only if your code operates directly on the Karton Backend.
+.. note::
 
-Version 6.0.0 introduces a new type of backend API called the Karton Gateway API. Karton services communicate via
-a Websocket/REST API server (called the Karton Gateway Server) instead of direct calls to the Redis database. Resources
-are exchanged via S3 presigned URLs issued by the Karton Gateway, so no direct S3 authentication is needed.
+    Migration instructions can be found in :ref:`migrating-to-6.x` chapter.
 
-Karton Gateway is considered the primary backend going forward. The Redis-based interface (called "Direct backend")
-still works but is considered legacy, and users are encouraged to migrate to the Gateway-based setup.
+Version 6.0.0 breaks compatibility with Karton 4.x and older. Before upgrade, ensure that your services are using at least karton-core 5.0.0.
 
-The Karton Gateway Server is a separate service shipped within this package and runs as a FastAPI/gunicorn
-application. Install it together with the extra dependencies::
+Karton service code shouldn't require any changes to migrate to 6.x. The breaking changes are internal, so they may require attention only if your code operates directly on the Karton Backend.
+
+Version 6.0.0 introduces a new type of backend API called the Karton Gateway API. Karton services communicate via a Websocket/REST API server (called the Karton Gateway Server) instead of direct calls to the Redis database. Resources are exchanged via S3 presigned URLs issued by the Karton Gateway, so no direct S3 authentication is needed.
+
+Karton Gateway is considered the primary backend going forward. The Redis-based interface (called "Direct backend") still works but is considered legacy, and users are encouraged to migrate to the Gateway-based setup.
+
+The Karton Gateway Server is a separate service shipped within this package and runs as a FastAPI/gunicorn application. Install it together with the extra dependencies::
 
     pip install karton-core[gateway]
 
@@ -29,9 +29,7 @@ Python and dependencies
 ^^^^^^^^^^^^^^^^^^^^^^^
 
 * Python 3.12 or newer is now required.
-* New runtime dependencies were added: ``httpx2``, ``pydantic`` and ``websockets`` to support the Gateway
-  backend implementation. The Gateway Server additionally requires ``fastapi``, ``pyjwt`` and ``gunicorn``
-  (provided by the ``gateway`` extra).
+* New runtime dependencies were added: ``httpx2``, ``pydantic`` and ``websockets`` to support the Gateway backend implementation. The Gateway Server additionally requires ``fastapi``, ``pyjwt`` and ``gunicorn`` (provided by the ``gateway`` extra).
 
 Configuration
 ^^^^^^^^^^^^^
@@ -139,6 +137,10 @@ Resources
 
 * :meth:`RemoteResource.remove` has been removed.
 
+* :py:attr:`ResourceBase._flags` has been removed.
+
+* Removed redundant ``metadata.sha256`` from serialized ``__karton_resource__`` dictionary. Now SHA256 is serialized only into ``sha256`` key.
+
 * Backend object-storage methods were renamed to operate on resource objects rather than
   ``(bucket, uid)`` pairs:
 
@@ -153,13 +155,11 @@ Resources
       - backend.download_object_to_file(bucket, uid, path)
       + backend.download_resource_to_file(resource, path)
 
-  The public :meth:`Resource.upload`, :meth:`RemoteResource.download` and
-  :meth:`RemoteResource.download_to_file` APIs are unchanged; only custom backend subclasses are
-  affected.
+Tasks
+^^^^^
 
-* :meth:`RemoteResource.download` and :meth:`RemoteResource.download_to_file` no longer raise
-  ``"bucket is not set"`` — bucket resolution is now the backend's responsibility, which is required for
-  the Gateway backend where resources are fetched via presigned URLs.
+* Removed ``parse_resources`` flag from :meth:`Task.unserialize`. ``resource_unserializer`` set to None should be used instead (it's a default value)
+* Tasks are always deserialized using ``orjson`` (with fallback to Python ``json`` in case of errors). In 5.x ``orjson`` was used only when tasks were unserialized with ``parse_resources`` set to ``False``.
 
 Consumer behavior
 ^^^^^^^^^^^^^^^^^

@@ -1,12 +1,11 @@
+.. _migrating-to-6.x:
+
 Migration to Karton 6.x
 =======================
 
-Version 6.0.0 introduces a new type of backend API called the Karton Gateway API. Karton services communicate via
-a Websocket/REST API server (called the Karton Gateway Server) instead of direct calls to the Redis database. Resources
-are exchanged via S3 presigned URLs issued by the Karton Gateway, so no direct S3 authentication is needed.
+Version 6.0.0 introduces a new type of backend API called the Karton Gateway API. Karton services communicate via a Websocket/REST API server (called the Karton Gateway Server) instead of direct calls to the Redis database. Resources are exchanged via S3 presigned URLs issued by the Karton Gateway, so no direct S3 authentication is needed.
 
-Karton Gateway Server introduces a fine-grained authorization system based on public-key cryptography. It is required
-by default, but can be turned off for migration/development purposes.
+Karton Gateway Server introduces a fine-grained authorization system based on public-key cryptography. It is required by default, but can be turned off for migration/development purposes.
 
 To allow easier migration:
 
