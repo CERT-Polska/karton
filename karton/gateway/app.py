@@ -1,13 +1,14 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, status
+from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect, status
 
 from .backend import gateway_backend
 from .errors import InternalError, KartonGatewayError, ShutdownError
 from .logger import set_connection_id, setup_logger
 from .messages import close_websocket, send_error
 from .session import ClientSession
+from .shutdown import shutdown_latch
 
 
 @asynccontextmanager
@@ -29,6 +30,14 @@ async def try_send_error(websocket: WebSocket, error: KartonGatewayError):
         await send_error(websocket, error)
     except WebSocketDisconnect:
         logger.warning("Client disconnected before error could be sent")
+
+
+@app.get("/status")
+async def status_endpoint(response: Response):
+    if shutdown_latch.shutdown_in_progress:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return {"message": "Server shutting down"}
+    return {"message": "OK"}
 
 
 @app.websocket("/gateway")
