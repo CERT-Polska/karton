@@ -282,9 +282,8 @@ class SystemService(KartonServiceBase):
         self.backend.register_tasks(tasks)
 
     def process_routing(self) -> None:
-        # Order does matter! task dispatching must be before
-        # karton.operations to avoid races. Timeout must be shorter
-        # than self.gc_interval, but not too long allowing graceful shutdown
+        # Timeout must be shorter than self.gc_interval,
+        # but not too long allowing graceful shutdown
         data = self.backend.consume_queues([KARTON_TASKS_QUEUE], timeout=5)
         if data:
             queue, body = data
