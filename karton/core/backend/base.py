@@ -169,6 +169,26 @@ def unserialize_bind(identity: str, bind: dict[str, Any]) -> KartonBind:
     )
 
 
+def make_tombstone_bind(identity: str) -> KartonBind:
+    """
+    Makes non-persistent bind with empty filters to
+    stop receiving tasks and let GC cancel tasks
+    and delete the bind. This is safe method of deleting
+    consumer queue.
+
+    :param identity: Identity for the tombstone bind
+    """
+    return KartonBind(
+        identity=identity,
+        info=None,
+        version=__version__,
+        persistent=False,
+        filters=[],
+        service_version=None,
+        is_async=False,
+    )
+
+
 @dataclasses.dataclass(frozen=True)
 class KartonOutputs:
     """
@@ -379,6 +399,15 @@ class KartonBackendProtocol(Protocol):
 
         :param identity: Karton service identity
         :return: KartonBind object or None if not found
+        """
+
+    def mark_bind_for_deletion(self, identity: str) -> None:
+        """
+        Replace the bind with non-persistent bind with empty filters.
+        This is "mark for deletion" for Karton System GC.
+        All pending tasks in the queue will be canceled.
+
+        :param identity: Identity to be marked for deletion
         """
 
     def get_online_services(self) -> list[KartonExternalServiceInfo]:

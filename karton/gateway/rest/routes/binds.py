@@ -1,7 +1,5 @@
 from fastapi import Depends, HTTPException, Response
 
-from karton.core.__version__ import __version__
-from karton.core.backend import KartonBind
 from karton.gateway.backend import gateway_backend
 from karton.gateway.rest.auth import (
     CanInspectKarton,
@@ -41,16 +39,5 @@ async def delete_bind(identity: str) -> Response:
                 "before it can be deleted"
             ),
         )
-    # Replace the bind with non-persistent bind with empty filters.
-    # This is "mark for deletion" for Karton System GC
-    tombstone_bind = KartonBind(
-        identity=identity,
-        info=None,
-        version=__version__,
-        persistent=False,
-        filters=[],
-        service_version=None,
-        is_async=False,
-    )
-    await gateway_backend.register_bind(tombstone_bind, bind_backend=False)
+    await gateway_backend.mark_bind_for_deletion(identity)
     return Response(status_code=204)

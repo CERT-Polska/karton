@@ -36,6 +36,7 @@ from .base import (
     KartonOutputs,
     KartonQueueState,
     KartonServiceInfo,
+    make_tombstone_bind,
     unserialize_bind,
 )
 
@@ -359,6 +360,9 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         :param identity: Identity to be unregistered
         """
         self.redis.hdel(KARTON_BINDS_HSET, identity)
+
+    def mark_bind_for_deletion(self, identity: str) -> None:
+        self.register_bind(make_tombstone_bind(identity))
 
     def get_online_consumers(self) -> dict[str, list[dict[str, str]]]:
         """

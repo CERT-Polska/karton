@@ -572,6 +572,12 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
         response.raise_for_status()
         return self._bind_from_view(BindView.model_validate_json(response.content))
 
+    def mark_bind_for_deletion(self, identity: str) -> None:
+        response = self._http_client.delete(f"/binds/{identity}")
+        if response.status_code == 404:
+            return
+        response.raise_for_status()
+
     def get_online_services(self) -> list[KartonExternalServiceInfo]:
         response = self._http_client.get("/services")
         response.raise_for_status()

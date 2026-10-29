@@ -17,7 +17,11 @@ from redis.exceptions import AuthenticationError
 from karton.core import Config, Task
 from karton.core.asyncio.resource import LocalResource, RemoteResource, ResourceData
 from karton.core.backend import KartonBind, KartonMetrics, KartonServiceInfo
-from karton.core.backend.base import KartonExternalServiceInfo, KartonOutputs
+from karton.core.backend.base import (
+    KartonExternalServiceInfo,
+    KartonOutputs,
+    make_tombstone_bind,
+)
 from karton.core.backend.direct import (
     KARTON_BINDS_HSET,
     KARTON_OUTPUTS_NAMESPACE,
@@ -360,6 +364,9 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             return self.unserialize_bind(bind.identity, old_serialized_bind)
         else:
             return None
+
+    async def mark_bind_for_deletion(self, identity: str) -> None:
+        await self.register_bind(make_tombstone_bind(identity), bind_backend=False)
 
     async def _get_online_gateway_services(
         self,

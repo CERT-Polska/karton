@@ -7,12 +7,11 @@ from typing import Any
 import boto3
 from redis import StrictRedis
 
-from karton.core.backend import KartonServiceInfo
-
 from .__version__ import __version__
-from .backend import KartonBackend
+from .backend import KartonServiceInfo, get_backend
+from .backend.direct import KartonBackendBase
 from .config import Config
-from .karton import Consumer, LogConsumer
+from .karton import LogConsumer
 
 log = logging.getLogger(__name__)
 
@@ -151,7 +150,7 @@ def configuration_wizard(config_filename: str) -> None:
 
 
 def print_bind_list(config: Config, output_format: str) -> None:
-    backend = KartonBackend(config=config, service_info=cli_service_info)
+    backend = get_backend(config=config, service_info=cli_service_info)
 
     if output_format == "table":
         # Print a human-readable table-like version
@@ -164,15 +163,15 @@ def print_bind_list(config: Config, output_format: str) -> None:
     elif output_format == "json":
         # Use JSONL, each line is a JSON representing next bind
         for bind in backend.get_binds():
-            print(backend.serialize_bind(bind))
+            print(KartonBackendBase.serialize_bind(bind))
     else:
         raise RuntimeError(f"Invalid output format: {output_format}")
 
 
 def delete_bind(config: Config, karton_name: str) -> None:
-    backend = KartonBackend(config=config, service_info=cli_service_info)
+    backend = get_backend(config=config, service_info=cli_service_info)
     binds = {k.identity: k for k in backend.get_binds()}
-    consumers = backend.get_online_consumers()
+    consumers = backend.get_online_identities()
 
     if karton_name not in binds:
         log.error("Trying to delete a karton bind that doesn't exist")
@@ -185,16 +184,8 @@ def delete_bind(config: Config, karton_name: str) -> None:
         )
         return
 
-    class KartonDummy(Consumer):
-        persistent = False
-        filters: list[dict[str, Any]] = []
-
-        def process(self, task):
-            pass
-
-    karton = KartonDummy(config=config, identity=karton_name)
-    karton._shutdown = True
-    karton.loop()
+    backend.mark_bind_for_deletion(karton_name)
+    log.info("Bind marked for deletion.")
 
 
 def main() -> None:
