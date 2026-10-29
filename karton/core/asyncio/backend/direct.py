@@ -344,14 +344,15 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         self, bind: KartonBind, bind_backend: bool = True
     ) -> KartonBind | None:
         """
-        Extends :meth:`KartonAsyncBackendProtocol.register_bind` with a
-        Direct-backend-only ``bind_backend`` argument.
+        Register bind for Karton consumer and return the old one.
 
+        :param bind: KartonBind object with bind definition
         :param bind_backend: |
             Store the KartonBind in the backend object for consume_routed_task
             comparison to validate whether bind is still valid for current consumer.
             This flag is set to False by Karton Gateway because it reuses backend for
             multiple independent Karton services.
+        :return: Old KartonBind that was registered under this identity
         """
         async with self.redis.pipeline(transaction=True) as pipe:
             await pipe.hget(KARTON_BINDS_HSET, bind.identity)

@@ -342,13 +342,27 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
             ).items()
         ]
 
-    def register_bind(self, bind: KartonBind) -> KartonBind | None:
+    def register_bind(
+        self, bind: KartonBind, bind_backend: bool = True
+    ) -> KartonBind | None:
+        """
+        Register bind for Karton consumer and return the old one.
+
+        :param bind: KartonBind object with bind definition
+        :param bind_backend: |
+            Store the KartonBind in the backend object for consume_routed_task
+            comparison to validate whether bind is still valid for current consumer.
+            This flag is set to False by Karton Gateway because it reuses backend for
+            multiple independent Karton services.
+        :return: Old KartonBind that was registered under this identity
+        """
         with self.redis.pipeline(transaction=True) as pipe:
             pipe.hget(KARTON_BINDS_HSET, bind.identity)
             pipe.hset(KARTON_BINDS_HSET, bind.identity, self.serialize_bind(bind))
             old_serialized_bind, _ = pipe.execute()
 
-        self._current_bind = bind
+        if bind_backend:
+            self._current_bind = bind
         if old_serialized_bind:
             return self.unserialize_bind(bind.identity, old_serialized_bind)
         else:
@@ -362,7 +376,7 @@ class KartonBackend(KartonBackendBase, KartonBackendProtocol):
         self.redis.hdel(KARTON_BINDS_HSET, identity)
 
     def mark_bind_for_deletion(self, identity: str) -> None:
-        self.register_bind(make_tombstone_bind(identity))
+        self.register_bind(make_tombstone_bind(identity), bind_backend=False)
 
     def get_online_consumers(self) -> dict[str, list[dict[str, str]]]:
         """
