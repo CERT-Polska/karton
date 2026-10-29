@@ -2,7 +2,8 @@ import json
 import logging
 import os
 import time
-from collections.abc import AsyncIterator
+from collections import defaultdict
+from collections.abc import AsyncIterator, Iterable
 from typing import IO, Any, cast
 
 import aioboto3
@@ -16,8 +17,14 @@ from redis.exceptions import AuthenticationError
 from karton.core import Config, Task
 from karton.core.asyncio.resource import LocalResource, RemoteResource, ResourceData
 from karton.core.backend import KartonBind, KartonMetrics, KartonServiceInfo
+from karton.core.backend.base import (
+    KartonExternalServiceInfo,
+    KartonOutputs,
+    make_tombstone_bind,
+)
 from karton.core.backend.direct import (
     KARTON_BINDS_HSET,
+    KARTON_OUTPUTS_NAMESPACE,
     KARTON_SERVICES_NAMESPACE,
     KARTON_TASK_NAMESPACE,
     KARTON_TASKS_QUEUE,
@@ -26,6 +33,7 @@ from karton.core.backend.direct import (
 from karton.core.exceptions import BindExpiredError, HeartbeatExpiredError
 from karton.core.resource import LocalResource as SyncLocalResource
 from karton.core.task import TaskState
+from karton.core.utils import achunks_iter
 
 from .base import KartonAsyncBackendProtocol
 
@@ -178,6 +186,123 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         """
         return RemoteResource.from_dict(resource_spec, backend=self)
 
+    async def _iter_tasks(
+        self,
+        task_keys: AsyncIterator[str],
+        chunk_size: int = 1000,
+        parse_resources: bool = True,
+    ) -> AsyncIterator[Task]:
+        async for chunk in achunks_iter(task_keys, chunk_size):
+            for task_data in await self.redis.mget(chunk):
+                if task_data is None:
+                    continue
+                yield Task.unserialize(
+                    task_data,
+                    resource_unserializer=self.unserialize_resource
+                    if parse_resources
+                    else None,
+                )
+
+    def iter_tasks(
+        self,
+        task_uid_list: Iterable[str],
+        chunk_size: int = 1000,
+        parse_resources: bool = True,
+    ) -> AsyncIterator[Task]:
+        """
+        Get multiple tasks for given identifier list as an iterator
+
+        :param task_uid_list: List of task fully-qualified identifiers
+        :param chunk_size: Size of chunks passed to the Redis MGET command
+        :param parse_resources: If set to False, resources are not parsed.
+            It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
+            to learn more.
+        :return: Iterator with task objects
+        """
+
+        async def _key_iter(uid_list: Iterable[str]) -> AsyncIterator[str]:
+            for uid in uid_list:
+                yield f"{KARTON_TASK_NAMESPACE}:{uid}"
+
+        return self._iter_tasks(
+            _key_iter(task_uid_list),
+            chunk_size=chunk_size,
+            parse_resources=parse_resources,
+        )
+
+    def iter_all_tasks(
+        self, chunk_size: int = 1000, parse_resources: bool = True
+    ) -> AsyncIterator[Task]:
+        """
+        Iterates all tasks registered in Redis
+        :param chunk_size: Size of chunks passed to the Redis SCAN and MGET command
+        :param parse_resources: If set to False, resources are not parsed.
+            It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
+            to learn more.
+        :return: Iterator with Task objects
+        """
+        task_keys = self.redis.scan_iter(
+            match=f"{KARTON_TASK_NAMESPACE}:*", count=chunk_size
+        )
+        return self._iter_tasks(
+            task_keys, chunk_size=chunk_size, parse_resources=parse_resources
+        )
+
+    async def _iter_legacy_task_tree(
+        self, root_uid: str, chunk_size: int = 1000, parse_resources: bool = True
+    ) -> AsyncIterator[Task]:
+        """
+        Processes tasks made by <5.4.0 (unrouted from <5.4.0 producers or existing
+        before upgrade)
+
+        Internal function for use by iter_task_tree.
+        """
+        # Iterate over all karton tasks that do not match the new task id format
+        legacy_task_keys = self.redis.scan_iter(
+            match=f"{KARTON_TASK_NAMESPACE}:[^{{]*", count=chunk_size
+        )
+        async for chunk in achunks_iter(legacy_task_keys, chunk_size):
+            for task_data in await self.redis.mget(chunk):
+                if task_data is None:
+                    continue
+                task = Task.unserialize(
+                    task_data,
+                    resource_unserializer=self.unserialize_resource
+                    if parse_resources
+                    else None,
+                )
+                if task.root_uid == root_uid:
+                    yield task
+
+    async def iter_task_tree(
+        self, root_uid: str, chunk_size: int = 1000, parse_resources: bool = True
+    ) -> AsyncIterator[Task]:
+        """
+        Iterates all tasks that belong to the same analysis task tree
+        and have the same root_uid
+
+        :param root_uid: Root identifier of task tree
+        :param chunk_size: Size of chunks passed to the Redis SCAN and MGET command
+        :param parse_resources: If set to False, resources are not parsed.
+            It speeds up deserialization. Read :py:meth:`Task.unserialize` documentation
+            to learn more.
+        :return: Iterator with task objects
+        """
+        # Process <5.4.0 tasks (unrouted from <5.4.0 producers
+        # or existing before upgrade)
+        async for task in self._iter_legacy_task_tree(
+            root_uid, chunk_size=chunk_size, parse_resources=parse_resources
+        ):
+            yield task
+        # Process >=5.4.0 tasks
+        task_keys = self.redis.scan_iter(
+            match=f"{KARTON_TASK_NAMESPACE}:{{{root_uid}}}:*", count=chunk_size
+        )
+        async for task in self._iter_tasks(
+            task_keys, chunk_size=chunk_size, parse_resources=parse_resources
+        ):
+            yield task
+
     async def declare_task(self, task: Task) -> None:
         # Ensure all local resources have good buckets
         for resource in task.iterate_resources():
@@ -219,14 +344,15 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         self, bind: KartonBind, bind_backend: bool = True
     ) -> KartonBind | None:
         """
-        Extends :meth:`KartonAsyncBackendProtocol.register_bind` with a
-        Direct-backend-only ``bind_backend`` argument.
+        Register bind for Karton consumer and return the old one.
 
+        :param bind: KartonBind object with bind definition
         :param bind_backend: |
             Store the KartonBind in the backend object for consume_routed_task
             comparison to validate whether bind is still valid for current consumer.
             This flag is set to False by Karton Gateway because it reuses backend for
             multiple independent Karton services.
+        :return: Old KartonBind that was registered under this identity
         """
         async with self.redis.pipeline(transaction=True) as pipe:
             await pipe.hget(KARTON_BINDS_HSET, bind.identity)
@@ -240,6 +366,89 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         else:
             return None
 
+    async def mark_bind_for_deletion(self, identity: str) -> None:
+        await self.register_bind(make_tombstone_bind(identity), bind_backend=False)
+
+    async def _get_online_gateway_services(
+        self,
+    ) -> AsyncIterator[KartonExternalServiceInfo]:
+        async for service_keys in achunks_iter(
+            self.redis.scan_iter(
+                match=f"{KARTON_SERVICES_NAMESPACE}:*",
+                count=100,
+            ),
+            size=100,
+        ):
+            # KartonServiceInfo is returned per connection
+            # so returned services can be duplicated
+            for client_name in cast(
+                list[str | None], await self.redis.mget(*service_keys)
+            ):
+                if not client_name:
+                    continue
+                try:
+                    yield KartonExternalServiceInfo.parse_client_name(client_name)
+                except Exception:
+                    logger.exception(
+                        "Fatal error while parsing client name: %s", client_name
+                    )
+                    continue
+
+    async def _get_online_direct_services(
+        self,
+    ) -> AsyncIterator[KartonExternalServiceInfo]:
+        for client in await self.redis.client_list():
+            name = client["name"]
+            try:
+                service_info = KartonExternalServiceInfo.parse_client_name(
+                    name, redis_client_info=client
+                )
+                yield service_info
+            except Exception:
+                logger.exception("Fatal error while parsing client name: %s", name)
+                continue
+
+    async def _get_online_services(self) -> AsyncIterator[KartonExternalServiceInfo]:
+        # Services having instance_id should be returned only once per instance_id
+        # Services without instance_id are counted by amount of Redis connections
+        # so they should be returned as many times as they appear in the output
+        services: defaultdict[KartonExternalServiceInfo, int] = defaultdict(int)
+        async for service in self._get_online_direct_services():
+            services[service] += 1
+        async for service in self._get_online_gateway_services():
+            services[service] += 1
+
+        for service in services:
+            if service.instance_id is None:
+                for _ in range(services[service]):
+                    yield service
+            else:
+                yield service
+
+    async def get_online_services(self) -> list[KartonExternalServiceInfo]:
+        """
+        Gets all online services providing extended service information.
+
+        .. versionadded:: 5.1.0
+
+        :return: List of KartonExternalServiceInfo objects
+        """
+        return [el async for el in self._get_online_services()]
+
+    async def get_online_identities(self) -> dict[str, list[KartonExternalServiceInfo]]:
+        """
+        Returns a dictionary for all online identities with list of
+        KartonExternalServiceInfo of each instance
+
+        :return: Dictionary {identity: [list of KartonExternalServiceInfo objects]}
+        """
+        identities: defaultdict[str, list[KartonExternalServiceInfo]] = defaultdict(
+            list
+        )
+        async for service in self._get_online_services():
+            identities[service.identity].append(service)
+        return dict(identities)
+
     async def get_bind(self, identity: str) -> KartonBind | None:
         """
         Get bind object for given identity
@@ -252,8 +461,36 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             return None
         return self.unserialize_bind(identity, bind_data)
 
+    async def get_binds(self) -> list[KartonBind]:
+        """
+        Get all binds registered in Redis
+
+        :return: List of KartonBind objects for subsequent identities
+        """
+        return [
+            self.unserialize_bind(identity, raw_bind)
+            for identity, raw_bind in cast(
+                dict[str, str], await self.redis.hgetall(KARTON_BINDS_HSET)
+            ).items()
+        ]
+
     async def produce_unrouted_task(self, task: Task) -> None:
         await self.redis.rpush(KARTON_TASKS_QUEUE, task.uid)
+
+    async def produce_routed_task(
+        self, identity: str, task: Task, pipe: Pipeline | None = None
+    ) -> None:
+        """
+        Add given task to routed task queue of given identity
+
+        Task must be registered using :py:meth:`register_task`
+
+        :param identity: Karton service identity
+        :param task: Task object
+        :param pipe: Optional pipeline object if operation is a part of pipeline
+        """
+        rs = pipe or self.redis
+        await rs.rpush(self.get_queue_name(identity, task.priority), task.uid)
 
     async def consume_queues(
         self, queues: str | list[str], timeout: int = 0
@@ -322,6 +559,31 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         _queue, data = item
         return await self.get_task(data)
 
+    async def restart_task(self, task: Task) -> Task:
+        """
+        Requeues consumed task back to the consumer queue.
+
+        New task is created with new uid and can be consumed by any active replica.
+
+        Original task is marked as finished.
+
+        :param task: Task to be restarted
+        :return: Restarted task object
+        """
+        new_task = task.fork_task()
+        # Preserve orig_uid to point at unrouted task
+        new_task.orig_uid = task.orig_uid
+        new_task.status = TaskState.SPAWNED
+
+        async with self.redis.pipeline(transaction=True) as pipe:
+            await self.register_task(new_task, pipe=pipe)
+            await self.produce_routed_task(
+                new_task.headers["receiver"], new_task, pipe=pipe
+            )
+            await self.set_task_status(task, status=TaskState.FINISHED, pipe=pipe)
+            await pipe.execute()
+        return new_task
+
     async def increment_metrics(
         self, metric: KartonMetrics, identity: str, pipe: Pipeline | None = None
     ) -> None:
@@ -333,6 +595,22 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
         """
         rs = pipe or self.redis
         await rs.hincrby(metric.value, identity, 1)
+
+    async def get_metrics(self, metric: KartonMetrics) -> dict[str, int]:
+        """
+        Get a {karton-identity: current-number-of-tasks} mapping for a given metric.
+
+        :param metric: Operation metric type
+        """
+        return {
+            k: int(v)
+            for k, v in cast(
+                dict[str, str], await self.redis.hgetall(metric.value)
+            ).items()
+        }
+
+    async def get_all_metrics(self) -> dict[KartonMetrics, dict[str, int]]:
+        return {metric: await self.get_metrics(metric) for metric in KartonMetrics}
 
     async def upload_resource(
         self,
@@ -413,6 +691,24 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
                     # return control back to the caller in case a shutdown or some
                     # other action was requested and needs to be handled
                     yield None
+
+    async def get_outputs(self) -> list[KartonOutputs]:
+        """
+        Get a list of the output types for each karton.
+
+        :return: List of KartonOutputs
+        """
+
+        output_keys = cast(
+            list[str], await self.redis.keys(f"{KARTON_OUTPUTS_NAMESPACE}:*")
+        )
+        return [
+            self.unserialize_output(
+                identity.split(":")[1],
+                cast(set[str], await self.redis.smembers(identity)),
+            )
+            for identity in output_keys
+        ]
 
     @staticmethod
     def redis_heartbeat_key(service_info: KartonServiceInfo, connection_id: str) -> str:

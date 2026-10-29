@@ -1,7 +1,7 @@
 import functools
 import itertools
 import signal
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import AsyncIterator, Callable, Iterator, Sequence
 from contextlib import contextmanager
 from typing import Any
 
@@ -20,6 +20,22 @@ def chunks_iter[T](seq: Iterator[T], size: int) -> Iterator[Sequence[T]]:
         if len(elements) == 0:
             return
         yield elements
+
+
+async def achunks_iter[T](
+    seq: AsyncIterator[T], size: int
+) -> AsyncIterator[Sequence[T]]:
+    it = aiter(seq)
+    while True:
+        chunk: list[T] = []
+        try:
+            while len(chunk) < size:
+                chunk.append(await anext(it))
+        except StopAsyncIteration:
+            pass
+        if not chunk:
+            return
+        yield chunk
 
 
 def recursive_iter(obj: Any) -> Iterator[Any]:

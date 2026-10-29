@@ -1,24 +1,56 @@
 from collections import defaultdict
 
-from .backend import KartonBackend, KartonBind
+from .backend import KartonBackendProtocol, KartonBind
 from .task import Task, TaskState
 
 
 class KartonQueue:
     """
-    View object representing a Karton queue
+    View object representing a Karton queue.
 
     :param bind: :class:`KartonBind` object representing the queue bind
-    :param tasks: List of tasks currently in queue
-    :param state: :class:`KartonState` object to be used
+    :param replicas: Amount of active consumer replicas
+    :param state: :class:`KartonState` object to be used for lazy loading
+    :param tasks: List of tasks currently in queue (optional)
+    :param pending_task_uids: List of pending task UIDs (optional)
+    :param crashed_task_uids: List of crashed task UIDs (optional)
     """
 
     def __init__(
-        self, bind: KartonBind, tasks: list[Task], state: "KartonState"
+        self,
+        bind: KartonBind,
+        replicas: int,
+        state: "KartonState",
+        tasks: list[Task] | None = None,
+        pending_task_uids: list[str] | None = None,
+        crashed_task_uids: list[str] | None = None,
     ) -> None:
         self.bind = bind
-        self.tasks = tasks
+        self.replicas = replicas
         self.state = state
+        self.pending_task_uids: list[str] = pending_task_uids or []
+        self.crashed_task_uids: list[str] = crashed_task_uids or []
+        self._tasks: list[Task] | None = tasks
+
+        if tasks is not None:
+            self.pending_task_uids = [
+                task.uid for task in self._filter_pending_tasks(tasks)
+            ]
+            self.crashed_task_uids = [
+                task.uid for task in self._filter_crashed_tasks(tasks)
+            ]
+
+    @staticmethod
+    def _filter_pending_tasks(tasks: list[Task]) -> list[Task]:
+        return [
+            task
+            for task in tasks
+            if task.status not in (TaskState.FINISHED, TaskState.CRASHED)
+        ]
+
+    @staticmethod
+    def _filter_crashed_tasks(tasks: list[Task]) -> list[Task]:
+        return [task for task in tasks if task.status == TaskState.CRASHED]
 
     @property
     def last_update(self) -> float:
@@ -28,33 +60,41 @@ class KartonQueue:
     @property
     def online_consumers_count(self) -> int:
         """Get number of consumers listening on this queue"""
-        return (
-            len(self.state.replicas[self.bind.identity])
-            if self.bind.identity in self.state.replicas
-            else 0
-        )
+        return self.replicas
+
+    @property
+    def tasks(self) -> list[Task]:
+        """
+        Get all non-finished tasks in this queue (pending and crashed).
+
+        For the direct backend, tasks are pre-loaded. For the gateway
+        backend, tasks are fetched lazily on first access.
+        """
+        if self._tasks is None:
+            # Load everything in one request
+            self._tasks = self.state.backend.get_tasks(
+                self.pending_task_uids + self.crashed_task_uids
+            )
+
+        return self._tasks
 
     @property
     def pending_tasks(self) -> list[Task]:
         """Get queue pending tasks"""
-        return [
-            task
-            for task in self.tasks
-            if task.status not in (TaskState.FINISHED, TaskState.CRASHED)
-        ]
+        return self._filter_pending_tasks(self.tasks)
 
     @property
     def crashed_tasks(self) -> list[Task]:
         """Get queue crashed tasks"""
-        return [task for task in self.tasks if task.status == TaskState.CRASHED]
+        return self._filter_crashed_tasks(self.tasks)
 
 
 class KartonAnalysis:
     """
-    View object representing a Karton task analysis
+    View object representing a Karton task analysis.
 
     :param root_uid: Analysis root task uid
-    :param tasks: List of tasks
+    :param tasks: List of tasks (pending and crashed, excluding finished)
     :param state: :class:`KartonState` object to be used
     """
 
@@ -83,7 +123,7 @@ class KartonAnalysis:
         ]
 
     @property
-    def pending_queues(self) -> dict[str, KartonQueue]:
+    def pending_queues(self) -> dict[str, "KartonQueue"]:
         """Group analysis tasks by their queues"""
         return get_queues_for_tasks(self.tasks, self.state)
 
@@ -97,13 +137,13 @@ def get_queues_for_tasks(
     tasks: list[Task], state: "KartonState"
 ) -> dict[str, KartonQueue]:
     """
-    Group task objects by their queue name
+    Group task objects by their queue name.
 
     :param tasks: Task objects to group
     :param state: :class:`KartonState` object to be used
-    :return: A dictionary containing the queue names and lists of tasks
+    :return: A dictionary containing the queue names and :class:`KartonQueue` objects
     """
-    tasks_per_queue = defaultdict(list)
+    tasks_per_queue: dict[str, list[Task]] = defaultdict(list)
 
     for task in tasks:
         if "receiver" not in task.headers:
@@ -114,8 +154,14 @@ def get_queues_for_tasks(
             # No known bind, dangling task for non-existent queue
             continue
         tasks_per_queue[queue_name].append(task)
+
     return {
-        queue_name: KartonQueue(bind=state.binds[queue_name], tasks=tasks, state=state)
+        queue_name: KartonQueue(
+            bind=state.binds[queue_name],
+            replicas=len(state.replicas.get(queue_name, [])),
+            state=state,
+            tasks=tasks,
+        )
         for queue_name, tasks in tasks_per_queue.items()
     }
 
@@ -125,75 +171,56 @@ class KartonState:
     Karton state inspection class. Allows to make a detailed inspection
     of the pipeline and analyses state.
 
-    .. versionadded: 4.0.0
+    Works with both the direct backend (Redis) and the gateway backend
+    (REST API). When using the gateway backend, queue task lists are
+    fetched lazily on first access to :attr:`KartonQueue.pending_tasks`
+    or :attr:`KartonQueue.crashed_tasks`.
 
-    :param backend: :py:meth:`KartonBackend` object to use for data fetching
+    :param backend: :py:class:`KartonBackend` object to use for data fetching
+    :param parse_resources: If set to False (default), resources are not
+        parsed to speed up deserialization.
     """
 
-    def __init__(self, backend: KartonBackend, parse_resources: bool = False) -> None:
+    def __init__(
+        self, backend: KartonBackendProtocol, parse_resources: bool = False
+    ) -> None:
         self.backend = backend
         self.binds = {bind.identity: bind for bind in backend.get_binds()}
         self.replicas = backend.get_online_identities()
         self.parse_resources = parse_resources
 
-        self._tasks: list[Task] | None = None
-        self._pending_tasks: list[Task] | None = None
-        self._analyses: dict[str, KartonAnalysis] | None = None
         self._queues: dict[str, KartonQueue] | None = None
 
     @property
-    def tasks(self) -> list[Task]:
-        if self._tasks is None:
-            self._tasks = self.backend.get_all_tasks(
-                parse_resources=self.parse_resources
-            )
-        return self._tasks
-
-    @property
-    def pending_tasks(self) -> list[Task]:
-        if self._pending_tasks is None:
-            self._pending_tasks = [
-                task
-                for task in self.tasks
-                if task.status not in (TaskState.FINISHED, TaskState.CRASHED)
-            ]
-        return self._pending_tasks
-
-    @property
-    def analyses(self) -> dict[str, KartonAnalysis]:
-        if self._analyses is None:
-            # Tasks grouped by root_uid
-            tasks_per_analysis = defaultdict(list)
-
-            for task in self.pending_tasks:
-                tasks_per_analysis[task.root_uid].append(task)
-
-            self._analyses = {
-                root_uid: KartonAnalysis(root_uid=root_uid, tasks=tasks, state=self)
-                for root_uid, tasks in tasks_per_analysis.items()
-            }
-        return self._analyses
-
-    @property
     def queues(self) -> dict[str, KartonQueue]:
+        """
+        Get all queues (binds) with their task state.
+
+        Returns a dictionary mapping queue identity to
+        :class:`KartonQueue`. Registered queues without any tasks
+        are included with empty task lists.
+        """
         if self._queues is None:
-            queues = get_queues_for_tasks(self.pending_tasks, self)
-            # Present registered queues without tasks
-            for bind_name in self.binds:
-                if bind_name not in queues:
-                    queues[bind_name] = KartonQueue(
-                        bind=self.binds[bind_name], tasks=[], state=self
-                    )
-            self._queues = queues
+            queues_state = self.backend.get_queues(parse_resources=self.parse_resources)
+            self._queues = {
+                identity: KartonQueue(
+                    bind=queue_state.bind,
+                    replicas=queue_state.replicas,
+                    state=self,
+                    pending_task_uids=queue_state.pending_task_uids,
+                    crashed_task_uids=queue_state.crashed_task_uids,
+                )
+                for identity, queue_state in queues_state.items()
+            }
         return self._queues
 
     def get_analysis(self, root_uid: str) -> KartonAnalysis:
-        return KartonAnalysis(
-            root_uid=root_uid,
-            tasks=list(
-                self.backend.iter_task_tree(
-                    root_uid, parse_resources=self.parse_resources
-                )
-            ),
-            state=self,
-        )
+        """
+        Get a detailed view of a single analysis (task tree).
+
+        :param root_uid: Root identifier of the analysis task tree
+        :return: :class:`KartonAnalysis` object
+        """
+        analysis_tasks = self.backend.get_analysis_tasks(root_uid)
+        tasks = [task for task_list in analysis_tasks.values() for task in task_list]
+        return KartonAnalysis(root_uid=root_uid, tasks=tasks, state=self)
