@@ -43,6 +43,11 @@ def make_args(**kwargs):
         "consume_log": False,
         "register_bind": None,
         "foreign_buckets": None,
+        "inspect_karton": False,
+        "restart_task": False,
+        "cancel_task": False,
+        "remove_bind": False,
+        "get_metrics": False,
     }
     defaults.update(kwargs)
     return Namespace(**defaults)
