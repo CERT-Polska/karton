@@ -7,16 +7,26 @@ from collections.abc import Callable, Iterator
 from contextvars import ContextVar
 from typing import (
     Any,
+    Generic,
     NotRequired,
     Optional,
     TypedDict,
+    cast,
 )
 
 import orjson
+from typing_extensions import TypeVar
 
 from . import query
 from .resource import ResourceBase, ResourceData
 from .utils import recursive_iter, recursive_iter_with_keys, recursive_map
+
+ResourceT_co = TypeVar(
+    "ResourceT_co",
+    bound=ResourceBase,
+    default=ResourceBase,
+    covariant=True,
+)
 
 current_task: ContextVar[Optional["Task"]] = ContextVar("current_task")
 
@@ -83,7 +93,8 @@ class TaskData(TypedDict):
     last_update: float
 
 
-class Task:
+# Py3.13+: Task[ResourceT: ResourceBase = ResourceBase]
+class Task(Generic[ResourceT_co]):
     """
     Task representation with headers and resources.
 
@@ -575,7 +586,7 @@ class Task:
             return self.payload_persistent[name]
         return self.payload.get(name, default)
 
-    def get_resource(self, name: str) -> ResourceBase:
+    def get_resource(self, name: str) -> ResourceT_co:
         """
         Get resource from task.
 
@@ -588,7 +599,7 @@ class Task:
         resource = self.get_payload(name)
         if not isinstance(resource, ResourceBase):
             raise TypeError("Resource was expected but not found")
-        return resource
+        return cast(ResourceT_co, resource)
 
     def remove_payload(self, name: str) -> None:
         """
