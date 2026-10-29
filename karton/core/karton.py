@@ -16,7 +16,7 @@ from .backend import KartonBackendProtocol, KartonBind, KartonMetrics
 from .base import KartonBase, KartonServiceBase
 from .config import Config
 from .exceptions import BindExpiredError, TaskTimeoutError
-from .resource import LocalResource
+from .resource import LocalResource, RemoteResource
 from .task import Task, TaskState
 from .utils import timeout
 
@@ -154,7 +154,7 @@ class Consumer(KartonServiceBase):
         ] = []
 
     @abc.abstractmethod
-    def process(self, task: Task) -> None:
+    def process(self, task: Task[RemoteResource]) -> None:
         """
         Task processing method.
 
@@ -166,7 +166,7 @@ class Consumer(KartonServiceBase):
         """
         raise NotImplementedError()
 
-    def internal_process(self, task: Task) -> None:
+    def internal_process(self, task: Task[RemoteResource]) -> None:
         """
         The internal side of :py:meth:`Consumer.process` function, takes care of
         synchronizing the task state, handling errors and running task hooks.
@@ -369,7 +369,7 @@ class Consumer(KartonServiceBase):
                     self.log.info("%r", e)
                     break
                 if task:
-                    self.internal_process(task)
+                    self.internal_process(cast(Task[RemoteResource], task))
 
 
 class LogConsumer(KartonServiceBase):
