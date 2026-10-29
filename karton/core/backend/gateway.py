@@ -48,6 +48,7 @@ from karton.core.resource import (
     LocalResourceBase,
     RemoteResource,
     ResourceBase,
+    ResourceData,
 )
 from karton.core.task import Task, TaskPriority, TaskState, root_uid_from_task_uid
 from karton.core.utils import recursive_map
@@ -207,7 +208,7 @@ def serialize_resources(
 
 def deserialize_resources(
     payload: dict[str, Any],
-    resource_deserializer: Callable[[dict[str, Any]], ResourceBase],
+    resource_deserializer: Callable[[ResourceData], ResourceBase],
 ) -> dict[str, Any]:
     deserialized_resources: dict[ResourceIdentifier, ResourceBase] = {}
 
@@ -336,7 +337,7 @@ class KartonGatewayBackend(KartonGatewayBackendBase, KartonBackendProtocol):
             (spec.bucket, spec.uid): spec.url for spec in response.message.download_urls
         }
 
-        def deserialize_resource(resource_data: dict[str, Any]) -> RemoteResource:
+        def deserialize_resource(resource_data: ResourceData) -> RemoteResource:
             return RemoteResource.from_dict(
                 resource_data,
                 backend=self,

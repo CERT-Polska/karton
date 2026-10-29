@@ -14,7 +14,7 @@ from redis.asyncio.client import Pipeline
 from redis.exceptions import AuthenticationError
 
 from karton.core import Config, Task
-from karton.core.asyncio.resource import LocalResource, RemoteResource
+from karton.core.asyncio.resource import LocalResource, RemoteResource, ResourceData
 from karton.core.backend import KartonBind, KartonMetrics, KartonServiceInfo
 from karton.core.backend.direct import (
     KARTON_BINDS_HSET,
@@ -169,7 +169,7 @@ class KartonAsyncBackend(KartonBackendBase, KartonAsyncBackendProtocol):
             await rs.ping()
         return rs
 
-    def unserialize_resource(self, resource_spec: dict[str, Any]) -> RemoteResource:
+    def unserialize_resource(self, resource_spec: ResourceData) -> RemoteResource:
         """
         Unserializes resource into a RemoteResource object bound with current backend
 

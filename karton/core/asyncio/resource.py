@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 from io import BytesIO
 from typing import IO, TYPE_CHECKING, Any, Optional
 
-from karton.core.resource import LocalResourceBase, ResourceBase
+from karton.core.resource import LocalResourceBase, ResourceBase, ResourceData
 
 if TYPE_CHECKING:
     from .backend import KartonAsyncBackendProtocol
@@ -37,7 +37,6 @@ class LocalResource(LocalResourceBase):
     :param uid: Alternative S3 resource id
     :param sha256: Resource sha256 hash
     :param fd: Seekable file descriptor
-    :param _flags: Resource flags
     :param _close_fd: Close file descriptor after upload (default: False)
     """
 
@@ -51,7 +50,6 @@ class LocalResource(LocalResourceBase):
         uid: str | None = None,
         sha256: str | None = None,
         fd: IO[bytes] | None = None,
-        _flags: list[str] | None = None,
         _close_fd: bool = False,
     ) -> None:
         super().__init__(
@@ -63,7 +61,6 @@ class LocalResource(LocalResourceBase):
             uid=uid,
             sha256=sha256,
             fd=fd,
-            _flags=_flags,
             _close_fd=_close_fd,
         )
 
@@ -132,7 +129,6 @@ class RemoteResource(ResourceBase):
     :param size: Resource size
     :param backend: :py:meth:`KartonBackend` to bind to this resource
     :param sha256: Resource sha256 hash
-    :param _flags: Resource flags
     :param _download_url: Resource download URL
     """
 
@@ -145,7 +141,6 @@ class RemoteResource(ResourceBase):
         size: int | None = None,
         backend: Optional["KartonAsyncBackendProtocol"] = None,
         sha256: str | None = None,
-        _flags: list[str] | None = None,
         _download_url: str | None = None,
     ) -> None:
         super().__init__(
@@ -155,7 +150,6 @@ class RemoteResource(ResourceBase):
             sha256=sha256,
             _uid=uid,
             _size=size,
-            _flags=_flags,
         )
         self.backend = backend
         self._download_url = _download_url
@@ -190,7 +184,7 @@ class RemoteResource(ResourceBase):
     @classmethod
     def from_dict(
         cls,
-        dict: dict[str, Any],
+        dict: ResourceData,
         backend: Optional["KartonAsyncBackendProtocol"],
         download_url: str | None = None,
     ) -> "RemoteResource":
@@ -204,19 +198,14 @@ class RemoteResource(ResourceBase):
 
         :meta private:
         """
-        # Backwards compatibility
-        metadata = dict.get("metadata", {})
-        if "sha256" in dict:
-            metadata["sha256"] = dict["sha256"]
-
         return cls(
             name=dict["name"],
-            metadata=metadata,
+            metadata=dict["metadata"],
             bucket=dict["bucket"],
             uid=dict["uid"],
-            size=dict.get("size"),  # Backwards compatibility (2.x.x)
+            size=dict["size"],
+            sha256=dict["sha256"],
             backend=backend,
-            _flags=dict.get("flags"),  # Backwards compatibility (3.x.x)
             _download_url=download_url,
         )
 
