@@ -236,8 +236,8 @@ async def generate_resource_download_urls(
     :param task: Task containing resources
     :param allowed_buckets: Allowed target buckets to use for resource download
     :param omit_disallowed_buckets: |
-        If True (default is False), function just doesn't generate download URLs
-        for resources referencing disallowed buckets instead of raising InvalidTaskError.
+        If False (default), function raises InvalidTaskError for resources referencing
+        disallowed buckets (otherwise, they are just skipped).
     :return: List of ResourceUrl objects with presigned download URLs
     """
     resources = {}
