@@ -2,7 +2,7 @@ import dataclasses
 import enum
 import uuid
 from collections.abc import Iterator
-from typing import IO, Any, Protocol, Self
+from typing import IO, Any, Literal, Protocol, Self
 from urllib.parse import parse_qsl, urlencode
 
 from karton.core.__version__ import __version__
@@ -169,6 +169,48 @@ def unserialize_bind(identity: str, bind: dict[str, Any]) -> KartonBind:
     )
 
 
+def make_tombstone_bind(identity: str) -> KartonBind:
+    """
+    Makes non-persistent bind with empty filters to
+    stop receiving tasks and let GC cancel tasks
+    and delete the bind. This is safe method of deleting
+    consumer queue.
+
+    :param identity: Identity for the tombstone bind
+    """
+    return KartonBind(
+        identity=identity,
+        info=None,
+        version=__version__,
+        persistent=False,
+        filters=[],
+        service_version=None,
+        is_async=False,
+    )
+
+
+@dataclasses.dataclass(frozen=True)
+class KartonOutputs:
+    """
+    Represents the output types declared by a Karton service.
+    """
+
+    identity: str
+    outputs: list[dict[str, Any]]
+
+
+@dataclasses.dataclass
+class KartonQueueState:
+    """
+    Karton queue state, returned by :meth:`KartonBackendProtocol.get_queues`.
+    """
+
+    bind: KartonBind
+    replicas: int
+    pending_task_uids: list[str] = dataclasses.field(default_factory=list)
+    crashed_task_uids: list[str] = dataclasses.field(default_factory=list)
+
+
 class KartonBackendProtocol(Protocol):
     """
     Protocol that defines methods that KartonBackend must implement.
@@ -235,6 +277,11 @@ class KartonBackendProtocol(Protocol):
         :param identity: Related Karton service identity
         """
 
+    def get_all_metrics(self) -> dict[KartonMetrics, dict[str, int]]:
+        """
+        Get a {karton-identity: current-number-of-tasks} mapping for each metric.
+        """
+
     def upload_resource(
         self,
         resource: LocalResource,
@@ -253,6 +300,17 @@ class KartonBackendProtocol(Protocol):
 
         :param resource: Resource to upload
         :param path: Path to the object content
+        """
+
+    def iter_download_resource(
+        self, resource: RemoteResource, chunk_size: int = 64 * 1024
+    ) -> Iterator[bytes]:
+        """
+        Download resource object, yielding its content as chunks of bytes.
+
+        :param resource: Resource to download
+        :param chunk_size: Chunk size in bytes
+        :return: Iterator of content chunks
         """
 
     def download_resource(self, resource: RemoteResource) -> bytes:
@@ -326,4 +384,132 @@ class KartonBackendProtocol(Protocol):
             The ``level`` filter is an exact match, not a threshold. Unlike
             Python's :meth:`logging.Logger.setLevel`, ``level="INFO"`` matches
             only logs recorded at the ``INFO`` level, not ``WARNING`` or higher.
+        """
+
+    def get_binds(self) -> list[KartonBind]:
+        """
+        Get all binds registered in the backend.
+
+        :return: List of KartonBind objects for all registered identities
+        """
+
+    def get_bind(self, identity: str) -> KartonBind | None:
+        """
+        Get bind object for given identity.
+
+        :param identity: Karton service identity
+        :return: KartonBind object or None if not found
+        """
+
+    def mark_bind_for_deletion(self, identity: str) -> None:
+        """
+        Replace the bind with non-persistent bind with empty filters.
+        This is "mark for deletion" for Karton System GC.
+        All pending tasks in the queue will be canceled.
+
+        :param identity: Identity to be marked for deletion
+        """
+
+    def get_online_services(self) -> list[KartonExternalServiceInfo]:
+        """
+        Get all online services providing extended service information.
+
+        .. versionadded:: 5.1.0
+
+        :return: List of KartonExternalServiceInfo objects
+        """
+
+    def get_online_identities(self) -> dict[str, list[KartonExternalServiceInfo]]:
+        """
+        Returns a dictionary for all online identities with list of
+        KartonExternalServiceInfo of each instance.
+
+        :return: Dictionary {identity: [list of service info objects]}
+        """
+
+    def get_queues(self, parse_resources: bool = False) -> dict[str, KartonQueueState]:
+        """
+        Get a summary of all queues (binds) and their task state.
+
+        :param parse_resources: If False (default), resources are not parsed
+            to speed up deserialization.
+        :return: Dictionary mapping queue identity to :class:`QueueSummary`
+        """
+
+    def get_tasks(self, task_uids: list[str]) -> list[Task]:
+        """
+        Get multiple task objects by their identifiers.
+
+        Tasks that don't exist are silently skipped.
+
+        :param task_uids: List of task identifiers
+        :return: List of Task objects (may be shorter than the input if some
+            tasks were not found)
+        """
+
+    def get_analysis_tasks(self, root_uid: str) -> dict[str, list[Task]]:
+        """
+        Get all tasks belonging to the same analysis tree, grouped by
+        receiver queue.
+
+        Includes both pending and crashed tasks (excludes only FINISHED).
+
+        :param root_uid: Root identifier of the analysis task tree
+        :return: Dictionary mapping receiver queue identity to list of tasks
+        """
+
+    def get_task(self, task_uid: str) -> Task | None:
+        """
+        Get task object with given identifier.
+
+        :param task_uid: Task identifier
+        :return: Task object or None if not found
+        """
+
+    def restart_task(self, task: Task) -> Task:
+        """
+        Requeue a consumed task back to the consumer queue.
+
+        A new task is created with a new UID. The original task is marked
+        as finished.
+
+        :param task: Task to be restarted
+        :return: The restarted (new) task object
+        """
+
+    def cancel_task(self, task: Task) -> None:
+        """
+        Cancel a task by marking it as finished.
+
+        :param task: Task to be cancelled
+        """
+
+    def restart_queue_crashed_tasks(
+        self,
+        identity: str,
+    ) -> list[tuple[str, str]]:
+        """
+        Bulk restart all crashed tasks in a queue.
+
+        :param identity: Karton service identity (queue name)
+        :return: List of ``(old_uid, new_uid)`` pairs for each restarted task
+        """
+
+    def cancel_queue_tasks(
+        self,
+        identity: str,
+        status: Literal["crashed", "pending"] = "crashed",
+    ) -> None:
+        """
+        Bulk cancel all tasks matching the given status in a queue.
+
+        :param identity: Karton service identity (queue name)
+        :param status: Which tasks to cancel (``"crashed"`` or ``"pending"``)
+        """
+
+    def get_outputs(self) -> list[KartonOutputs]:
+        """
+        Get a list of the output types for each Karton service.
+
+        :return: List of KartonOutputs objects
         """

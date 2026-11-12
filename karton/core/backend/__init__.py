@@ -1,6 +1,13 @@
 from karton.core.config import Config
 
-from .base import KartonBackendProtocol, KartonBind, KartonMetrics, KartonServiceInfo
+from .base import (
+    KartonBackendProtocol,
+    KartonBind,
+    KartonMetrics,
+    KartonOutputs,
+    KartonQueueState,
+    KartonServiceInfo,
+)
 from .direct import KartonBackend
 from .gateway import KartonGatewayBackend
 
@@ -21,6 +28,8 @@ __all__ = [
     "KartonBind",
     "KartonGatewayBackend",
     "KartonMetrics",
+    "KartonOutputs",
+    "KartonQueueState",
     "KartonServiceInfo",
     "get_backend",
 ]
