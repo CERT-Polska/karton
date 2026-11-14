@@ -2,7 +2,7 @@ import abc
 import asyncio
 import signal
 from asyncio import CancelledError
-from typing import Protocol
+from typing import Protocol, cast
 
 from karton.core import Task
 from karton.core.backend import KartonServiceInfo
@@ -13,6 +13,7 @@ from karton.core.utils import StrictClassMethod
 
 from .backend import KartonAsyncBackendProtocol, get_backend
 from .logger import KartonAsyncLogHandler
+from .resource import RemoteResource
 
 
 class KartonAsyncBackendFactory(Protocol):
@@ -61,8 +62,8 @@ class KartonAsyncBase(abc.ABC, ConfigMixin, LoggingMixin):
         await self.backend.connect()
 
     @property
-    def current_task(self) -> Task | None:
-        return get_current_task()
+    def current_task(self) -> Task[RemoteResource] | None:
+        return cast(Task[RemoteResource] | None, get_current_task())
 
     @current_task.setter
     def current_task(self, task: Task | None):

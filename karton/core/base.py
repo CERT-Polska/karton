@@ -11,6 +11,7 @@ from .backend import KartonBackendProtocol, KartonServiceInfo, get_backend
 from .backend.base import make_debug_identity
 from .config import Config
 from .logger import KartonLogHandler, TaskContextFilter
+from .resource import RemoteResource
 from .task import Task, get_current_task, set_current_task
 from .utils import HardShutdownInterrupt, StrictClassMethod, graceful_killer
 
@@ -251,8 +252,8 @@ class KartonBase(abc.ABC, ConfigMixin, LoggingMixin):
         )
 
     @property
-    def current_task(self) -> Task | None:
-        return get_current_task()
+    def current_task(self) -> Task["RemoteResource"] | None:
+        return cast(Task["RemoteResource"] | None, get_current_task())
 
     @current_task.setter
     def current_task(self, task: Task | None):
