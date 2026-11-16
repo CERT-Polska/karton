@@ -70,3 +70,95 @@ class TestTaskLargeNumber(unittest.TestCase):
         )
         task = Task.unserialize(task.serialize())
         self.assertTrue(task.payload["n"] == huge_n)
+
+
+class TestProducerEgressFilters(unittest.TestCase):
+    def _make_producer(self, karton_cls):
+        from karton.core.test import BackendMock, ConfigMock
+
+        return karton_cls(
+            identity="karton.test-producer",
+            config=ConfigMock(),
+            backend=BackendMock(),
+        )
+
+    def test_default_egress_filters(self):
+        from karton.core import Producer
+
+        producer = self._make_producer(Producer)
+        self.assertEqual(producer.egress_filters, [{}])
+
+    def test_egress_filters_from_class(self):
+        from karton.core import Producer
+
+        class Restricted(Producer):
+            egress_filters = [{"kind": "raw"}]
+
+        producer = self._make_producer(Restricted)
+        self.assertEqual(producer.egress_filters, [{"kind": "raw"}])
+
+    def test_send_task_allows_matching_headers(self):
+        from karton.core import Producer, Task
+
+        class Restricted(Producer):
+            egress_filters = [
+                {"kind": "raw"},
+                {"kind": "file", "extension": "txt"},
+            ]
+
+        producer = self._make_producer(Restricted)
+        for headers in (
+            {"type": "sample", "kind": "raw"},
+            {"kind": "raw", "foo": "bar"},
+            {"kind": "file", "extension": "txt"},
+            {"kind": "file", "extension": "txt", "xyz": "qwer"},
+        ):
+            producer.send_task(Task(headers=headers))
+        self.assertEqual(len(producer.backend.produced_tasks), 4)
+
+    def test_send_task_rejects_not_matching_headers(self):
+        from karton.core import Producer, Task
+        from karton.core.exceptions import TaskEgressFilterError
+
+        class Restricted(Producer):
+            egress_filters = [{"kind": "raw"}]
+
+        producer = self._make_producer(Restricted)
+        with self.assertRaises(TaskEgressFilterError):
+            producer.send_task(Task(headers={"kind": "file", "extension": "exe"}))
+        # Task was not delivered
+        self.assertEqual(producer.backend.produced_tasks, [])
+
+    def test_send_task_checks_headers_after_completion(self):
+        # The check must see the "origin" header added by send_task
+        # and the persistent headers propagated from the current task,
+        # not only the headers set by the producer code
+        from karton.core import Producer, Task
+        from karton.core.exceptions import TaskEgressFilterError
+
+        class Restricted(Producer):
+            # "origin" must match the configured producer identity
+            egress_filters = [{"kind": "raw", "origin": "karton.test-producer"}]
+
+        producer = self._make_producer(Restricted)
+        producer.send_task(Task(headers={"kind": "raw"}))
+
+        # Task with persistent headers propagated from the current task:
+        # the merged persistent header must also pass the egress check
+        current_task = Task(
+            headers={"kind": "raw"},
+            headers_persistent={"kind": "file"},
+        )
+        producer.current_task = current_task
+        try:
+            with self.assertRaises(TaskEgressFilterError):
+                producer.send_task(Task(headers={"kind": "raw"}))
+        finally:
+            producer.current_task = None
+
+    def test_send_task_allows_all_by_default(self):
+        from karton.core import Producer, Task
+
+        producer = self._make_producer(Producer)
+        producer.send_task(Task(headers={"anything": "goes"}))
+        self.assertEqual(len(producer.backend.produced_tasks), 1)

@@ -4,6 +4,8 @@ from typing import Any, Literal, NotRequired, TypedDict
 
 from pydantic import BaseModel, Field
 
+from karton.core import query
+
 DEFAULT_AUDIENCE = "karton-gateway"
 TOKEN_VERSION = 1
 # Set of token versions accepted by decode_auth_token.
@@ -64,6 +66,7 @@ class ConsumeTaskOperation(Operation):
 class ProduceTaskOperation(Operation):
     operation: Literal["produce_task"] = "produce_task"
     foreign_buckets: list[str] = Field(default_factory=list)
+    headers: list[dict[str, Any]]
 
     def covers(self, operation: "Operation") -> bool:
         """
@@ -72,9 +75,13 @@ class ProduceTaskOperation(Operation):
         :param operation: Operation to be authorized
         :return: True if operation is authorized by this entitlement, False otherwise
         """
-        return isinstance(operation, ProduceTaskOperation) and set(
-            operation.foreign_buckets
-        ).issubset(self.foreign_buckets)
+        if not isinstance(operation, ProduceTaskOperation):
+            return False
+        if not set(operation.foreign_buckets).issubset(self.foreign_buckets):
+            return False
+
+        filters_query = query.convert(self.headers)
+        return all(filters_query.match(headers) for headers in operation.headers)
 
 
 class ConsumeLogOperation(Operation):

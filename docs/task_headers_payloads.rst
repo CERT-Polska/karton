@@ -175,6 +175,53 @@ For some concrete examples, consider these filters:
         ]
 
 
+.. _egress-filters:
+
+Egress filters
+---------------
+
+.. versionadded:: 6.1.0
+
+The ``egress_filters`` attribute of a :class:`karton.core.Producer` declares which **outgoing**
+task headers are allowed.
+
+.. code-block:: python
+
+    class MyKarton(Karton):
+        identity = "karton.my-karton"
+        filters = [
+            {"type": "sample", "kind": "raw"},
+        ]
+        egress_filters = [
+            {"type": "sample", "stage": "recognized"},
+            {"type": "sample", "stage": "unrecognized"}
+        ]
+
+``egress_filters`` use exactly the same syntax and matching rules as the consumer ``filters``.
+
+The default value for ``egress_filters`` is ``[{}]``, the catch-all filter.
+An empty list (``[]``) means that no task is allowed.
+
+When service authentication is enabled, egress filters are enforced by the
+:ref:`Karton Gateway <gateway-setup>`, based on service access token. Producers also checks the
+egress filters before sending a task.
+
+The ``karton-auth claims`` command will generate proper claims automatically from a class definition:
+
+.. code-block:: console
+
+    $ karton-auth claims my_karton:MyKarton
+
+but you can also pass the filters explicitly:
+
+.. code-block:: console
+
+    $ karton-auth claims --identity karton.my-karton \
+        --egress-filters '[{"type": "sample", "kind": "processed"}]'
+
+``karton-auth`` automatically appends proper conditions for the ``origin`` header.
+
+
 Task payload
 ------------
 

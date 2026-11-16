@@ -15,6 +15,7 @@ from karton.core.auth.cli import (
     dedup_and_sort_operations,
     parse_filters_args,
     parse_register_bind_args,
+    pin_origin,
     resolve_bind_persistence,
 )
 from karton.core.auth.models import (
@@ -43,6 +44,7 @@ def make_args(**kwargs):
         "consume_log": False,
         "register_bind": None,
         "foreign_buckets": None,
+        "egress_filters": None,
         "inspect_karton": False,
         "restart_task": False,
         "cancel_task": False,
@@ -175,6 +177,27 @@ class TestResolveBindPersistence(unittest.TestCase):
         self.assertTrue(non_persistent)
 
 
+def pinned_origin_condition(identity):
+    """Origin condition pinned to the identity, as built by the CLI."""
+
+    from karton.core.auth.cli import pin_origin
+
+    return pin_origin([{}], identity=identity)[0]["origin"]
+
+
+def expected_produce_op(identity="x", foreign_buckets=None, egress_filters=None):
+    """ProduceTaskOperation expected from claims_from_args for a given identity."""
+    if egress_filters is None:
+        egress_filters = [{}]
+    return ProduceTaskOperation(
+        foreign_buckets=foreign_buckets or [],
+        headers=[
+            {**variant, "origin": pinned_origin_condition(identity)}
+            for variant in egress_filters
+        ],
+    )
+
+
 class TestClaimsWithKartonType(unittest.TestCase):
     FILTERS = ['[{"type": "example.RawFeed"}]']
 
@@ -184,7 +207,7 @@ class TestClaimsWithKartonType(unittest.TestCase):
 
     def test_producer(self):
         operations = self.operations_of(identity="p", karton_type="producer")
-        self.assertEqual(operations, [ProduceTaskOperation(foreign_buckets=[])])
+        self.assertEqual(operations, [expected_produce_op("p")])
 
     def test_consumer(self):
         operations = self.operations_of(
@@ -208,7 +231,7 @@ class TestClaimsWithKartonType(unittest.TestCase):
             operations,
             [
                 ConsumeTaskOperation(),
-                ProduceTaskOperation(foreign_buckets=[]),
+                expected_produce_op("k"),
                 RegisterBindOperation(
                     filters=[{"type": "example.RawFeed"}], persistent=True
                 ),
@@ -227,7 +250,7 @@ class TestClaimsWithKartonType(unittest.TestCase):
             [
                 ConsumeTaskOperation(),
                 EnableDebugOperation(),
-                ProduceTaskOperation(foreign_buckets=[]),
+                expected_produce_op("k"),
                 RegisterBindOperation(
                     filters=[{"type": "example.RawFeed"}], persistent=False
                 ),
@@ -247,7 +270,7 @@ class TestClaimsWithKartonType(unittest.TestCase):
             [
                 ConsumeTaskOperation(),
                 EnableDebugOperation(),
-                ProduceTaskOperation(foreign_buckets=[]),
+                expected_produce_op("k"),
                 RegisterBindOperation(
                     filters=[{"type": "example.RawFeed"}], persistent=True
                 ),
@@ -304,7 +327,7 @@ class TestClaimsWithKartonType(unittest.TestCase):
         self.assertEqual(
             operations,
             [
-                ProduceTaskOperation(foreign_buckets=[]),
+                expected_produce_op("p"),
                 RegisterBindOperation(
                     filters=[{"type": "example.RawFeed"}], persistent=True
                 ),
@@ -343,7 +366,10 @@ class TestClaimsExplicitFlags(unittest.TestCase):
         ).allowed_operations
         self.assertEqual(
             operations,
-            [ConsumeLogOperation(), ProduceTaskOperation(foreign_buckets=[])],
+            [
+                ConsumeLogOperation(),
+                expected_produce_op("x"),
+            ],
         )
 
     def test_filters_with_explicit_flags(self):
@@ -406,7 +432,8 @@ class TestClaimsExplicitFlags(unittest.TestCase):
             )
         ).allowed_operations
         self.assertEqual(
-            operations, [ProduceTaskOperation(foreign_buckets=["b1", "b2"])]
+            operations,
+            [expected_produce_op("x", foreign_buckets=["b1", "b2"])],
         )
 
     def test_legacy_flags_merge_with_karton_type(self):
@@ -419,7 +446,10 @@ class TestClaimsExplicitFlags(unittest.TestCase):
         ).allowed_operations
         self.assertEqual(
             operations,
-            [ConsumeLogOperation(), ProduceTaskOperation(foreign_buckets=[])],
+            [
+                ConsumeLogOperation(),
+                expected_produce_op("x"),
+            ],
         )
 
     def test_empty_filters_valid(self):
@@ -446,6 +476,166 @@ class TestClaimsExplicitFlags(unittest.TestCase):
             claims_from_args(make_args(identity="x", register_bind=["not json"]))
 
 
+class TestClaimsWithEgressFilters(unittest.TestCase):
+    EGRESS = ['[{"kind": "raw"}, {"kind": "file", "extension": "txt"}]']
+
+    def operations_of(self, **kwargs):
+        claims = claims_from_args(make_args(**kwargs))
+        return claims.allowed_operations
+
+    def test_egress_filters_require_produce_task(self):
+        with self.assertRaises(ValueError):
+            self.operations_of(identity="p", egress_filters=self.EGRESS)
+
+    def test_egress_filters_with_produce_task(self):
+        operations = self.operations_of(
+            identity="p", produce_task=True, egress_filters=self.EGRESS
+        )
+        self.assertEqual(
+            operations,
+            [
+                expected_produce_op(
+                    "p",
+                    egress_filters=[
+                        {"kind": "raw"},
+                        {"kind": "file", "extension": "txt"},
+                    ],
+                )
+            ],
+        )
+
+    def test_egress_filters_concatenated(self):
+        operations = self.operations_of(
+            identity="p",
+            produce_task=True,
+            egress_filters=['[{"kind": "raw"}]', '[{"kind": "file"}]'],
+        )
+        self.assertEqual(
+            operations,
+            [
+                expected_produce_op(
+                    "p", egress_filters=[{"kind": "raw"}, {"kind": "file"}]
+                )
+            ],
+        )
+
+    def test_egress_filters_empty_list(self):
+        # Explicit empty egress filter list allows to produce nothing.
+        # Origin pinning doesn't change that.
+        operations = self.operations_of(
+            identity="p", produce_task=True, egress_filters=["[]"]
+        )
+        self.assertEqual(
+            operations, [ProduceTaskOperation(foreign_buckets=[], headers=[])]
+        )
+
+    def test_egress_filters_with_karton_type_producer(self):
+        operations = self.operations_of(
+            identity="p", karton_type="producer", egress_filters=self.EGRESS
+        )
+        self.assertEqual(
+            operations,
+            [
+                expected_produce_op(
+                    "p",
+                    egress_filters=[
+                        {"kind": "raw"},
+                        {"kind": "file", "extension": "txt"},
+                    ],
+                )
+            ],
+        )
+
+    def test_egress_filters_with_foreign_buckets(self):
+        operations = self.operations_of(
+            identity="p",
+            foreign_buckets=["b1"],
+            egress_filters=self.EGRESS,
+        )
+        self.assertEqual(
+            operations,
+            [
+                expected_produce_op(
+                    "p",
+                    foreign_buckets=["b1"],
+                    egress_filters=[
+                        {"kind": "raw"},
+                        {"kind": "file", "extension": "txt"},
+                    ],
+                )
+            ],
+        )
+
+    def test_invalid_json(self):
+        with self.assertRaises(ValueError):
+            claims_from_args(
+                make_args(identity="p", produce_task=True, egress_filters=["not json"])
+            )
+
+    def test_not_a_list(self):
+        with self.assertRaises(ValueError):
+            claims_from_args(
+                make_args(
+                    identity="p",
+                    produce_task=True,
+                    egress_filters=['{"kind": "raw"}'],
+                )
+            )
+
+
+class TestPinOriginInEgressFilters(unittest.TestCase):
+    def pin(self, egress_filters, identity="karton.sample"):
+        return pin_origin(egress_filters, identity=identity)
+
+    def test_origin_condition_added_to_each_variant(self):
+        pinned = self.pin([{"kind": "raw"}, {"kind": "file", "extension": "txt"}])
+        origin = pinned[0]["origin"]
+        self.assertEqual(set(pinned[0]), {"kind", "origin"})
+        self.assertEqual(pinned[0]["kind"], "raw")
+        self.assertEqual(pinned[1]["origin"], origin)
+        self.assertEqual(pinned[1]["kind"], "file")
+
+    def test_catch_all_variant_gets_origin_condition(self):
+        pinned = self.pin([{}])
+        self.assertEqual(set(pinned[0]), {"origin"})
+
+    def test_empty_filters_stay_empty(self):
+        self.assertEqual(self.pin([]), [])
+
+    def test_pinned_claims_cover_own_identity_only(self):
+        from karton.core import query
+
+        pinned = self.pin([{"kind": "raw"}])
+        match = query.convert(pinned).match
+
+        # Own identity, also with extra headers
+        self.assertTrue(match({"kind": "raw", "origin": "karton.sample"}))
+        self.assertTrue(match({"kind": "raw", "origin": "karton.sample", "x": "y"}))
+        # Debug mode instance identity
+        self.assertTrue(
+            match(
+                {
+                    "kind": "raw",
+                    "origin": "karton.sample-550e8400-e29b-41d4-a716-446655440000-dev",
+                }
+            )
+        )
+        # Someone else's identity or lookalikes are not covered
+        self.assertFalse(match({"kind": "raw", "origin": "karton.other"}))
+        self.assertFalse(match({"kind": "raw", "origin": "karton.sample2"}))
+        self.assertFalse(match({"kind": "raw", "origin": "karton.sample-impostor"}))
+        # Missing origin is not covered
+        self.assertFalse(match({"kind": "raw"}))
+
+    def test_identity_with_regex_specials_is_escaped(self):
+        pinned = self.pin([{}], identity="karton.foo+bar")
+        from karton.core import query
+
+        match = query.convert(pinned).match
+        self.assertTrue(match({"origin": "karton.foo+bar"}))
+        self.assertFalse(match({"origin": "karton.foobar"}))
+
+
 class TestValidateOutput(unittest.TestCase):
     """cmd_validate must emit a single machine-readable JSON document."""
 
@@ -458,7 +648,7 @@ class TestValidateOutput(unittest.TestCase):
             identity="test-karton",
             allowed_operations=[
                 ConsumeTaskOperation(),
-                ProduceTaskOperation(foreign_buckets=[]),
+                ProduceTaskOperation(foreign_buckets=[], headers=[{}]),
             ],
         )
         token = issue_auth_token(
@@ -498,12 +688,15 @@ class TestDedupAndSort(unittest.TestCase):
     def test_dedup(self):
         operations = [
             ConsumeTaskOperation(),
-            ProduceTaskOperation(foreign_buckets=[]),
+            ProduceTaskOperation(foreign_buckets=[], headers=[{}]),
             ConsumeTaskOperation(),
         ]
         self.assertEqual(
             dedup_and_sort_operations(operations),
-            [ConsumeTaskOperation(), ProduceTaskOperation(foreign_buckets=[])],
+            [
+                ConsumeTaskOperation(),
+                ProduceTaskOperation(foreign_buckets=[], headers=[{}]),
+            ],
         )
 
     def test_sorting_order(self):
@@ -512,7 +705,7 @@ class TestDedupAndSort(unittest.TestCase):
             ConsumeLogOperation(),
             RegisterBindOperation(filters=[{}], persistent=True),
             ConsumeTaskOperation(),
-            ProduceTaskOperation(foreign_buckets=[]),
+            ProduceTaskOperation(foreign_buckets=[], headers=[{}]),
         ]
         self.assertEqual(
             dedup_and_sort_operations(operations),
@@ -520,7 +713,7 @@ class TestDedupAndSort(unittest.TestCase):
                 ConsumeLogOperation(),
                 ConsumeTaskOperation(),
                 EnableDebugOperation(),
-                ProduceTaskOperation(foreign_buckets=[]),
+                ProduceTaskOperation(foreign_buckets=[], headers=[{}]),
                 RegisterBindOperation(filters=[{}], persistent=True),
             ],
         )

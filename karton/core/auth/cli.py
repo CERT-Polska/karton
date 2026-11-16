@@ -3,6 +3,7 @@ import getpass
 import importlib
 import inspect
 import json
+import re
 import socket
 import sys
 from pathlib import Path
@@ -44,6 +45,20 @@ def default_issuer() -> str:
     return f"{getpass.getuser()}@{socket.gethostname()}"
 
 
+def pin_origin(
+    egress_filters: list[dict[str, Any]],
+    identity: str,
+) -> list[dict[str, Any]]:
+    """Pin the service identity in the egress filter variants.
+
+    Ensures that "origin" header produced by karton is either equal to identity,
+    or matches "identity-.*-dev".
+    """
+    safe_identity = re.escape(identity)
+    origin_condition = {"$regex": rf"^{safe_identity}$|^{safe_identity}(-.*)?-dev$"}
+    return [{**variant, "origin": origin_condition} for variant in egress_filters]
+
+
 def get_claims_from_karton_class(
     karton_class: type[KartonBase] | type[KartonAsyncBase],
 ) -> AuthClaims:
@@ -54,7 +69,14 @@ def get_claims_from_karton_class(
     claims = AuthClaims(identity=karton_class.identity, allowed_operations=[])
 
     if issubclass(karton_class, (Producer, AsyncProducer)):
-        claims.allowed_operations.append(ProduceTaskOperation())
+        claims.allowed_operations.append(
+            ProduceTaskOperation(
+                headers=pin_origin(
+                    karton_class.egress_filters,
+                    identity=karton_class.identity,
+                )
+            )
+        )
 
     if issubclass(karton_class, (Consumer, AsyncConsumer)):
         claims.allowed_operations.append(ConsumeTaskOperation())
@@ -343,9 +365,27 @@ def claims_from_args(args: argparse.Namespace) -> AuthClaims:
         wants_consume = wants_consume or karton_type in ("consumer", "karton")
         wants_log = wants_log or karton_type == "logconsumer"
 
+    if args.egress_filters is not None and not wants_produce:
+        raise ValueError("--egress-filters specified, but karton can't produce tasks")
+
+    if args.egress_filters == []:
+        raise ValueError("Empty egress filters will block all task")
+
     operations: list[AllowedOperation] = []
     if wants_produce:
-        operations.append(ProduceTaskOperation(foreign_buckets=foreign_buckets))
+        if args.egress_filters is not None:
+            egress_filters = parse_filters_args(args.egress_filters)
+        else:
+            egress_filters = [{}]  # catch-all
+        operations.append(
+            ProduceTaskOperation(
+                foreign_buckets=foreign_buckets,
+                headers=pin_origin(
+                    egress_filters,
+                    identity=args.identity,
+                ),
+            )
+        )
     if wants_consume:
         operations.append(ConsumeTaskOperation())
     if raw_filters is not None:
@@ -432,6 +472,7 @@ def validate_no_conflicting_args(args: argparse.Namespace) -> None:
             ("--consume-log", args.consume_log),
             ("--register-bind", args.register_bind),
             ("--foreign-buckets", args.foreign_buckets),
+            ("--egress-filters", args.egress_filters),
         )
         if value
     ]
@@ -653,6 +694,15 @@ def main() -> None:
         metavar="BUCKET",
         help="Foreign bucket name (implies --produce-task). "
         "Repeatable for multiple buckets",
+    )
+    claims_parser.add_argument(
+        "--egress-filters",
+        action="append",
+        default=None,
+        metavar="JSON_LIST",
+        help="Egress filters as JSON list of filter variants, e.g. "
+        '\'[{"kind": "raw"}]\'. Restricts which task headers can be '
+        "produced using the produce_task operation.",
     )
     claims_parser.set_defaults(func=cmd_claims)
 

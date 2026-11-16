@@ -28,7 +28,7 @@ class TestOperationCovers(unittest.TestCase):
             ConsumeTaskOperation(),
             ConsumeLogOperation(),
             EnableDebugOperation(),
-            ProduceTaskOperation(foreign_buckets=[]),
+            ProduceTaskOperation(foreign_buckets=[], headers=[{}]),
             RegisterBindOperation(filters=[], persistent=False),
         ]
         for entitlement in simple_operations:
@@ -41,23 +41,74 @@ class TestOperationCovers(unittest.TestCase):
                 )
 
     def test_produce_task_foreign_buckets_subset(self):
-        entitlement = ProduceTaskOperation(foreign_buckets=["bucket1", "bucket2"])
-        self.assertTrue(entitlement.covers(ProduceTaskOperation(foreign_buckets=[])))
-        self.assertTrue(
-            entitlement.covers(ProduceTaskOperation(foreign_buckets=["bucket1"]))
+        entitlement = ProduceTaskOperation(
+            foreign_buckets=["bucket1", "bucket2"], headers=[{}]
         )
-        self.assertFalse(
-            entitlement.covers(ProduceTaskOperation(foreign_buckets=["bucket3"]))
+        self.assertTrue(
+            entitlement.covers(ProduceTaskOperation(foreign_buckets=[], headers=[{}]))
+        )
+        self.assertTrue(
+            entitlement.covers(
+                ProduceTaskOperation(foreign_buckets=["bucket1"], headers=[{}])
+            )
         )
         self.assertFalse(
             entitlement.covers(
-                ProduceTaskOperation(foreign_buckets=["bucket1", "bucket3"])
+                ProduceTaskOperation(foreign_buckets=["bucket3"], headers=[{}])
+            )
+        )
+        self.assertFalse(
+            entitlement.covers(
+                ProduceTaskOperation(
+                    foreign_buckets=["bucket1", "bucket3"], headers=[{}]
+                )
             )
         )
 
     def test_produce_task_doesnt_cover_other_types(self):
-        entitlement = ProduceTaskOperation(foreign_buckets=[])
+        entitlement = ProduceTaskOperation(headers=[{}])
         self.assertFalse(entitlement.covers(ConsumeTaskOperation()))
+
+    def test_produce_task_egress_filters_partial_match(self):
+        entitlement = ProduceTaskOperation(
+            headers=[{"kind": "raw"}, {"kind": "file", "extension": "txt"}]
+        )
+
+        def requested(headers):
+            return ProduceTaskOperation(headers=[headers])
+
+        for headers in (
+            {"kind": "raw"},
+            {"kind": "raw", "foo": "bar"},
+            {"kind": "file", "extension": "txt"},
+            {"kind": "file", "extension": "txt", "xyz": "qwer"},
+        ):
+            self.assertTrue(entitlement.covers(requested(headers)), headers)
+
+        for headers in (
+            {},
+            {"kind": "file"},
+            {"kind": "file", "extension": "exe"},
+            {"extension": "txt"},
+            {"type": "sample"},
+        ):
+            self.assertFalse(entitlement.covers(requested(headers)), headers)
+
+    def test_produce_task_egress_filters_catch_all(self):
+        # [{}] is a catch-all that covers every requested headers
+        entitlement = ProduceTaskOperation(headers=[{}])
+        self.assertTrue(
+            entitlement.covers(ProduceTaskOperation(headers=[{"kind": "raw"}]))
+        )
+        self.assertTrue(entitlement.covers(ProduceTaskOperation(headers=[{}])))
+        self.assertTrue(entitlement.covers(ProduceTaskOperation(headers=[{"a": 1}])))
+
+    def test_produce_task_egress_filters_empty(self):
+        entitlement = ProduceTaskOperation(headers=[])
+        self.assertFalse(
+            entitlement.covers(ProduceTaskOperation(headers=[{"kind": "raw"}]))
+        )
+        self.assertFalse(entitlement.covers(ProduceTaskOperation(headers=[{}])))
 
     def test_register_bind_requires_same_persistence(self):
         bind = RegisterBindOperation(filters=[{"type": "a"}], persistent=True)
