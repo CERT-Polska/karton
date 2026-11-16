@@ -185,7 +185,7 @@ async def handle_declare_task_request(
         session.can_perform(
             ProduceTaskOperation(
                 foreign_buckets=list(referenced_foreign_buckets),
-                headers=[{**task_params.headers, **task_params.headers_persistent}],
+                headers=[task_params.headers],
             )
         )
 
