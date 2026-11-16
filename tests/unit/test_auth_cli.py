@@ -177,22 +177,27 @@ class TestResolveBindPersistence(unittest.TestCase):
         self.assertTrue(non_persistent)
 
 
-def pinned_origin_condition(identity):
+def pinned_origin_condition(identity, debug=False):
     """Origin condition pinned to the identity, as built by the CLI."""
 
     from karton.core.auth.cli import pin_origin
 
-    return pin_origin([{}], identity=identity)[0]["origin"]
+    return pin_origin([{}], identity=identity, debug=debug)[0]["origin"]
 
 
-def expected_produce_op(identity="x", foreign_buckets=None, egress_filters=None):
+def expected_produce_op(
+    identity="x", foreign_buckets=None, egress_filters=None, debug=False
+):
     """ProduceTaskOperation expected from claims_from_args for a given identity."""
     if egress_filters is None:
         egress_filters = [{}]
     return ProduceTaskOperation(
         foreign_buckets=foreign_buckets or [],
         headers=[
-            {**variant, "origin": pinned_origin_condition(identity)}
+            {
+                **variant,
+                "origin": pinned_origin_condition(identity, debug=debug),
+            }
             for variant in egress_filters
         ],
     )
@@ -250,7 +255,7 @@ class TestClaimsWithKartonType(unittest.TestCase):
             [
                 ConsumeTaskOperation(),
                 EnableDebugOperation(),
-                expected_produce_op("k"),
+                expected_produce_op("k", debug=True),
                 RegisterBindOperation(
                     filters=[{"type": "example.RawFeed"}], persistent=False
                 ),
@@ -270,7 +275,7 @@ class TestClaimsWithKartonType(unittest.TestCase):
             [
                 ConsumeTaskOperation(),
                 EnableDebugOperation(),
-                expected_produce_op("k"),
+                expected_produce_op("k", debug=True),
                 RegisterBindOperation(
                     filters=[{"type": "example.RawFeed"}], persistent=True
                 ),
@@ -520,14 +525,9 @@ class TestClaimsWithEgressFilters(unittest.TestCase):
         )
 
     def test_egress_filters_empty_list(self):
-        # Explicit empty egress filter list allows to produce nothing.
-        # Origin pinning doesn't change that.
-        operations = self.operations_of(
-            identity="p", produce_task=True, egress_filters=["[]"]
-        )
-        self.assertEqual(
-            operations, [ProduceTaskOperation(foreign_buckets=[], headers=[])]
-        )
+        # Explicit empty egress filter list would block all tasks
+        with self.assertRaises(ValueError):
+            self.operations_of(identity="p", produce_task=True, egress_filters=["[]"])
 
     def test_egress_filters_with_karton_type_producer(self):
         operations = self.operations_of(
@@ -549,6 +549,7 @@ class TestClaimsWithEgressFilters(unittest.TestCase):
     def test_egress_filters_with_foreign_buckets(self):
         operations = self.operations_of(
             identity="p",
+            produce_task=True,
             foreign_buckets=["b1"],
             egress_filters=self.EGRESS,
         )
@@ -565,6 +566,10 @@ class TestClaimsWithEgressFilters(unittest.TestCase):
                 )
             ],
         )
+
+    def test_foreign_buckets_require_produce_task(self):
+        with self.assertRaises(ValueError):
+            claims_from_args(make_args(identity="p", foreign_buckets=["b1"]))
 
     def test_invalid_json(self):
         with self.assertRaises(ValueError):
@@ -584,8 +589,8 @@ class TestClaimsWithEgressFilters(unittest.TestCase):
 
 
 class TestPinOriginInEgressFilters(unittest.TestCase):
-    def pin(self, egress_filters, identity="karton.sample"):
-        return pin_origin(egress_filters, identity=identity)
+    def pin(self, egress_filters, identity="karton.sample", debug=False):
+        return pin_origin(egress_filters, identity=identity, debug=debug)
 
     def test_origin_condition_added_to_each_variant(self):
         pinned = self.pin([{"kind": "raw"}, {"kind": "file", "extension": "txt"}])
@@ -611,7 +616,21 @@ class TestPinOriginInEgressFilters(unittest.TestCase):
         # Own identity, also with extra headers
         self.assertTrue(match({"kind": "raw", "origin": "karton.sample"}))
         self.assertTrue(match({"kind": "raw", "origin": "karton.sample", "x": "y"}))
-        # Debug mode instance identity
+        # Someone else's identity or lookalikes are not covered
+        self.assertFalse(match({"kind": "raw", "origin": "karton.other"}))
+        self.assertFalse(match({"kind": "raw", "origin": "karton.sample2"}))
+        self.assertFalse(match({"kind": "raw", "origin": "karton.sample-impostor"}))
+        # Missing origin is not covered
+        self.assertFalse(match({"kind": "raw"}))
+
+    def test_pinned_claims_in_debug_mode_cover_dev_identity(self):
+        from karton.core import query
+
+        pinned = self.pin([{"kind": "raw"}], debug=True)
+        match = query.convert(pinned).match
+
+        # Own identity and the debug mode instance identities
+        self.assertTrue(match({"kind": "raw", "origin": "karton.sample"}))
         self.assertTrue(
             match(
                 {
@@ -620,12 +639,25 @@ class TestPinOriginInEgressFilters(unittest.TestCase):
                 }
             )
         )
-        # Someone else's identity or lookalikes are not covered
+        # Other identities are not covered
         self.assertFalse(match({"kind": "raw", "origin": "karton.other"}))
-        self.assertFalse(match({"kind": "raw", "origin": "karton.sample2"}))
-        self.assertFalse(match({"kind": "raw", "origin": "karton.sample-impostor"}))
-        # Missing origin is not covered
         self.assertFalse(match({"kind": "raw"}))
+
+    def test_pinned_claims_without_debug_dont_cover_dev_identity(self):
+        from karton.core import query
+
+        # Non-debug tokens match the identity exactly:
+        # they must not cover the debug mode identities
+        pinned = self.pin([{"kind": "raw"}])
+        match = query.convert(pinned).match
+        self.assertFalse(
+            match(
+                {
+                    "kind": "raw",
+                    "origin": "karton.sample-550e8400-e29b-41d4-a716-446655440000-dev",
+                }
+            )
+        )
 
     def test_identity_with_regex_specials_is_escaped(self):
         pinned = self.pin([{}], identity="karton.foo+bar")

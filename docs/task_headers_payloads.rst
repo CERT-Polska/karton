@@ -200,7 +200,6 @@ task headers are allowed.
 ``egress_filters`` use exactly the same syntax and matching rules as the consumer ``filters``.
 
 The default value for ``egress_filters`` is ``[{}]``, the catch-all filter.
-An empty list (``[]``) means that no task is allowed.
 
 When service authentication is enabled, egress filters are enforced by the
 :ref:`Karton Gateway <gateway-setup>`, based on service access token. Producers also checks the
@@ -220,6 +219,7 @@ but you can also pass the filters explicitly:
         --egress-filters '[{"type": "sample", "kind": "processed"}]'
 
 ``karton-auth`` automatically appends proper conditions for the ``origin`` header.
+For debug-enabled kartons, also `{identity}.*-dev` is allowed.
 
 
 Task payload

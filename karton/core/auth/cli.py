@@ -46,21 +46,25 @@ def default_issuer() -> str:
 
 
 def pin_origin(
-    egress_filters: list[dict[str, Any]],
-    identity: str,
+    egress_filters: list[dict[str, Any]], identity: str, debug: bool
 ) -> list[dict[str, Any]]:
     """Pin the service identity in the egress filter variants.
 
-    Ensures that "origin" header produced by karton is either equal to identity,
-    or matches "identity-.*-dev".
+    Ensures that "origin" header produced by karton is either equal to identity.
+    If debug is enabled, it also matches "identity-.*-dev".
     """
-    safe_identity = re.escape(identity)
-    origin_condition = {"$regex": rf"^{safe_identity}$|^{safe_identity}(-.*)?-dev$"}
+    origin_condition: dict[str, Any] | str
+    if debug:
+        safe_identity = re.escape(identity)
+        origin_condition = {"$regex": rf"^{safe_identity}$|^{safe_identity}(-.*)?-dev$"}
+    else:
+        origin_condition = identity
+
     return [{**variant, "origin": origin_condition} for variant in egress_filters]
 
 
 def get_claims_from_karton_class(
-    karton_class: type[KartonBase] | type[KartonAsyncBase],
+    karton_class: type[KartonBase] | type[KartonAsyncBase], debug: bool
 ) -> AuthClaims:
     from karton.core import Consumer, LogConsumer, Producer
     from karton.core.asyncio import Consumer as AsyncConsumer
@@ -74,6 +78,7 @@ def get_claims_from_karton_class(
                 headers=pin_origin(
                     karton_class.egress_filters,
                     identity=karton_class.identity,
+                    debug=debug,
                 )
             )
         )
@@ -357,8 +362,8 @@ def claims_from_args(args: argparse.Namespace) -> AuthClaims:
         raise ValueError("--identity is required when using --filters")
 
     foreign_buckets = sorted(set(args.foreign_buckets or []))
-    wants_produce = bool(args.produce_task or foreign_buckets)
-    wants_consume = bool(args.consume_task)
+    wants_produce = args.produce_task
+    wants_consume = args.consume_task
     wants_log = bool(args.consume_log)
     if karton_type is not None:
         wants_produce = wants_produce or karton_type in ("producer", "karton")
@@ -368,21 +373,27 @@ def claims_from_args(args: argparse.Namespace) -> AuthClaims:
     if args.egress_filters is not None and not wants_produce:
         raise ValueError("--egress-filters specified, but karton can't produce tasks")
 
-    if args.egress_filters == []:
+    egress_filters: list[dict[str, Any]]
+    if args.egress_filters is None:
+        egress_filters = [{}]  # catch-all
+    else:
+        egress_filters = parse_filters_args(args.egress_filters)
+
+    if egress_filters == []:
         raise ValueError("Empty egress filters will block all task")
+
+    if args.foreign_buckets is not None and not wants_produce:
+        raise ValueError("--foreign-buckets specified, but karton can't produce tasks")
 
     operations: list[AllowedOperation] = []
     if wants_produce:
-        if args.egress_filters is not None:
-            egress_filters = parse_filters_args(args.egress_filters)
-        else:
-            egress_filters = [{}]  # catch-all
         operations.append(
             ProduceTaskOperation(
                 foreign_buckets=foreign_buckets,
                 headers=pin_origin(
                     egress_filters,
                     identity=args.identity,
+                    debug=args.debug,
                 ),
             )
         )
@@ -419,7 +430,7 @@ def cmd_claims(args: argparse.Namespace) -> None:
     if args.karton is not None:
         validate_no_conflicting_args(args)
         karton_class = import_karton_class(args.karton)
-        claims = get_claims_from_karton_class(karton_class)
+        claims = get_claims_from_karton_class(karton_class, args.debug)
         if bind_flags_requested(args):
             # Rebuild introspected bind claims with the requested
             # persistence variants, keeping the class filters verbatim.
@@ -692,8 +703,8 @@ def main() -> None:
         action="append",
         default=None,
         metavar="BUCKET",
-        help="Foreign bucket name (implies --produce-task). "
-        "Repeatable for multiple buckets",
+        help="Foreign bucket name (requires --produce-task or "
+        "--karton-type producer/karton). Repeatable for multiple buckets",
     )
     claims_parser.add_argument(
         "--egress-filters",

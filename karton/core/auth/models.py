@@ -66,7 +66,7 @@ class ConsumeTaskOperation(Operation):
 class ProduceTaskOperation(Operation):
     operation: Literal["produce_task"] = "produce_task"
     foreign_buckets: list[str] = Field(default_factory=list)
-    headers: list[dict[str, Any]]
+    headers: list[dict[str, Any]] = Field(default_factory=lambda: [dict[str, Any]()])
 
     def covers(self, operation: "Operation") -> bool:
         """
