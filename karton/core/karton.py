@@ -15,7 +15,11 @@ from .__version__ import __version__
 from .backend import KartonBackendProtocol, KartonBind, KartonMetrics
 from .base import KartonBase, KartonServiceBase
 from .config import Config
-from .exceptions import BindExpiredError, TaskTimeoutError
+from .exceptions import (
+    BindExpiredError,
+    TaskEgressFilterError,
+    TaskTimeoutError,
+)
 from .resource import LocalResource
 from .task import Task, TaskState
 from .utils import timeout
@@ -53,6 +57,8 @@ class Producer(KartonBase):
     :param backend: Karton backend to use
     """
 
+    egress_filters: list[dict[str, Any]] = [{}]
+
     def __init__(
         self,
         identity: str,
@@ -60,6 +66,21 @@ class Producer(KartonBase):
         backend: KartonBackendProtocol | None = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
+
+    def _check_egress_filters(self, task: Task) -> None:
+        """
+        Check if task headers are allowed by the configured egress filters.
+
+        :param task: Task about to be sent
+        :raises TaskEgressFilterError: If task headers don't match the filters
+        """
+        if not task.matches_filters(self.egress_filters):
+            raise TaskEgressFilterError(
+                "Task headers are not allowed by the egress filters "
+                "configured for this service "
+                f"(task headers: {task.headers}, "
+                f"egress filters: {self.egress_filters})"
+            )
 
     def send_task(self, task: Task) -> bool:
         """
@@ -80,6 +101,7 @@ class Producer(KartonBase):
 
         task.last_update = time.time()
         task.headers.update({"origin": self.identity})
+        self._check_egress_filters(task)
 
         # Register new task
         self.backend.declare_task(task)

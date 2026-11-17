@@ -3,6 +3,7 @@ import getpass
 import importlib
 import inspect
 import json
+import re
 import socket
 import sys
 from pathlib import Path
@@ -44,8 +45,26 @@ def default_issuer() -> str:
     return f"{getpass.getuser()}@{socket.gethostname()}"
 
 
+def pin_origin(
+    egress_filters: list[dict[str, Any]], identity: str, debug: bool
+) -> list[dict[str, Any]]:
+    """Pin the service identity in the egress filter variants.
+
+    Ensures that "origin" header produced by karton is either equal to identity.
+    If debug is enabled, it also matches "identity-.*-dev".
+    """
+    origin_condition: dict[str, Any] | str
+    if debug:
+        safe_identity = re.escape(identity)
+        origin_condition = {"$regex": rf"^{safe_identity}$|^{safe_identity}(-.*)?-dev$"}
+    else:
+        origin_condition = identity
+
+    return [{**variant, "origin": origin_condition} for variant in egress_filters]
+
+
 def get_claims_from_karton_class(
-    karton_class: type[KartonBase] | type[KartonAsyncBase],
+    karton_class: type[KartonBase] | type[KartonAsyncBase], debug: bool
 ) -> AuthClaims:
     from karton.core import Consumer, LogConsumer, Producer
     from karton.core.asyncio import Consumer as AsyncConsumer
@@ -54,7 +73,15 @@ def get_claims_from_karton_class(
     claims = AuthClaims(identity=karton_class.identity, allowed_operations=[])
 
     if issubclass(karton_class, (Producer, AsyncProducer)):
-        claims.allowed_operations.append(ProduceTaskOperation())
+        claims.allowed_operations.append(
+            ProduceTaskOperation(
+                headers=pin_origin(
+                    karton_class.egress_filters,
+                    identity=karton_class.identity,
+                    debug=debug,
+                )
+            )
+        )
 
     if issubclass(karton_class, (Consumer, AsyncConsumer)):
         claims.allowed_operations.append(ConsumeTaskOperation())
@@ -335,17 +362,41 @@ def claims_from_args(args: argparse.Namespace) -> AuthClaims:
         raise ValueError("--identity is required when using --filters")
 
     foreign_buckets = sorted(set(args.foreign_buckets or []))
-    wants_produce = bool(args.produce_task or foreign_buckets)
-    wants_consume = bool(args.consume_task)
+    wants_produce = args.produce_task
+    wants_consume = args.consume_task
     wants_log = bool(args.consume_log)
     if karton_type is not None:
         wants_produce = wants_produce or karton_type in ("producer", "karton")
         wants_consume = wants_consume or karton_type in ("consumer", "karton")
         wants_log = wants_log or karton_type == "logconsumer"
 
+    if args.egress_filters is not None and not wants_produce:
+        raise ValueError("--egress-filters specified, but karton can't produce tasks")
+
+    egress_filters: list[dict[str, Any]]
+    if args.egress_filters is None:
+        egress_filters = [{}]  # catch-all
+    else:
+        egress_filters = parse_filters_args(args.egress_filters)
+
+    if egress_filters == []:
+        raise ValueError("Empty egress filters will block all task")
+
+    if args.foreign_buckets is not None and not wants_produce:
+        raise ValueError("--foreign-buckets specified, but karton can't produce tasks")
+
     operations: list[AllowedOperation] = []
     if wants_produce:
-        operations.append(ProduceTaskOperation(foreign_buckets=foreign_buckets))
+        operations.append(
+            ProduceTaskOperation(
+                foreign_buckets=foreign_buckets,
+                headers=pin_origin(
+                    egress_filters,
+                    identity=args.identity,
+                    debug=args.debug,
+                ),
+            )
+        )
     if wants_consume:
         operations.append(ConsumeTaskOperation())
     if raw_filters is not None:
@@ -379,7 +430,7 @@ def cmd_claims(args: argparse.Namespace) -> None:
     if args.karton is not None:
         validate_no_conflicting_args(args)
         karton_class = import_karton_class(args.karton)
-        claims = get_claims_from_karton_class(karton_class)
+        claims = get_claims_from_karton_class(karton_class, args.debug)
         if bind_flags_requested(args):
             # Rebuild introspected bind claims with the requested
             # persistence variants, keeping the class filters verbatim.
@@ -432,6 +483,7 @@ def validate_no_conflicting_args(args: argparse.Namespace) -> None:
             ("--consume-log", args.consume_log),
             ("--register-bind", args.register_bind),
             ("--foreign-buckets", args.foreign_buckets),
+            ("--egress-filters", args.egress_filters),
         )
         if value
     ]
@@ -651,8 +703,17 @@ def main() -> None:
         action="append",
         default=None,
         metavar="BUCKET",
-        help="Foreign bucket name (implies --produce-task). "
-        "Repeatable for multiple buckets",
+        help="Foreign bucket name (requires --produce-task or "
+        "--karton-type producer/karton). Repeatable for multiple buckets",
+    )
+    claims_parser.add_argument(
+        "--egress-filters",
+        action="append",
+        default=None,
+        metavar="JSON_LIST",
+        help="Egress filters as JSON list of filter variants, e.g. "
+        '\'[{"kind": "raw"}]\'. Restricts which task headers can be '
+        "produced using the produce_task operation.",
     )
     claims_parser.set_defaults(func=cmd_claims)
 

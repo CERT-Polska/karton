@@ -180,9 +180,13 @@ async def handle_declare_task_request(
     )
 
     # Check if service is allowed to operate on referenced foreign buckets
+    # and if the task headers are allowed by the egress filters.
     if session.auth_required:
         session.can_perform(
-            ProduceTaskOperation(foreign_buckets=list(referenced_foreign_buckets))
+            ProduceTaskOperation(
+                foreign_buckets=list(referenced_foreign_buckets),
+                headers=[{**task_params.headers, **task_params.headers_persistent}],
+            )
         )
 
     resource_urls = await generate_resource_upload_urls(validated_resources)

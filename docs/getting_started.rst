@@ -181,7 +181,11 @@ Then we can use ``karton-auth claims`` to autogenerate the claims specification 
       "allowed_operations": [
         {
           "operation": "produce_task",
-          "foreign_buckets": []
+          "foreign_buckets": [],
+          "headers": [
+            {"type": "sample", "stage": "recognized"},
+            {"type": "sample", "stage": "unrecognized"}
+          ]
         },
         {
           "operation": "consume_task"
@@ -199,8 +203,9 @@ Then we can use ``karton-auth claims`` to autogenerate the claims specification 
       ]
     }
 
-As we can see, this specification allows the ``karton.classifier`` to produce tasks, consume tasks and register a
-persistent bind (queue) with specified filters. Let's pipe this output to ``karton-auth issue`` to issue a new token:
+As we can see, this specification allows the ``karton.classifier`` to produce tasks
+(with matching headers), consume tasks and register a persistent bind (queue) with specified
+filters. Let's pipe this output to ``karton-auth issue`` to issue a new token:
 
 .. code-block:: console
 

@@ -14,5 +14,9 @@ class BindExpiredError(Exception):
     pass
 
 
+class TaskEgressFilterError(Exception):
+    pass
+
+
 class HeartbeatExpiredError(Exception):
     pass
