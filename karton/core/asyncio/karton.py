@@ -60,8 +60,8 @@ class Producer(KartonAsyncBase):
 
     def __init__(
         self,
-        identity: str,
         config: Config | None = None,
+        identity: str | None = None,
         backend: KartonAsyncBackendProtocol | None = None,
     ) -> None:
         super().__init__(config=config, identity=identity, backend=backend)
